@@ -12,6 +12,7 @@ import com.io.git.way.ui.common.GitWaySessionViewModel
 import com.io.git.way.ui.common.GitWayViewModelFactory
 import com.io.git.way.ui.screens.analysis.AnalysisScreen
 import com.io.git.way.ui.screens.auth.TokenScreen
+import com.io.git.way.ui.screens.browser.RepositoryBrowserScreen
 import com.io.git.way.ui.screens.complete.CompletionScreen
 import com.io.git.way.ui.screens.confirm.ConfirmationScreen
 import com.io.git.way.ui.screens.folder.FolderSelectionScreen
@@ -68,7 +69,7 @@ fun GitWayNavGraph(
             RepositoryListScreen(
                 onRepositorySelected = { repo ->
                     sessionViewModel.selectRepository(repo)
-                    navController.navigate(Routes.FolderSelection.route)
+                    navController.navigate(Routes.RepositoryBrowser.route)
                 },
                 onDisconnect = {
                     navController.navigate(Routes.Token.route) {
@@ -77,6 +78,13 @@ fun GitWayNavGraph(
                 },
                 themeMode = themeMode,
                 onThemeModeChange = onThemeModeChange
+            )
+        }
+        composable(Routes.RepositoryBrowser.route) {
+            RepositoryBrowserScreen(
+                sessionViewModel = sessionViewModel,
+                onBack = { navController.popBackStack() },
+                onSyncFromDevice = { navController.navigate(Routes.FolderSelection.route) }
             )
         }
         composable(Routes.FolderSelection.route) {

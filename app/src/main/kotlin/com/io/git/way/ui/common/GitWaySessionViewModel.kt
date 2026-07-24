@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import com.io.git.way.data.local.FolderScanner
 import com.io.git.way.data.local.NetworkUtils
 import com.io.git.way.domain.ComparisonEngine
+import com.io.git.way.domain.model.BrowserEntry
 import com.io.git.way.domain.model.ChangeType
 import com.io.git.way.domain.model.FileChange
 import com.io.git.way.domain.model.GitRepository
@@ -47,7 +48,16 @@ data class GitWaySessionState(
     val uploadProgress: Pair<Int, Int> = 0 to 0,
     val uploadCurrentFile: String = "",
     val uploadError: String? = null,
-    val commitSha: String? = null
+    val commitSha: String? = null,
+
+    // ===== Repository Browser (file-manager view of the repo + manual file/folder create) =====
+    val browserPath: String = "",
+    val browserEntries: List<BrowserEntry> = emptyList(),
+    val isBrowserLoading: Boolean = false,
+    val browserError: String? = null,
+    val remoteTreeCache: Map<String, String> = emptyMap(),
+    val isCreatingEntry: Boolean = false,
+    val createEntryError: String? = null
 ) {
     val addedCount get() = fileChanges.count { it.type == ChangeType.ADDED }
     val modifiedCount get() = fileChanges.count { it.type == ChangeType.MODIFIED }
@@ -266,5 +276,148 @@ class GitWaySessionViewModel(
     /** Called when returning to the Repository List after Completion, or backing out of a repo. */
     fun resetForNewRepository() {
         state = GitWaySessionState()
+    }
+
+    // ===== Repository Browser =====
+
+    /** Loads the repo's full file tree once and shows the root folder. Cheap to call again
+     * (e.g. pull-to-refresh) — it always re-fetches from GitHub rather than trusting the cache. */
+    fun loadBrowserRoot() {
+        val repo = state.selectedRepo ?: return
+        state = state.copy(isBrowserLoading = true, browserError = null, browserPath = "")
+        viewModelScope.launch {
+            gitHubRepository.getRepositoryTree(repo)
+                .onSuccess { tree ->
+                    state = state.copy(
+                        isBrowserLoading = false,
+                        remoteTreeCache = tree,
+                        browserEntries = childrenOf(tree.keys, "")
+                    )
+                }
+                .onFailure { throwable ->
+                    state = state.copy(
+                        isBrowserLoading = false,
+                        browserError = throwable.message ?: "Couldn't load repository files."
+                    )
+                }
+        }
+    }
+
+    fun navigateInto(entry: BrowserEntry) {
+        if (!entry.isFolder) return
+        state = state.copy(
+            browserPath = entry.path,
+            browserEntries = childrenOf(state.remoteTreeCache.keys, entry.path)
+        )
+    }
+
+    fun navigateUp() {
+        val parent = state.browserPath.substringBeforeLast("/", "")
+        state = state.copy(
+            browserPath = parent,
+            browserEntries = childrenOf(state.remoteTreeCache.keys, parent)
+        )
+    }
+
+    fun navigateToBreadcrumb(path: String) {
+        state = state.copy(
+            browserPath = path,
+            browserEntries = childrenOf(state.remoteTreeCache.keys, path)
+        )
+    }
+
+    fun clearCreateEntryError() {
+        state = state.copy(createEntryError = null)
+    }
+
+    /** Creates an empty text file at the current browser folder as a single, immediate
+     * commit — reuses the same tested [GitHubRepository.syncChanges] pipeline (validation,
+     * retries, atomic tree/commit/ref, post-push verification) as the main sync flow. */
+    fun createFile(fileName: String, content: String = "") {
+        val repo = state.selectedRepo ?: return
+        val name = fileName.trim()
+        if (name.isBlank() || state.isCreatingEntry) return
+
+        val fullPath = if (state.browserPath.isEmpty()) name else "${state.browserPath}/$name"
+        if (state.remoteTreeCache.containsKey(fullPath)) {
+            state = state.copy(createEntryError = "\"$name\" already exists here.")
+            return
+        }
+
+        val bytes = content.toByteArray(Charsets.UTF_8)
+        state = state.copy(isCreatingEntry = true, createEntryError = null)
+        viewModelScope.launch {
+            gitHubRepository.syncChanges(
+                repo = repo,
+                changes = listOf(FileChange(fileName = name, filePath = fullPath, type = ChangeType.ADDED)),
+                readFileBytes = { bytes },
+                onProgress = { _, _, _, _ -> }
+            ).onSuccess {
+                val updatedTree = state.remoteTreeCache + (fullPath to "")
+                state = state.copy(
+                    isCreatingEntry = false,
+                    remoteTreeCache = updatedTree,
+                    browserEntries = childrenOf(updatedTree.keys, state.browserPath)
+                )
+            }.onFailure { throwable ->
+                state = state.copy(isCreatingEntry = false, createEntryError = throwable.message ?: "Couldn't create file.")
+            }
+        }
+    }
+
+    /** Git has no real folder objects — an empty folder is created by committing a hidden
+     * ".gitkeep" placeholder inside it, the standard convention. The placeholder itself is
+     * filtered out of [childrenOf] so the folder just looks empty until a real file is added. */
+    fun createFolder(folderName: String) {
+        val repo = state.selectedRepo ?: return
+        val name = folderName.trim()
+        if (name.isBlank() || state.isCreatingEntry) return
+
+        val folderPath = if (state.browserPath.isEmpty()) name else "${state.browserPath}/$name"
+        val alreadyExists = state.remoteTreeCache.keys.any { it == folderPath || it.startsWith("$folderPath/") }
+        if (alreadyExists) {
+            state = state.copy(createEntryError = "\"$name\" already exists here.")
+            return
+        }
+
+        val placeholderPath = "$folderPath/.gitkeep"
+        state = state.copy(isCreatingEntry = true, createEntryError = null)
+        viewModelScope.launch {
+            gitHubRepository.syncChanges(
+                repo = repo,
+                changes = listOf(FileChange(fileName = ".gitkeep", filePath = placeholderPath, type = ChangeType.ADDED)),
+                readFileBytes = { ByteArray(0) },
+                onProgress = { _, _, _, _ -> }
+            ).onSuccess {
+                val updatedTree = state.remoteTreeCache + (placeholderPath to "")
+                state = state.copy(
+                    isCreatingEntry = false,
+                    remoteTreeCache = updatedTree,
+                    browserEntries = childrenOf(updatedTree.keys, state.browserPath)
+                )
+            }.onFailure { throwable ->
+                state = state.copy(isCreatingEntry = false, createEntryError = throwable.message ?: "Couldn't create folder.")
+            }
+        }
+    }
+
+    /** Computes the immediate children of [currentPath] from a flat set of full repo paths. */
+    private fun childrenOf(paths: Set<String>, currentPath: String): List<BrowserEntry> {
+        val prefix = if (currentPath.isEmpty()) "" else "$currentPath/"
+        val seen = linkedSetOf<String>()
+        val entries = mutableListOf<BrowserEntry>()
+        for (path in paths) {
+            if (!path.startsWith(prefix)) continue
+            val remainder = path.removePrefix(prefix)
+            if (remainder.isEmpty()) continue
+            val firstSegment = remainder.substringBefore("/")
+            val isFolder = remainder.contains("/")
+            if (!isFolder && firstSegment == ".gitkeep") continue // hide folder placeholder files
+            val fullPath = prefix + firstSegment
+            if (seen.add(fullPath)) {
+                entries += BrowserEntry(name = firstSegment, path = fullPath, isFolder = isFolder)
+            }
+        }
+        return entries.sortedWith(compareBy({ !it.isFolder }, { it.name.lowercase() }))
     }
 }

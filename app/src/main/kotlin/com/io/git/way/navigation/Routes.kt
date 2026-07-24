@@ -5,6 +5,7 @@ sealed class Routes(val route: String) {
     data object Splash : Routes("splash")
     data object Token : Routes("token")
     data object RepositoryList : Routes("repository_list")
+    data object RepositoryBrowser : Routes("repository_browser")
     data object FolderSelection : Routes("folder_selection")
     data object Analysis : Routes("analysis")
     data object Confirmation : Routes("confirmation")
