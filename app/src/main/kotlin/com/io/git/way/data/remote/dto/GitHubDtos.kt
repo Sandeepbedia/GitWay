@@ -22,7 +22,33 @@ data class GitHubRepoDto(
     val owner: GitHubOwnerDto,
     @SerialName("private") val isPrivate: Boolean = false,
     @SerialName("updated_at") val updatedAt: String? = null,
-    @SerialName("default_branch") val defaultBranch: String? = null
+    @SerialName("default_branch") val defaultBranch: String? = null,
+    val archived: Boolean = false,
+    val disabled: Boolean = false,
+    val permissions: GitHubRepoPermissionsDto? = null
+)
+
+@Serializable
+data class GitHubRepoPermissionsDto(
+    val push: Boolean = false,
+    val admin: Boolean = false,
+    val pull: Boolean = false
+)
+
+/** Shape of GitHub's standard Git Data API error body (PRD §1 "parse and display GitHub's error response"). */
+@Serializable
+data class GitHubErrorResponseDto(
+    val message: String? = null,
+    val errors: List<GitHubErrorItemDto>? = null,
+    @SerialName("documentation_url") val documentationUrl: String? = null
+)
+
+@Serializable
+data class GitHubErrorItemDto(
+    val resource: String? = null,
+    val field: String? = null,
+    val code: String? = null,
+    val message: String? = null
 )
 
 // ===== Git Data API (PRD1 §3.2 / PRD2 §3.2) =====

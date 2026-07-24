@@ -9,6 +9,7 @@ import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.io.git.way.data.local.FolderScanner
+import com.io.git.way.data.local.NetworkUtils
 import com.io.git.way.domain.ComparisonEngine
 import com.io.git.way.domain.model.ChangeType
 import com.io.git.way.domain.model.FileChange
@@ -16,7 +17,9 @@ import com.io.git.way.domain.model.GitRepository
 import com.io.git.way.domain.model.LocalFile
 import com.io.git.way.domain.model.UploadPhase
 import com.io.git.way.domain.repository.GitHubRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -148,9 +151,18 @@ class GitWaySessionViewModel(
         }
     }
 
+    private var uploadJob: Job? = null
+
     fun uploadChanges(context: Context) {
         val repo = state.selectedRepo ?: return
         if (state.fileChanges.isEmpty() || state.isUploading) return
+
+        // §2 Validate Repository Before Upload: fail fast on no connection rather than
+        // letting blob creation start and die partway through.
+        if (!NetworkUtils.isOnline(context)) {
+            state = state.copy(uploadError = "No internet connection. Please reconnect and try again.")
+            return
+        }
 
         val localByPath = state.localFiles.associateBy { it.relativePath }
         val readBytes: suspend (String) -> ByteArray = { path ->
@@ -160,36 +172,51 @@ class GitWaySessionViewModel(
             }
         }
 
-        viewModelScope.launch {
+        uploadJob = viewModelScope.launch {
             state = state.copy(
                 isUploading = true,
                 uploadError = null,
-                uploadPhase = UploadPhase.PREPARING,
+                uploadPhase = UploadPhase.VALIDATING,
                 uploadProgress = 0 to state.fileChanges.size,
                 uploadCurrentFile = ""
             )
 
-            gitHubRepository.syncChanges(
-                repo = repo,
-                changes = state.fileChanges,
-                readFileBytes = readBytes,
-                onProgress = { phase, completed, total, currentFile ->
+            try {
+                gitHubRepository.syncChanges(
+                    repo = repo,
+                    changes = state.fileChanges,
+                    readFileBytes = readBytes,
+                    onProgress = { phase, completed, total, currentFile ->
+                        state = state.copy(
+                            uploadPhase = phase,
+                            uploadProgress = completed to total,
+                            uploadCurrentFile = currentFile
+                        )
+                    }
+                ).onSuccess { sha ->
+                    state = state.copy(isUploading = false, uploadPhase = UploadPhase.DONE, commitSha = sha)
+                }.onFailure { throwable ->
                     state = state.copy(
-                        uploadPhase = phase,
-                        uploadProgress = completed to total,
-                        uploadCurrentFile = currentFile
+                        isUploading = false,
+                        uploadError = throwable.message ?: "Upload failed.",
+                        uploadPhase = UploadPhase.IDLE
                     )
                 }
-            ).onSuccess { sha ->
-                state = state.copy(isUploading = false, uploadPhase = UploadPhase.DONE, commitSha = sha)
-            }.onFailure { throwable ->
+            } catch (e: CancellationException) {
                 state = state.copy(
                     isUploading = false,
-                    uploadError = throwable.message ?: "Upload failed.",
+                    uploadError = "Upload cancelled. Nothing was written to the repository — it's safe to retry.",
                     uploadPhase = UploadPhase.IDLE
                 )
+                throw e
             }
         }
+    }
+
+    /** §14 Cancel button. Safe at any point before UPDATING_BRANCH finishes — the repo's
+     * branch is only ever touched by the final ref update. */
+    fun cancelUpload() {
+        uploadJob?.cancel()
     }
 
     /** Called when returning to the Repository List after Completion, or backing out of a repo. */

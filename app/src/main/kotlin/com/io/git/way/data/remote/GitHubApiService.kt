@@ -33,6 +33,14 @@ interface GitHubApiService {
         @Query("affiliation") affiliation: String = "owner,collaborator,organization_member"
     ): List<GitHubRepoDto>
 
+    /** Fresh single-repo lookup: used right before upload to re-check permissions,
+     * archived/disabled state, and the current default branch (422-fix PRD §2/§3). */
+    @GET("repos/{owner}/{repo}")
+    suspend fun getRepository(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String
+    ): GitHubRepoDto
+
     // ===== Git Data API (PRD1 §3.2 / PRD2 §3.2) =====
 
     @GET("repos/{owner}/{repo}/git/trees/{sha}")

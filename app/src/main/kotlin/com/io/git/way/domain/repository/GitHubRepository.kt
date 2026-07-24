@@ -22,6 +22,14 @@ interface GitHubRepository {
     suspend fun getRepositoryTree(repo: GitRepository): Result<Map<String, String>>
 
     /**
+     * Re-checks [repo] directly against GitHub right before upload: still exists, token
+     * still has push permission, not archived/disabled, and has a resolvable default
+     * branch (422-fix PRD §2 "Validate Repository Before Upload"). Returns the fresh
+     * default branch name on success — never the possibly-stale one cached on [repo].
+     */
+    suspend fun validateRepositoryForUpload(repo: GitRepository): Result<String>
+
+    /**
      * Uploads every [changes] entry to GitHub as a single commit using the Git Data API
      * (PRD2 §3.1 approach B): blobs are created (with limited concurrency) for every
      * ADDED/MODIFIED path, then one tree + commit + ref update lands the whole change set

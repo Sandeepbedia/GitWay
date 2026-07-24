@@ -41,7 +41,17 @@ object RetrofitProvider {
             .addInterceptor(loggingInterceptor)
             .build()
 
-        val json = Json { ignoreUnknownKeys = true }
+        // encodeDefaults = true is critical: kotlinx.serialization's Json defaults to
+        // OMITTING properties that still hold their default value. TreeEntryInput's
+        // mode/type and CreateBlobRequest's encoding are always left at their defaults
+        // in this app, so without this flag they were silently stripped from every
+        // request body — GitHub then rejected trees with "Must supply a valid
+        // tree.mode" (422), and worse, blobs were silently uploaded as UTF-8 text
+        // instead of base64, corrupting any binary file (images, APKs, etc.).
+        val json = Json {
+            ignoreUnknownKeys = true
+            encodeDefaults = true
+        }
 
         return Retrofit.Builder()
             .baseUrl(BASE_URL)
