@@ -88,7 +88,9 @@ class GitHubRepositoryImpl(
                         owner = dto.owner.login,
                         isPrivate = dto.isPrivate,
                         lastUpdated = dto.updatedAt.orEmpty(),
-                        defaultBranch = dto.defaultBranch ?: "main"
+                        defaultBranch = dto.defaultBranch ?: "main",
+                        language = dto.language,
+                        createdAt = dto.createdAt.orEmpty()
                     )
                 }
             }

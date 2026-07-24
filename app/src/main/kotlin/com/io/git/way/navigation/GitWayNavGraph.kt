@@ -16,6 +16,8 @@ import com.io.git.way.ui.screens.browser.RepositoryBrowserScreen
 import com.io.git.way.ui.screens.complete.CompletionScreen
 import com.io.git.way.ui.screens.confirm.ConfirmationScreen
 import com.io.git.way.ui.screens.folder.FolderSelectionScreen
+import com.io.git.way.ui.screens.overview.OverviewScreen
+import com.io.git.way.ui.screens.profile.ProfileScreen
 import com.io.git.way.ui.screens.repos.RepositoryListScreen
 import com.io.git.way.ui.screens.splash.SplashScreen
 import com.io.git.way.ui.screens.upload.UploadProgressScreen
@@ -76,8 +78,22 @@ fun GitWayNavGraph(
                         popUpTo(Routes.RepositoryList.route) { inclusive = true }
                     }
                 },
+                onNavigateOverview = { navigateToTab(navController, Routes.Overview.route) },
+                onNavigateProfile = { navigateToTab(navController, Routes.Profile.route) },
                 themeMode = themeMode,
                 onThemeModeChange = onThemeModeChange
+            )
+        }
+        composable(Routes.Overview.route) {
+            OverviewScreen(
+                onNavigateRepositories = { navigateToTab(navController, Routes.RepositoryList.route) },
+                onNavigateProfile = { navigateToTab(navController, Routes.Profile.route) }
+            )
+        }
+        composable(Routes.Profile.route) {
+            ProfileScreen(
+                onNavigateOverview = { navigateToTab(navController, Routes.Overview.route) },
+                onNavigateRepositories = { navigateToTab(navController, Routes.RepositoryList.route) }
             )
         }
         composable(Routes.RepositoryBrowser.route) {
@@ -125,5 +141,14 @@ fun GitWayNavGraph(
                 }
             )
         }
+    }
+}
+
+/** Standard bottom-nav navigation: avoids stacking duplicate destinations and restores each tab's state. */
+private fun navigateToTab(navController: NavHostController, route: String) {
+    navController.navigate(route) {
+        popUpTo(Routes.RepositoryList.route) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
     }
 }

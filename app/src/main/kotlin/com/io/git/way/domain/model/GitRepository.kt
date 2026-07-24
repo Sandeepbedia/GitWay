@@ -7,5 +7,7 @@ data class GitRepository(
     val owner: String,
     val isPrivate: Boolean,
     val lastUpdated: String,
-    val defaultBranch: String = "main"
+    val defaultBranch: String = "main",
+    val language: String? = null,
+    val createdAt: String = ""
 )

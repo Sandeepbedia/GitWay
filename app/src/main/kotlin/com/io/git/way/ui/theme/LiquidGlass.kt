@@ -1,8 +1,17 @@
 package com.io.git.way.ui.theme
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -20,7 +29,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Search
+
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -29,13 +47,21 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -345,4 +371,241 @@ fun GlassChip(
         leadingIcon?.invoke()
         Text(text, style = MaterialTheme.typography.labelMedium, color = textColor, fontWeight = FontWeight.Medium)
     }
+}
+
+/** Small circular glass button used for header actions (filter, add, theme, etc.). */
+@Composable
+fun GlassIconButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    size: Dp = 44.dp,
+    content: @Composable () -> Unit
+) {
+    val dark = MaterialTheme.isDarkSurface
+    val fill = if (dark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.55f)
+    val border = if (dark) Color.White.copy(alpha = 0.30f) else Color.White.copy(alpha = 0.75f)
+    val contentColor = if (dark) Color.White.copy(alpha = 0.92f) else MaterialTheme.colorScheme.onSurface
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.92f else 1f, label = "iconButtonScale")
+
+    Box(
+        modifier
+            .size(size)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(CircleShape)
+            .background(fill)
+            .border(1.dp, border, CircleShape)
+            .clickable(
+                onClick = onClick,
+                interactionSource = interactionSource,
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        CompositionLocalProvider(LocalContentColor provides contentColor) {
+            content()
+        }
+    }
+}
+
+/** Large rounded search field with a glass background and an animated focus border. */
+@Composable
+fun GlassSearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "Search"
+) {
+    val dark = MaterialTheme.isDarkSurface
+    val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(28.dp)
+    var focused by remember { mutableStateOf(false) }
+
+    val borderColor by animateColorAsState(
+        targetValue = if (focused) scheme.primary.copy(alpha = 0.85f) else Color.White.copy(alpha = if (dark) 0.18f else 0.6f),
+        label = "searchBorder"
+    )
+    val fill = if (dark) Color.White.copy(alpha = 0.07f) else Color.White.copy(alpha = 0.45f)
+    val contentColor = if (dark) Color.White.copy(alpha = 0.92f) else scheme.onSurface
+
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .clip(shape)
+            .background(fill)
+            .border(1.5.dp, borderColor, shape)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(Icons.Filled.Search, contentDescription = null, tint = contentColor.copy(alpha = 0.7f))
+            Box(modifier = Modifier.weight(1f)) {
+                if (value.isEmpty()) {
+                    Text(placeholder, color = contentColor.copy(alpha = 0.5f))
+                }
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = contentColor),
+                    cursorBrush = SolidColor(scheme.primary),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { focused = it.isFocused }
+                )
+            }
+            if (value.isNotEmpty()) {
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = "Clear",
+                    tint = contentColor.copy(alpha = 0.7f),
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clip(CircleShape)
+                        .clickable { onValueChange("") }
+                )
+            }
+        }
+    }
+}
+
+/** Shimmering placeholder card shown while the repository list is loading, instead of a spinner. */
+@Composable
+fun GlassSkeletonCard(modifier: Modifier = Modifier) {
+    val dark = MaterialTheme.isDarkSurface
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val shimmer by transition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 0.75f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "shimmerAlpha"
+    )
+    val base = if (dark) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.4f)
+    val shape = RoundedCornerShape(28.dp)
+
+    Row(
+        modifier
+            .fillMaxWidth()
+            .height(104.dp)
+            .clip(shape)
+            .background(base)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Box(
+            Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = shimmer * 0.3f))
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.size(120.dp, 14.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = shimmer * 0.3f)))
+            Box(Modifier.size(80.dp, 10.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = shimmer * 0.2f)))
+        }
+    }
+}
+
+/** The three primary destinations behind the floating bottom nav. */
+enum class BottomNavTab(val label: String) {
+    OVERVIEW("Overview"),
+    REPOSITORIES("Repositories"),
+    PROFILE("Profile")
+}
+
+/** Floating glass pill navigation bar — not attached to the screen edge (PRD "Floating Navigation Bar"). */
+@Composable
+fun GlassFloatingBottomNav(
+    selected: BottomNavTab,
+    onSelect: (BottomNavTab) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val dark = MaterialTheme.isDarkSurface
+    val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(32.dp)
+    val fill = if (dark) Color(0xFF0B0B14).copy(alpha = 0.75f) else Color.White.copy(alpha = 0.75f)
+    val border = if (dark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.9f)
+
+    Row(
+        modifier
+            .padding(horizontal = 20.dp, vertical = 24.dp)
+            .fillMaxWidth()
+            .height(64.dp)
+            .clip(shape)
+            .background(fill)
+            .border(1.dp, border, shape)
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceEvenly
+    ) {
+        BottomNavTab.entries.forEach { tab ->
+            BottomNavItem(
+                tab = tab,
+                isSelected = tab == selected,
+                onClick = { onSelect(tab) },
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun BottomNavItem(
+    tab: BottomNavTab,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val dark = MaterialTheme.isDarkSurface
+    val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(50)
+    val pillAlpha by animateFloatAsState(if (isSelected) 1f else 0f, label = "navPillAlpha")
+    val contentColor = when {
+        isSelected -> Color.White
+        dark -> Color.White.copy(alpha = 0.6f)
+        else -> scheme.onSurfaceVariant
+    }
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.9f else 1f, label = "navItemScale")
+
+    Row(
+        modifier
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(shape)
+            .background(
+                Brush.horizontalGradient(
+                    listOf(
+                        scheme.primary.copy(alpha = pillAlpha),
+                        scheme.tertiary.copy(alpha = pillAlpha)
+                    )
+                )
+            )
+            .clickable(
+                onClick = onClick,
+                interactionSource = interactionSource,
+            )
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Icon(bottomNavIcon(tab), contentDescription = tab.label, tint = contentColor, modifier = Modifier.size(20.dp))
+        if (isSelected) {
+            Text(tab.label, color = contentColor, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
+        }
+    }
+}
+
+private fun bottomNavIcon(tab: BottomNavTab) = when (tab) {
+    BottomNavTab.OVERVIEW -> Icons.Filled.Home
+    BottomNavTab.REPOSITORIES -> Icons.Filled.Folder
+    BottomNavTab.PROFILE -> Icons.Filled.Person
 }

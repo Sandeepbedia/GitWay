@@ -23,6 +23,8 @@ data class GitHubRepoDto(
     @SerialName("private") val isPrivate: Boolean = false,
     @SerialName("updated_at") val updatedAt: String? = null,
     @SerialName("default_branch") val defaultBranch: String? = null,
+    val language: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
     val archived: Boolean = false,
     val disabled: Boolean = false,
     val permissions: GitHubRepoPermissionsDto? = null
