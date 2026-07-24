@@ -37,6 +37,11 @@ data class GitWaySessionState(
     val compareError: String? = null,
     val fileChanges: List<FileChange> = emptyList(),
 
+    /** Which changes the user has chosen to actually push — defaults to "all selected"
+     * as soon as a comparison finishes, but can be narrowed manually per file or per
+     * section (Added/Modified/Removed) via the Analysis screen's checkboxes. */
+    val selectedPaths: Set<String> = emptySet(),
+
     val isUploading: Boolean = false,
     val uploadPhase: UploadPhase = UploadPhase.IDLE,
     val uploadProgress: Pair<Int, Int> = 0 to 0,
@@ -47,6 +52,11 @@ data class GitWaySessionState(
     val addedCount get() = fileChanges.count { it.type == ChangeType.ADDED }
     val modifiedCount get() = fileChanges.count { it.type == ChangeType.MODIFIED }
     val removedCount get() = fileChanges.count { it.type == ChangeType.REMOVED }
+
+    val selectedChanges get() = fileChanges.filter { selectedPaths.contains(it.filePath) }
+    val selectedAddedCount get() = selectedChanges.count { it.type == ChangeType.ADDED }
+    val selectedModifiedCount get() = selectedChanges.count { it.type == ChangeType.MODIFIED }
+    val selectedRemovedCount get() = selectedChanges.count { it.type == ChangeType.REMOVED }
 }
 
 /**
@@ -132,7 +142,14 @@ class GitWaySessionViewModel(
                                 state = state.copy(compareProgress = done to total)
                             }
                         )
-                        state = state.copy(isComparing = false, fileChanges = changes, compareProgress = null)
+                        state = state.copy(
+                            isComparing = false,
+                            fileChanges = changes,
+                            compareProgress = null,
+                            // Everything starts selected — the user can then manually
+                            // uncheck items or use "Select all" / "Clear" per section.
+                            selectedPaths = changes.map { it.filePath }.toSet()
+                        )
                     } catch (e: Exception) {
                         state = state.copy(
                             isComparing = false,
@@ -151,11 +168,38 @@ class GitWaySessionViewModel(
         }
     }
 
+    /** Toggle a single file's inclusion — the "manual" selection option. */
+    fun toggleChangeSelection(filePath: String) {
+        val current = state.selectedPaths
+        state = state.copy(
+            selectedPaths = if (filePath in current) current - filePath else current + filePath
+        )
+    }
+
+    /** Select or clear every change of one type at once (the section-level "Select all"). */
+    fun setSelectionForType(type: ChangeType, selected: Boolean) {
+        val pathsOfType = state.fileChanges.filter { it.type == type }.map { it.filePath }.toSet()
+        state = state.copy(
+            selectedPaths = if (selected) state.selectedPaths + pathsOfType else state.selectedPaths - pathsOfType
+        )
+    }
+
+    /** Global "Select all" across every detected change. */
+    fun selectAllChanges() {
+        state = state.copy(selectedPaths = state.fileChanges.map { it.filePath }.toSet())
+    }
+
+    /** Global "Clear selection". */
+    fun deselectAllChanges() {
+        state = state.copy(selectedPaths = emptySet())
+    }
+
     private var uploadJob: Job? = null
 
     fun uploadChanges(context: Context) {
         val repo = state.selectedRepo ?: return
-        if (state.fileChanges.isEmpty() || state.isUploading) return
+        val changesToUpload = state.selectedChanges
+        if (changesToUpload.isEmpty() || state.isUploading) return
 
         // §2 Validate Repository Before Upload: fail fast on no connection rather than
         // letting blob creation start and die partway through.
@@ -177,14 +221,14 @@ class GitWaySessionViewModel(
                 isUploading = true,
                 uploadError = null,
                 uploadPhase = UploadPhase.VALIDATING,
-                uploadProgress = 0 to state.fileChanges.size,
+                uploadProgress = 0 to changesToUpload.size,
                 uploadCurrentFile = ""
             )
 
             try {
                 gitHubRepository.syncChanges(
                     repo = repo,
-                    changes = state.fileChanges,
+                    changes = changesToUpload,
                     readFileBytes = readBytes,
                     onProgress = { phase, completed, total, currentFile ->
                         state = state.copy(

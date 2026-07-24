@@ -74,7 +74,9 @@ fun GitWayNavGraph(
                     navController.navigate(Routes.Token.route) {
                         popUpTo(Routes.RepositoryList.route) { inclusive = true }
                     }
-                }
+                },
+                themeMode = themeMode,
+                onThemeModeChange = onThemeModeChange
             )
         }
         composable(Routes.FolderSelection.route) {

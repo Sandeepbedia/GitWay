@@ -10,23 +10,25 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Button
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.io.git.way.domain.model.UploadPhase
 import com.io.git.way.ui.common.GitWaySessionViewModel
+import com.io.git.way.ui.theme.GlassCard
+import com.io.git.way.ui.theme.GlassPrimaryButton
+import com.io.git.way.ui.theme.GlassScaffold
+import com.io.git.way.ui.theme.GlassSecondaryButton
 
 /** Screen 7: real-time upload status through every stage of the push, not just a stuck
  * "42/42" (422-fix PRD §11 Progress UI / §14 Better UI). */
@@ -42,67 +44,71 @@ fun UploadProgressScreen(
         if (state.commitSha != null) onUploadFinished()
     }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Uploading") }) }) { padding ->
+    GlassScaffold(title = "Uploading") { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp)) {
-            val phaseLabel = phaseLabel(state.uploadPhase)
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                val phaseLabel = phaseLabel(state.uploadPhase)
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (state.isUploading) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                    Column(modifier = Modifier.padding(start = 12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (state.isUploading) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        Column(modifier = Modifier.padding(start = 12.dp)) {
+                            Text(phaseLabel, style = MaterialTheme.typography.titleMedium)
+                        }
+                    } else {
                         Text(phaseLabel, style = MaterialTheme.typography.titleMedium)
                     }
-                } else {
-                    Text(phaseLabel, style = MaterialTheme.typography.titleMedium)
+                }
+
+                val (completed, total) = state.uploadProgress
+                Text(
+                    text = if (state.uploadCurrentFile.isNotBlank()) {
+                        "$completed / $total files — ${state.uploadCurrentFile}"
+                    } else {
+                        "$completed / $total files"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+
+                val progressFraction = if (total > 0) completed.toFloat() / total.toFloat() else 0f
+                LinearProgressIndicator(
+                    progress = { progressFraction },
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp).clip(RoundedCornerShape(8.dp))
+                )
+
+                if (state.isUploading) {
+                    TextButton(
+                        onClick = { sessionViewModel.cancelUpload() },
+                        modifier = Modifier.padding(top = 12.dp)
+                    ) { Text("Cancel") }
                 }
             }
 
-            val (completed, total) = state.uploadProgress
-            Text(
-                text = if (state.uploadCurrentFile.isNotBlank()) {
-                    "$completed / $total files — ${state.uploadCurrentFile}"
-                } else {
-                    "$completed / $total files"
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 8.dp)
-            )
-
-            val progressFraction = if (total > 0) completed.toFloat() / total.toFloat() else 0f
-            LinearProgressIndicator(
-                progress = { progressFraction },
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
-            )
-
-            if (state.isUploading) {
-                TextButton(
-                    onClick = { sessionViewModel.cancelUpload() },
-                    modifier = Modifier.padding(top = 12.dp)
-                ) { Text("Cancel") }
-            }
-
             if (state.uploadError != null) {
-                // §1 Improve Error Handling: GitHub's real reason, not a bare status code.
-                Text(
-                    "Upload Failed",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(top = 20.dp)
-                )
-                Text(
-                    state.uploadError,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-                Row(
-                    modifier = Modifier.padding(top = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(onClick = { sessionViewModel.uploadChanges(context) }) {
-                        Text("Retry upload")
-                    }
-                    OutlinedButton(onClick = { copyErrorToClipboard(context, state.uploadError) }) {
-                        Text("Copy Error")
+                GlassCard(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+                    // §1 Improve Error Handling: GitHub's real reason, not a bare status code.
+                    Text(
+                        "Upload Failed",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Text(
+                        state.uploadError,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GlassPrimaryButton(
+                            text = "Retry upload",
+                            onClick = { sessionViewModel.uploadChanges(context) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        GlassSecondaryButton(
+                            text = "Copy Error",
+                            onClick = { copyErrorToClipboard(context, state.uploadError) },
+                            modifier = Modifier.weight(1f)
+                        )
                     }
                 }
             }

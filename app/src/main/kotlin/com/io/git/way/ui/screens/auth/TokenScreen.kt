@@ -4,15 +4,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -22,6 +17,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.io.git.way.GitWayApp
 import com.io.git.way.ui.common.GitWayViewModelFactory
+import com.io.git.way.ui.theme.GlassCard
+import com.io.git.way.ui.theme.GlassPrimaryButton
+import com.io.git.way.ui.theme.GlassScaffold
 
 /** Screen 2: GitHub Personal Access Token input, validated live against the GitHub API. */
 @Composable
@@ -35,14 +33,16 @@ fun TokenScreen(
 ) {
     val state = viewModel.uiState
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Connect GitHub") }) }) { padding ->
+    GlassScaffold(title = "Connect GitHub") { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp)) {
-            Text(
-                text = "Paste a GitHub Personal Access Token (classic or fine-grained) with " +
-                    "repo access. It's encrypted on-device and never leaves this app except " +
-                    "to authenticate with GitHub.",
-                style = MaterialTheme.typography.bodyMedium
-            )
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Paste a GitHub Personal Access Token (classic or fine-grained) with " +
+                        "repo access. It's encrypted on-device and never leaves this app except " +
+                        "to authenticate with GitHub.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
             OutlinedTextField(
                 value = state.token,
                 onValueChange = viewModel::onTokenChange,
@@ -62,17 +62,13 @@ fun TokenScreen(
                     modifier = Modifier.padding(top = 8.dp)
                 )
             }
-            Button(
+            GlassPrimaryButton(
+                text = "Connect",
                 onClick = { viewModel.connect(onConnected) },
                 enabled = state.token.isNotBlank() && !state.isLoading,
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
-            ) {
-                if (state.isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp))
-                } else {
-                    Text("Connect")
-                }
-            }
+                loading = state.isLoading,
+                modifier = Modifier.padding(top = 16.dp)
+            )
         }
     }
 }
