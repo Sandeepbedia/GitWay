@@ -5,53 +5,41 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.ui.Alignment
-import com.io.git.way.ui.theme.ComposeEmptyActivityTheme
+import androidx.navigation.compose.rememberNavController
+import com.io.git.way.navigation.GitWayNavGraph
+import com.io.git.way.ui.theme.AppThemeMode
+import com.io.git.way.ui.theme.GitWayTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            ComposeEmptyActivityTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
-            }
+            GitWayRoot()
         }
     }
 }
 
 @Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier.fillMaxSize(),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = "Hello $name!"
-        )
-    }
-}
+private fun GitWayRoot() {
+    // TODO: replace with persisted theme preference from DataStore (see PRD Theme System).
+    var themeMode by remember { mutableStateOf(AppThemeMode.SYSTEM) }
 
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    ComposeEmptyActivityTheme {
-        Greeting("Android")
+    GitWayTheme(themeMode = themeMode) {
+        Surface(modifier = Modifier.fillMaxSize()) {
+            val navController = rememberNavController()
+            GitWayNavGraph(
+                navController = navController,
+                themeMode = themeMode,
+                onThemeModeChange = { themeMode = it }
+            )
+        }
     }
 }
