@@ -431,4 +431,16 @@ class GitHubRepositoryImpl(
     override fun hasToken(): Boolean = tokenManager.hasToken()
 
     override fun clearToken() = tokenManager.clearToken()
+
+    override suspend fun getFileContent(repo: GitRepositoryModel, blobSha: String): Result<ByteArray> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val blob = githubCallWithRetry { apiService.getBlob(repo.owner, repo.name, blobSha) }
+                if (blob.encoding == "base64") {
+                    Base64.decode(blob.content.replace("\n", ""), Base64.DEFAULT)
+                } else {
+                    blob.content.toByteArray(Charsets.UTF_8)
+                }
+            }
+        }
 }

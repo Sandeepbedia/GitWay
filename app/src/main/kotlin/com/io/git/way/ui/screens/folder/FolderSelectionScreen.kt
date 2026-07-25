@@ -2,6 +2,7 @@ package com.io.git.way.ui.screens.folder
 
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,9 +14,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.GppGood
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -33,8 +40,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.io.git.way.domain.model.LocalFile
+import com.io.git.way.domain.model.ScanIssue
+import com.io.git.way.domain.model.ScanReport
 import com.io.git.way.ui.common.FileTypeIcons
 import com.io.git.way.ui.common.GitWaySessionViewModel
+import com.io.git.way.ui.theme.DiffModifiedYellow
+import com.io.git.way.ui.theme.DiffRemovedRed
 import com.io.git.way.ui.theme.GlassCard
 import com.io.git.way.ui.theme.GlassPrimaryButton
 import com.io.git.way.ui.theme.GlassScaffold
@@ -118,6 +129,10 @@ fun FolderSelectionScreen(
                         }
                     }
 
+                    state.scanReport?.let { report ->
+                        ProtectionSummaryCard(report)
+                    }
+
                     OutlinedTextField(
                         value = query,
                         onValueChange = { query = it },
@@ -187,6 +202,118 @@ private fun FileRow(file: LocalFile) {
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+/** PRD "Smart Upload Protection" §14/§16 — Upload Summary + expandable Ignored/Blocked
+ * (secrets included in Blocked) lists, right where the file list already lives so the
+ * user sees exactly what will and won't be uploaded before tapping Continue. */
+@Composable
+private fun ProtectionSummaryCard(report: ScanReport) {
+    var showIgnored by remember { mutableStateOf(false) }
+    var showBlocked by remember { mutableStateOf(false) }
+
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(Icons.Filled.Shield, contentDescription = null)
+            Text("Smart Upload Protection", style = MaterialTheme.typography.titleSmall)
+        }
+        Text(
+            "${report.safeCount} safe · ${FileTypeIcons.formatSize(report.estimatedUploadBytes)} to upload",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp, bottom = 10.dp)
+        )
+
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            CountBadge(Icons.Filled.GppGood, report.safeCount, "Safe", MaterialTheme.colorScheme.primary)
+            CountBadge(Icons.Filled.VisibilityOff, report.ignoredCount, "Ignored", DiffModifiedYellow)
+            CountBadge(Icons.Filled.Warning, report.blockedCount + report.secretCount, "Blocked", DiffRemovedRed)
+        }
+
+        if (report.ignoredFiles.isNotEmpty()) {
+            ExpandableIssueSection(
+                title = "View ${report.ignoredCount} ignored file(s)",
+                expanded = showIgnored,
+                onToggle = { showIgnored = !showIgnored },
+                issues = report.ignoredFiles
+            )
+        }
+
+        val blockedAll = report.blockedFiles + report.secretsFound
+        if (blockedAll.isNotEmpty()) {
+            ExpandableIssueSection(
+                title = "View ${blockedAll.size} blocked file(s)",
+                expanded = showBlocked,
+                onToggle = { showBlocked = !showBlocked },
+                issues = blockedAll,
+                accent = DiffRemovedRed
+            )
+        }
+    }
+}
+
+@Composable
+private fun CountBadge(icon: androidx.compose.ui.graphics.vector.ImageVector, count: Int, label: String, tint: androidx.compose.ui.graphics.Color) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
+        Text("$count", style = MaterialTheme.typography.labelLarge, color = tint)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun ExpandableIssueSection(
+    title: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    issues: List<ScanIssue>,
+    accent: androidx.compose.ui.graphics.Color? = null
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.padding(top = 10.dp).fillMaxWidth()
+    ) {
+        Text(
+            title,
+            style = MaterialTheme.typography.labelMedium,
+            color = accent ?: MaterialTheme.colorScheme.primary,
+            modifier = Modifier.weight(1f)
+        )
+        IconButton(onClick = onToggle, modifier = Modifier.size(28.dp)) {
+            Icon(
+                if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = if (expanded) "Collapse" else "Expand",
+                tint = accent ?: MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+    AnimatedVisibility(visible = expanded) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
+            issues.take(50).forEach { issue ->
+                Column {
+                    Text(
+                        issue.relativePath,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        issue.reason,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            if (issues.size > 50) {
+                Text(
+                    "+ ${issues.size - 50} more",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }

@@ -146,3 +146,14 @@ data class CreateRefRequest(
     val ref: String,
     val sha: String
 )
+
+/** Response of GET git/blobs/{sha} — used to read a file's current content for the
+ * Repository Browser's viewer/editor/copy-paste features (blob sha already known from
+ * the cached repo tree, so no extra Contents-API round trip is needed). */
+@Serializable
+data class GitBlobContentDto(
+    val sha: String,
+    val content: String,
+    val encoding: String,
+    val size: Long = 0
+)

@@ -4,6 +4,7 @@ import com.io.git.way.data.remote.dto.CreateBlobRequest
 import com.io.git.way.data.remote.dto.CreateCommitRequest
 import com.io.git.way.data.remote.dto.CreateRefRequest
 import com.io.git.way.data.remote.dto.CreateTreeRequest
+import com.io.git.way.data.remote.dto.GitBlobContentDto
 import com.io.git.way.data.remote.dto.GitBlobRefDto
 import com.io.git.way.data.remote.dto.GitCommitDetailDto
 import com.io.git.way.data.remote.dto.GitCommitRefDto
@@ -101,4 +102,14 @@ interface GitHubApiService {
         @Path("repo") repo: String,
         @Body body: CreateRefRequest
     ): GitRefDto
+
+    /** Reads a blob's raw content by sha — the sha is already known from the cached repo
+     * tree, so this powers the Repository Browser's file viewer/editor without a second
+     * Contents-API lookup. */
+    @GET("repos/{owner}/{repo}/git/blobs/{sha}")
+    suspend fun getBlob(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Path("sha") sha: String
+    ): GitBlobContentDto
 }

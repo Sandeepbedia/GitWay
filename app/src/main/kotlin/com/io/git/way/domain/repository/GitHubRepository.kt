@@ -47,4 +47,10 @@ interface GitHubRepository {
 
     /** Removes the stored token (PRD "Security Requirements > Clear token option"). */
     fun clearToken()
+
+    /**
+     * Reads a file's raw bytes from GitHub by its blob sha (already known from the cached
+     * repo tree — see [getRepositoryTree]). Powers the Repository Browser's read/edit view.
+     */
+    suspend fun getFileContent(repo: GitRepository, blobSha: String): Result<ByteArray>
 }

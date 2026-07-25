@@ -24,6 +24,12 @@ object FolderScanner {
         result
     }
 
+    /** Reads a scanned file's raw bytes — shared by the upload pipeline, the Smart Upload
+     * Protection scan's .gitignore parsing, and its secret-detection pass. */
+    suspend fun readBytes(context: Context, uri: Uri): ByteArray = withContext(Dispatchers.IO) {
+        context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: ByteArray(0)
+    }
+
     private fun walk(dir: DocumentFile, relativePrefix: String, out: MutableList<LocalFile>) {
         for (child in dir.listFiles()) {
             val name = child.name ?: continue

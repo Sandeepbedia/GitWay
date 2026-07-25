@@ -10,12 +10,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.io.git.way.data.local.FolderScanner
 import com.io.git.way.data.local.NetworkUtils
+import com.io.git.way.data.local.ProtectionScanner
 import com.io.git.way.domain.ComparisonEngine
 import com.io.git.way.domain.model.BrowserEntry
 import com.io.git.way.domain.model.ChangeType
 import com.io.git.way.domain.model.FileChange
 import com.io.git.way.domain.model.GitRepository
 import com.io.git.way.domain.model.LocalFile
+import com.io.git.way.domain.model.ScanReport
 import com.io.git.way.domain.model.UploadPhase
 import com.io.git.way.domain.repository.GitHubRepository
 import kotlinx.coroutines.CancellationException
@@ -32,6 +34,11 @@ data class GitWaySessionState(
     val localFiles: List<LocalFile> = emptyList(),
     val isScanning: Boolean = false,
     val scanError: String? = null,
+
+    /** Smart Upload Protection result for the current [localFiles] — [localFiles] is
+     * already filtered down to [ScanReport.safeFiles], this is kept for the summary UI
+     * (counts, ignored/blocked/secret lists). Null before a folder has been scanned. */
+    val scanReport: ScanReport? = null,
 
     val isComparing: Boolean = false,
     val compareProgress: Pair<Int, Int>? = null,
@@ -57,7 +64,24 @@ data class GitWaySessionState(
     val browserError: String? = null,
     val remoteTreeCache: Map<String, String> = emptyMap(),
     val isCreatingEntry: Boolean = false,
-    val createEntryError: String? = null
+    val createEntryError: String? = null,
+
+    /** Multi-select in the browser (long-press to start, tap to toggle). Only files are
+     * selectable — folders aren't copyable as a unit yet. */
+    val selectedBrowserPaths: Set<String> = emptySet(),
+    /** Files copied via the selection toolbar, ready to paste into another folder. */
+    val clipboard: List<BrowserEntry> = emptyList(),
+    val isPasting: Boolean = false,
+    val pasteError: String? = null,
+
+    /** Read/edit viewer for a single file, opened by tapping it outside select mode. */
+    val viewingFile: BrowserEntry? = null,
+    val viewingContent: String? = null,
+    val isLoadingContent: Boolean = false,
+    val viewerError: String? = null,
+    val isEditingFile: Boolean = false,
+    val isSavingFile: Boolean = false,
+    val saveFileError: String? = null
 ) {
     val addedCount get() = fileChanges.count { it.type == ChangeType.ADDED }
     val modifiedCount get() = fileChanges.count { it.type == ChangeType.MODIFIED }
@@ -88,7 +112,7 @@ class GitWaySessionViewModel(
 
     fun onFolderPicked(context: Context, uri: Uri) {
         viewModelScope.launch {
-            state = state.copy(isScanning = true, scanError = null, folderUri = uri)
+            state = state.copy(isScanning = true, scanError = null, folderUri = uri, scanReport = null)
             try {
                 withContext(Dispatchers.IO) {
                     context.contentResolver.takePersistableUriPermission(
@@ -109,16 +133,25 @@ class GitWaySessionViewModel(
                         isScanning = false,
                         folderName = folderName,
                         localFiles = emptyList(),
+                        scanReport = null,
                         scanError = "Selected folder is empty."
                     )
-                } else {
-                    state = state.copy(
-                        isScanning = false,
-                        folderName = folderName,
-                        localFiles = files,
-                        scanError = null
-                    )
+                    return@launch
                 }
+
+                // Smart Upload Protection (see matching PRD): ignore rules, secret
+                // detection, and large-file blocking all run before anything reaches the
+                // diff engine — localFiles below is exactly ScanReport.safeFiles.
+                val report = ProtectionScanner.scan(context, files)
+                state = state.copy(
+                    isScanning = false,
+                    folderName = folderName,
+                    localFiles = report.safeFiles,
+                    scanReport = report,
+                    scanError = if (report.safeFiles.isEmpty()) {
+                        "Every file was ignored or blocked by Smart Upload Protection — nothing safe to upload."
+                    } else null
+                )
             } catch (e: SecurityException) {
                 state = state.copy(
                     isScanning = false,
@@ -307,7 +340,8 @@ class GitWaySessionViewModel(
         if (!entry.isFolder) return
         state = state.copy(
             browserPath = entry.path,
-            browserEntries = childrenOf(state.remoteTreeCache.keys, entry.path)
+            browserEntries = childrenOf(state.remoteTreeCache.keys, entry.path),
+            selectedBrowserPaths = emptySet()
         )
     }
 
@@ -315,14 +349,16 @@ class GitWaySessionViewModel(
         val parent = state.browserPath.substringBeforeLast("/", "")
         state = state.copy(
             browserPath = parent,
-            browserEntries = childrenOf(state.remoteTreeCache.keys, parent)
+            browserEntries = childrenOf(state.remoteTreeCache.keys, parent),
+            selectedBrowserPaths = emptySet()
         )
     }
 
     fun navigateToBreadcrumb(path: String) {
         state = state.copy(
             browserPath = path,
-            browserEntries = childrenOf(state.remoteTreeCache.keys, path)
+            browserEntries = childrenOf(state.remoteTreeCache.keys, path),
+            selectedBrowserPaths = emptySet()
         )
     }
 
@@ -397,6 +433,187 @@ class GitWaySessionViewModel(
                 )
             }.onFailure { throwable ->
                 state = state.copy(isCreatingEntry = false, createEntryError = throwable.message ?: "Couldn't create folder.")
+            }
+        }
+    }
+
+    // ===== Select / Copy / Paste =====
+
+    fun toggleBrowserSelection(entry: BrowserEntry) {
+        if (entry.isFolder) return // only files are selectable for now
+        val current = state.selectedBrowserPaths
+        state = state.copy(
+            selectedBrowserPaths = if (entry.path in current) current - entry.path else current + entry.path
+        )
+    }
+
+    fun clearBrowserSelection() {
+        state = state.copy(selectedBrowserPaths = emptySet())
+    }
+
+    /** Copies every currently selected file into the in-memory clipboard and exits
+     * selection mode. Only the path/sha is kept — bytes are fetched lazily on paste. */
+    fun copySelectionToClipboard() {
+        val selectedEntries = state.browserEntries.filter { it.path in state.selectedBrowserPaths && !it.isFolder }
+        if (selectedEntries.isEmpty()) return
+        state = state.copy(clipboard = selectedEntries, selectedBrowserPaths = emptySet())
+    }
+
+    fun clearClipboard() {
+        state = state.copy(clipboard = emptyList())
+    }
+
+    /** Pastes every clipboard entry into the current browser folder as a single commit —
+     * reads each file's bytes from GitHub by its cached blob sha, then re-uploads them at
+     * the new path(s). Auto-renames on a name collision ("name (copy).ext", then " (2)"…). */
+    fun pasteClipboardHere() {
+        val repo = state.selectedRepo ?: return
+        val toPaste = state.clipboard
+        if (toPaste.isEmpty() || state.isPasting) return
+
+        state = state.copy(isPasting = true, pasteError = null)
+        viewModelScope.launch {
+            try {
+                val existingNames = state.browserEntries.map { it.name }.toMutableSet()
+                val destinations = toPaste.map { entry ->
+                    val uniqueName = uniqueFileName(entry.name, existingNames)
+                    existingNames += uniqueName
+                    val destPath = if (state.browserPath.isEmpty()) uniqueName else "${state.browserPath}/$uniqueName"
+                    entry to destPath
+                }
+
+                val byteCache = mutableMapOf<String, ByteArray>()
+                for ((entry, destPath) in destinations) {
+                    val sha = state.remoteTreeCache[entry.path]
+                    if (sha.isNullOrBlank()) {
+                        state = state.copy(isPasting = false, pasteError = "Couldn't read \"${entry.name}\" — try re-opening this folder.")
+                        return@launch
+                    }
+                    val bytes = gitHubRepository.getFileContent(repo, sha).getOrElse {
+                        state = state.copy(isPasting = false, pasteError = it.message ?: "Couldn't read \"${entry.name}\".")
+                        return@launch
+                    }
+                    byteCache[destPath] = bytes
+                }
+
+                val changes = destinations.map { (_, destPath) ->
+                    FileChange(fileName = destPath.substringAfterLast('/'), filePath = destPath, type = ChangeType.ADDED)
+                }
+
+                gitHubRepository.syncChanges(
+                    repo = repo,
+                    changes = changes,
+                    readFileBytes = { path -> byteCache.getValue(path) },
+                    onProgress = { _, _, _, _ -> }
+                ).onSuccess {
+                    val updatedTree = state.remoteTreeCache + byteCache.keys.associateWith { "" }
+                    state = state.copy(
+                        isPasting = false,
+                        clipboard = emptyList(),
+                        remoteTreeCache = updatedTree,
+                        browserEntries = childrenOf(updatedTree.keys, state.browserPath)
+                    )
+                }.onFailure { throwable ->
+                    state = state.copy(isPasting = false, pasteError = throwable.message ?: "Paste failed.")
+                }
+            } catch (e: Exception) {
+                state = state.copy(isPasting = false, pasteError = e.message ?: "Paste failed.")
+            }
+        }
+    }
+
+    private fun uniqueFileName(original: String, taken: Set<String>): String {
+        if (original !in taken) return original
+        val dot = original.lastIndexOf('.')
+        val base = if (dot > 0) original.substring(0, dot) else original
+        val ext = if (dot > 0) original.substring(dot) else ""
+        var n = 1
+        var candidate: String
+        do {
+            candidate = if (n == 1) "$base (copy)$ext" else "$base (copy $n)$ext"
+            n++
+        } while (candidate in taken)
+        return candidate
+    }
+
+    // ===== Read / Edit =====
+
+    fun openFile(entry: BrowserEntry) {
+        val repo = state.selectedRepo ?: return
+        if (entry.isFolder) return
+        val sha = state.remoteTreeCache[entry.path]
+        state = state.copy(
+            viewingFile = entry,
+            viewingContent = null,
+            isLoadingContent = true,
+            viewerError = null,
+            isEditingFile = false,
+            saveFileError = null
+        )
+        if (sha.isNullOrBlank()) {
+            state = state.copy(isLoadingContent = false, viewerError = "Couldn't locate this file's content.")
+            return
+        }
+        viewModelScope.launch {
+            gitHubRepository.getFileContent(repo, sha)
+                .onSuccess { bytes ->
+                    val text = runCatching { bytes.toString(Charsets.UTF_8) }.getOrNull()
+                    state = state.copy(
+                        isLoadingContent = false,
+                        viewingContent = text,
+                        viewerError = if (text == null) "This looks like a binary file — preview isn't available." else null
+                    )
+                }
+                .onFailure { throwable ->
+                    state = state.copy(isLoadingContent = false, viewerError = throwable.message ?: "Couldn't load this file.")
+                }
+        }
+    }
+
+    fun closeFileViewer() {
+        state = state.copy(
+            viewingFile = null,
+            viewingContent = null,
+            isLoadingContent = false,
+            viewerError = null,
+            isEditingFile = false,
+            isSavingFile = false,
+            saveFileError = null
+        )
+    }
+
+    fun startEditingFile() {
+        if (state.viewingContent == null) return
+        state = state.copy(isEditingFile = true, saveFileError = null)
+    }
+
+    fun cancelEditingFile() {
+        state = state.copy(isEditingFile = false, saveFileError = null)
+    }
+
+    /** Commits the edited content as a single-file MODIFIED change, via the same tested
+     * sync pipeline used everywhere else — then updates the viewer to show the saved text. */
+    fun saveFileEdits(newContent: String) {
+        val repo = state.selectedRepo ?: return
+        val entry = state.viewingFile ?: return
+        if (state.isSavingFile) return
+
+        val bytes = newContent.toByteArray(Charsets.UTF_8)
+        state = state.copy(isSavingFile = true, saveFileError = null)
+        viewModelScope.launch {
+            gitHubRepository.syncChanges(
+                repo = repo,
+                changes = listOf(FileChange(fileName = entry.name, filePath = entry.path, type = ChangeType.MODIFIED)),
+                readFileBytes = { bytes },
+                onProgress = { _, _, _, _ -> }
+            ).onSuccess {
+                state = state.copy(
+                    isSavingFile = false,
+                    isEditingFile = false,
+                    viewingContent = newContent
+                )
+            }.onFailure { throwable ->
+                state = state.copy(isSavingFile = false, saveFileError = throwable.message ?: "Couldn't save changes.")
             }
         }
     }
