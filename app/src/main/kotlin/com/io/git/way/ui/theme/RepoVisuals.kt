@@ -19,29 +19,30 @@ import androidx.compose.ui.graphics.vector.ImageVector
 data class RepoVisual(val color: Color, val icon: ImageVector)
 
 private val languageVisuals: Map<String, RepoVisual> = mapOf(
-    "kotlin" to RepoVisual(GlassBlobPurple, Icons.Filled.Code),
-    "java" to RepoVisual(Color(0xFFF08A3C), Icons.Filled.Coffee),
-    "python" to RepoVisual(GlassBlobBlue, Icons.Filled.DataObject),
-    "javascript" to RepoVisual(Color(0xFFE0C93E), Icons.Filled.Language),
-    "typescript" to RepoVisual(GlassBlobBlue, Icons.Filled.Language),
-    "c++" to RepoVisual(GlassBlobPink, Icons.Filled.Memory),
-    "c" to RepoVisual(Color(0xFF6F86D6), Icons.Filled.Memory),
-    "rust" to RepoVisual(Color(0xFFE0622A), Icons.Filled.Bolt),
-    "go" to RepoVisual(GlassBlobTeal, Icons.Filled.Bolt),
-    "html" to RepoVisual(Color(0xFFE0622A), Icons.Filled.Brush),
-    "css" to RepoVisual(GlassBlobBlue, Icons.Filled.Brush),
-    "shell" to RepoVisual(Color(0xFF3EAA6A), Icons.Filled.Terminal),
-    "dart" to RepoVisual(GlassBlobTeal, Icons.Filled.PhoneAndroid)
+    "kotlin" to RepoVisual(LangKotlin, Icons.Filled.Code),
+    "java" to RepoVisual(LangJava, Icons.Filled.Coffee),
+    "python" to RepoVisual(LangPython, Icons.Filled.DataObject),
+    "javascript" to RepoVisual(LangJavaScript, Icons.Filled.Language),
+    "typescript" to RepoVisual(LangJavaScript, Icons.Filled.Language),
+    "c++" to RepoVisual(LangCpp, Icons.Filled.Memory),
+    "c" to RepoVisual(LangCpp, Icons.Filled.Memory),
+    "rust" to RepoVisual(LangRust, Icons.Filled.Bolt),
+    "go" to RepoVisual(LangGo, Icons.Filled.Bolt),
+    "html" to RepoVisual(LangJava, Icons.Filled.Brush),
+    "css" to RepoVisual(LangGo, Icons.Filled.Brush),
+    "shell" to RepoVisual(LangPython, Icons.Filled.Terminal),
+    "dart" to RepoVisual(LangMisc, Icons.Filled.PhoneAndroid),
+    "misc" to RepoVisual(LangMisc, Icons.Filled.Memory)
 )
 
 /** Fallback palette cycled by a stable hash so unknown/null-language repos still look distinct. */
 private val fallbackPalette = listOf(
-    RepoVisual(GlassBlobPurple, Icons.Filled.Code),
-    RepoVisual(GlassBlobBlue, Icons.Filled.Folder),
-    RepoVisual(Color(0xFF3EAA6A), Icons.Filled.Description),
-    RepoVisual(Color(0xFFE0A23C), Icons.Filled.Bolt),
-    RepoVisual(GlassBlobPink, Icons.Filled.DataObject),
-    RepoVisual(GlassBlobTeal, Icons.Filled.Memory)
+    RepoVisual(LangKotlin, Icons.Filled.Code),
+    RepoVisual(LangGo, Icons.Filled.Folder),
+    RepoVisual(LangPython, Icons.Filled.Description),
+    RepoVisual(LangJava, Icons.Filled.Bolt),
+    RepoVisual(LangCpp, Icons.Filled.DataObject),
+    RepoVisual(LangMisc, Icons.Filled.Memory)
 )
 
 /** Resolves a stable [RepoVisual] for a repo — same language always maps to the same look,

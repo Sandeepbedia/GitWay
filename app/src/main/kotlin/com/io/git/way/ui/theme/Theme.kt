@@ -11,26 +11,46 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val LightColorScheme = lightColorScheme(
-    primary = GitBlue40,
-    secondary = GitBlueGrey40,
-    tertiary = GitGreen40
+    primary = RepoPurple,
+    secondary = RepoPurpleLight,
+    tertiary = RepoSuccess,
+    background = RepoBgPrimaryLight,
+    surface = RepoCardSurfaceLight,
+    surfaceVariant = RepoElevatedSurfaceLight,
+    onBackground = RepoTextPrimaryLight,
+    onSurface = RepoTextPrimaryLight,
+    onSurfaceVariant = RepoTextSecondaryLight,
+    error = RepoDanger
 )
 
+// A single consistent dark palette end to end: background, cards, and every elevated
+// surface all come from the same near-black family (#09090B / #171923 / #1D2030),
+// with purple reserved strictly for accents (buttons, active tab, selection, icons) —
+// see Color.kt "Repository Screen — Premium Color System v2".
 private val DarkColorScheme = darkColorScheme(
-    primary = GitBlue80,
-    secondary = GitBlueGrey80,
-    tertiary = GitGreen80
+    primary = RepoPurple,
+    secondary = RepoPurpleLight,
+    tertiary = RepoSuccess,
+    background = RepoBgPrimary,
+    surface = RepoCardSurface,
+    surfaceVariant = RepoElevatedSurface,
+    onBackground = RepoTextPrimary,
+    onSurface = RepoTextPrimary,
+    onSurfaceVariant = RepoTextSecondary,
+    error = RepoDanger
 )
 
-// True-black scheme for OLED screens — reduces battery usage per PRD.
+// True-black background for OLED screens, same card/surface family as Dark so cards
+// still read as "elevated" rather than invisible against pure black.
 private val AmoledColorScheme = DarkColorScheme.copy(
     background = AmoledBlack,
-    surface = AmoledSurface
+    surface = RepoCardSurface
 )
 
 /**

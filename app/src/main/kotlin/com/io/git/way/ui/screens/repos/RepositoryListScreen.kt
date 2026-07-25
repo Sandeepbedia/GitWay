@@ -59,6 +59,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
@@ -75,6 +76,7 @@ import com.io.git.way.ui.theme.AppThemeMode
 import com.io.git.way.ui.theme.BottomNavTab
 import com.io.git.way.ui.theme.GlassChip
 import com.io.git.way.ui.theme.GlassClickableCard
+import com.io.git.way.ui.theme.GlassFab
 import com.io.git.way.ui.theme.GlassFloatingBottomNav
 import com.io.git.way.ui.theme.GlassIconButton
 import com.io.git.way.ui.theme.GlassPrimaryButton
@@ -136,6 +138,14 @@ fun RepositoryListScreen(
         Scaffold(
             containerColor = Color.Transparent,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            floatingActionButton = {
+                GlassFab(
+                    onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/new"))) },
+                    size = 64.dp
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = "Create repository", modifier = Modifier.size(28.dp))
+                }
+            },
             bottomBar = {
                 GlassFloatingBottomNav(
                     selected = BottomNavTab.REPOSITORIES,
@@ -313,15 +323,15 @@ private fun RepoCard(
             .fillMaxWidth()
             .graphicsLayer { scaleX = scale; scaleY = scale }
     ) {
-        Row(modifier = Modifier.fillMaxWidth().height(104.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().height(120.dp)) {
             Box(
                 modifier = Modifier
-                    .width(4.dp)
+                    .width(5.dp)
                     .fillMaxHeight()
-                    .background(visual.color)
+                    .background(Brush.verticalGradient(listOf(visual.color, visual.color.copy(alpha = 0f))))
             )
             Row(
-                modifier = Modifier.weight(1f).padding(14.dp),
+                modifier = Modifier.weight(1f).padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {

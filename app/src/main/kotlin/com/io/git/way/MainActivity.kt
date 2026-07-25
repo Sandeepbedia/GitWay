@@ -29,7 +29,7 @@ private fun GitWayRoot() {
     // TODO: replace with persisted theme preference from DataStore (see PRD Theme System).
     var themeMode by remember { mutableStateOf(AppThemeMode.SYSTEM) }
 
-    GitWayTheme(themeMode = themeMode) {
+    GitWayTheme(themeMode = themeMode, dynamicColor = true) {
         val navController = rememberNavController()
         GitWayNavGraph(
             navController = navController,

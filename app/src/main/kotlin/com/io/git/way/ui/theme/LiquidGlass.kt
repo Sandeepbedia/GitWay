@@ -36,7 +36,6 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
-
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
@@ -56,6 +55,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -88,62 +88,27 @@ import androidx.compose.ui.unit.dp
 private val MaterialTheme.isDarkSurface: Boolean
     @Composable get() = colorScheme.background.luminance() < 0.5f
 
-/** Softly gradient-tinted backdrop with a few fixed, blurred colour blobs — no motion. */
+/** Background gradient per spec: a single consistent dark palette (#151520 → #11131C →
+ * #09090B), no primary/tertiary colour wash. Purple only ever appears as an accent on
+ * top of this — buttons, active tab, selection, icons — never as part of the backdrop
+ * itself, which is what was causing the background/card mismatch. */
 @Composable
 fun LiquidGlassBackground(
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit
 ) {
     val dark = MaterialTheme.isDarkSurface
-    val scheme = MaterialTheme.colorScheme
-    val blobAlpha = if (dark) 0.45f else 0.30f
-
-    val backdrop = Brush.verticalGradient(
-        listOf(
-            scheme.background,
-            (if (dark) GlassBlobPurple else GlassBlobBlue).copy(alpha = if (dark) 0.10f else 0.06f),
-            scheme.background
-        )
-    )
+    val backdrop = if (dark) {
+        Brush.verticalGradient(listOf(RepoBgGradientTop, RepoBgGradientMid, RepoBgGradientBottom))
+    } else {
+        Brush.verticalGradient(listOf(RepoBgGradientTopLight, RepoBgGradientBottomLight))
+    }
 
     Box(
         modifier
             .fillMaxSize()
             .background(backdrop)
     ) {
-        Box(
-            Modifier
-                .size(260.dp)
-                .align(Alignment.TopStart)
-                .offset(x = (-70).dp, y = (-60).dp)
-                .blur(90.dp)
-                .background(
-                    Brush.radialGradient(listOf(GlassBlobBlue.copy(alpha = blobAlpha), Color.Transparent)),
-                    CircleShape
-                )
-        )
-        Box(
-            Modifier
-                .size(300.dp)
-                .align(Alignment.TopEnd)
-                .offset(x = 60.dp, y = 20.dp)
-                .blur(100.dp)
-                .background(
-                    Brush.radialGradient(listOf(GlassBlobPurple.copy(alpha = blobAlpha), Color.Transparent)),
-                    CircleShape
-                )
-        )
-        Box(
-            Modifier
-                .size(280.dp)
-                .align(Alignment.BottomCenter)
-                .offset(x = 0.dp, y = 60.dp)
-                .blur(95.dp)
-                .background(
-                    Brush.radialGradient(listOf(GlassBlobTeal.copy(alpha = blobAlpha), Color.Transparent)),
-                    CircleShape
-                )
-        )
         content()
     }
 }
@@ -184,21 +149,26 @@ fun GlassScaffold(
     }
 }
 
-/** Shared glass fill/border colours + a resolved, always-legible content colour. */
+/** Shared glass fill/border colours + a resolved, always-legible content colour.
+ * Per spec: cards are a FLAT single surface colour (no gradient into primary/tertiary)
+ * with a flat hairline border — purple is reserved for [selected] state or accents
+ * elsewhere, never the card's resting border. */
 @Composable
-private fun glassTreatment(): GlassTreatment {
+private fun glassTreatment(selected: Boolean = false): GlassTreatment {
     val dark = MaterialTheme.isDarkSurface
+    val scheme = MaterialTheme.colorScheme
+    val border = when {
+        selected && dark -> RepoBorderSelected
+        selected && !dark -> RepoBorderSelectedLight
+        dark -> RepoBorderNormal
+        else -> RepoBorderNormalLight
+    }
     return GlassTreatment(
-        fillTop = if (dark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.55f),
-        fillBottom = if (dark) Color.White.copy(alpha = 0.03f) else Color.White.copy(alpha = 0.22f),
-        borderTop = if (dark) Color.White.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.85f),
-        borderBottom = if (dark) Color.White.copy(alpha = 0.04f) else Color.White.copy(alpha = 0.25f),
-        // The bug: cards never set a content colour, so Text()/Icon() inside them fell
-        // back to whatever LocalContentColor happened to be further up the tree —
-        // frequently a near-black default, illegible on a dark frosted card. Every
-        // glass surface below now explicitly provides a colour guaranteed to contrast
-        // with its own fill.
-        content = if (dark) Color.White.copy(alpha = 0.94f) else MaterialTheme.colorScheme.onSurface
+        fillTop = scheme.surface,
+        fillBottom = scheme.surface,
+        borderTop = border,
+        borderBottom = border,
+        content = if (dark) RepoTextPrimary else RepoTextPrimaryLight
     )
 }
 
@@ -210,21 +180,29 @@ private data class GlassTreatment(
     val content: Color
 )
 
-/** A frosted glass panel: translucent gradient fill + a soft specular border. */
+/** A frosted glass panel: flat surface fill + a soft hairline border (purple only when [selected]). */
 @Composable
 fun GlassCard(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(22.dp),
     padding: Dp = 16.dp,
+    selected: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val t = glassTreatment()
+    val t = glassTreatment(selected)
 
     Column(
         modifier
+            .shadow(
+                elevation = 18.dp,
+                shape = shape,
+                clip = false,
+                ambientColor = Color.Black.copy(alpha = 0.18f),
+                spotColor = Color.Black.copy(alpha = 0.18f)
+            )
             .clip(shape)
-            .background(Brush.verticalGradient(listOf(t.fillTop, t.fillBottom)))
-            .border(1.dp, Brush.verticalGradient(listOf(t.borderTop, t.borderBottom)), shape)
+            .background(t.fillTop)
+            .border(1.dp, t.borderTop, shape)
             .padding(padding)
     ) {
         CompositionLocalProvider(LocalContentColor provides t.content) {
@@ -233,22 +211,30 @@ fun GlassCard(
     }
 }
 
-/** Same frosted treatment as [GlassCard] but clickable, for list rows / tappable tiles. */
+/** Same flat treatment as [GlassCard] but clickable, for list rows / tappable tiles. */
 @Composable
 fun GlassClickableCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(22.dp),
     padding: Dp = 16.dp,
+    selected: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val t = glassTreatment()
+    val t = glassTreatment(selected)
 
     Column(
         modifier
+            .shadow(
+                elevation = 18.dp,
+                shape = shape,
+                clip = false,
+                ambientColor = Color.Black.copy(alpha = 0.18f),
+                spotColor = Color.Black.copy(alpha = 0.18f)
+            )
             .clip(shape)
-            .background(Brush.verticalGradient(listOf(t.fillTop, t.fillBottom)))
-            .border(1.dp, Brush.verticalGradient(listOf(t.borderTop, t.borderBottom)), shape)
+            .background(t.fillTop)
+            .border(1.dp, t.borderTop, shape)
             .clickable(onClick = onClick)
             .padding(padding)
     ) {
@@ -271,7 +257,7 @@ fun GlassPrimaryButton(
     val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(18.dp)
     val brush = if (enabled) {
-        Brush.horizontalGradient(listOf(scheme.primary, scheme.tertiary))
+        Brush.horizontalGradient(listOf(RepoPurpleGradientStart, RepoPurple, RepoPurpleGradientEnd))
     } else {
         Brush.horizontalGradient(
             listOf(scheme.onSurface.copy(alpha = 0.10f), scheme.onSurface.copy(alpha = 0.10f))
@@ -283,6 +269,7 @@ fun GlassPrimaryButton(
         modifier
             .fillMaxWidth()
             .height(54.dp)
+            .shadow(8.dp, shape, clip = false)
             .clip(shape)
             .background(brush)
             .border(1.dp, Color.White.copy(alpha = if (enabled) 0.35f else 0.08f), shape)
@@ -314,18 +301,18 @@ fun GlassSecondaryButton(
     leadingIcon: (@Composable () -> Unit)? = null
 ) {
     val dark = MaterialTheme.isDarkSurface
-    val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(18.dp)
-    val fill = if (dark) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.35f)
-    val textColor = if (enabled) scheme.primary else scheme.onSurface.copy(alpha = 0.35f)
+    val fill = if (dark) RepoElevatedSurface else RepoElevatedSurfaceLight
+    val textColor = if (enabled) RepoPurple else (if (dark) RepoTextDisabled else RepoTextMutedLight)
 
     Box(
         modifier
             .fillMaxWidth()
             .height(54.dp)
+            .shadow(7.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.14f), spotColor = Color.Black.copy(alpha = 0.14f))
             .clip(shape)
             .background(fill)
-            .border(1.dp, scheme.primary.copy(alpha = if (enabled) 0.55f else 0.15f), shape)
+            .border(1.dp, RepoPurple.copy(alpha = if (enabled) 0.55f else 0.15f), shape)
             .then(
                 if (enabled) Modifier.clickable(onClick = onClick) else Modifier
             ),
@@ -348,14 +335,21 @@ fun GlassChip(
     leadingIcon: (@Composable () -> Unit)? = null
 ) {
     val dark = MaterialTheme.isDarkSurface
-    val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(50)
-    val fill = if (selected) scheme.primary.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.18f)
-    val border = if (selected) scheme.primary else Color.White.copy(alpha = 0.4f)
+    val fill = when {
+        selected -> RepoPurple
+        dark -> RepoElevatedSurface
+        else -> RepoElevatedSurfaceLight
+    }
+    val border = when {
+        selected -> RepoPurple
+        dark -> RepoBorderNormal
+        else -> RepoBorderNormalLight
+    }
     val textColor = when {
-        selected -> Color.White
-        dark -> Color.White.copy(alpha = 0.9f)
-        else -> scheme.onSurface
+        selected -> RepoTextPrimary
+        dark -> RepoTextMuted
+        else -> RepoTextMutedLight
     }
 
     Row(
@@ -382,9 +376,9 @@ fun GlassIconButton(
     content: @Composable () -> Unit
 ) {
     val dark = MaterialTheme.isDarkSurface
-    val fill = if (dark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.55f)
-    val border = if (dark) Color.White.copy(alpha = 0.30f) else Color.White.copy(alpha = 0.75f)
-    val contentColor = if (dark) Color.White.copy(alpha = 0.92f) else MaterialTheme.colorScheme.onSurface
+    val fill = if (dark) RepoElevatedSurface else RepoElevatedSurfaceLight
+    val border = if (dark) RepoBorderNormal else RepoBorderNormalLight
+    val contentColor = if (dark) RepoIconDefault else RepoTextPrimaryLight
 
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
@@ -394,16 +388,52 @@ fun GlassIconButton(
         modifier
             .size(size)
             .graphicsLayer { scaleX = scale; scaleY = scale }
+            .shadow(8.dp, CircleShape, clip = false, ambientColor = Color.Black.copy(alpha = 0.18f), spotColor = Color.Black.copy(alpha = 0.18f))
             .clip(CircleShape)
             .background(fill)
             .border(1.dp, border, CircleShape)
             .clickable(
                 onClick = onClick,
-                interactionSource = interactionSource,
+                interactionSource = interactionSource
             ),
         contentAlignment = Alignment.Center
     ) {
         CompositionLocalProvider(LocalContentColor provides contentColor) {
+            content()
+        }
+    }
+}
+
+/** The main FAB: radial purple gradient per spec, used for primary create/add actions. */
+@Composable
+fun GlassFab(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    size: Dp = 64.dp,
+    content: @Composable () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.94f else 1f, label = "fabScale")
+    val brush = Brush.radialGradient(listOf(RepoPurpleLight, RepoPurple, RepoPurpleDark))
+
+    Box(
+        modifier
+            .size(size)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .shadow(
+                elevation = 16.dp,
+                shape = CircleShape,
+                clip = false,
+                ambientColor = RepoPurple.copy(alpha = 0.4f),
+                spotColor = RepoPurple.copy(alpha = 0.4f)
+            )
+            .clip(CircleShape)
+            .background(brush)
+            .clickable(onClick = onClick, interactionSource = interactionSource),
+        contentAlignment = Alignment.Center
+    ) {
+        CompositionLocalProvider(LocalContentColor provides Color.White) {
             content()
         }
     }
@@ -418,41 +448,43 @@ fun GlassSearchField(
     placeholder: String = "Search"
 ) {
     val dark = MaterialTheme.isDarkSurface
-    val scheme = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(28.dp)
+    val shape = RoundedCornerShape(30.dp)
     var focused by remember { mutableStateOf(false) }
 
+    val restingBorder = if (dark) RepoBorderNormal else RepoBorderNormalLight
     val borderColor by animateColorAsState(
-        targetValue = if (focused) scheme.primary.copy(alpha = 0.85f) else Color.White.copy(alpha = if (dark) 0.18f else 0.6f),
+        targetValue = if (focused) RepoPurple.copy(alpha = 0.85f) else restingBorder,
         label = "searchBorder"
     )
-    val fill = if (dark) Color.White.copy(alpha = 0.07f) else Color.White.copy(alpha = 0.45f)
-    val contentColor = if (dark) Color.White.copy(alpha = 0.92f) else scheme.onSurface
+    val fill = if (dark) RepoSearchBarSurface else RepoSearchBarSurfaceLight
+    val contentColor = if (dark) RepoTextPrimary else RepoTextPrimaryLight
+    val hintColor = if (dark) RepoTextHint else RepoTextMutedLight
 
     Box(
         modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .height(58.dp)
+            .shadow(4.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.14f), spotColor = Color.Black.copy(alpha = 0.14f))
             .clip(shape)
             .background(fill)
             .border(1.5.dp, borderColor, shape)
     ) {
         Row(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Icon(Icons.Filled.Search, contentDescription = null, tint = contentColor.copy(alpha = 0.7f))
+            Icon(Icons.Filled.Search, contentDescription = null, tint = RepoIconAccent)
             Box(modifier = Modifier.weight(1f)) {
                 if (value.isEmpty()) {
-                    Text(placeholder, color = contentColor.copy(alpha = 0.5f))
+                    Text(placeholder, color = hintColor)
                 }
                 BasicTextField(
                     value = value,
                     onValueChange = onValueChange,
                     singleLine = true,
                     textStyle = MaterialTheme.typography.bodyLarge.copy(color = contentColor),
-                    cursorBrush = SolidColor(scheme.primary),
+                    cursorBrush = SolidColor(RepoPurple),
                     modifier = Modifier
                         .fillMaxWidth()
                         .onFocusChanged { focused = it.isFocused }
@@ -462,7 +494,7 @@ fun GlassSearchField(
                 Icon(
                     Icons.Filled.Close,
                     contentDescription = "Clear",
-                    tint = contentColor.copy(alpha = 0.7f),
+                    tint = hintColor,
                     modifier = Modifier
                         .size(20.dp)
                         .clip(CircleShape)
@@ -520,7 +552,7 @@ enum class BottomNavTab(val label: String) {
     PROFILE("Profile")
 }
 
-/** Floating glass pill navigation bar — not attached to the screen edge (PRD "Floating Navigation Bar"). */
+/** Elevated floating navigation dock with a compact, expressive active-tab pill. */
 @Composable
 fun GlassFloatingBottomNav(
     selected: BottomNavTab,
@@ -528,20 +560,20 @@ fun GlassFloatingBottomNav(
     modifier: Modifier = Modifier
 ) {
     val dark = MaterialTheme.isDarkSurface
-    val scheme = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(32.dp)
-    val fill = if (dark) Color(0xFF0B0B14).copy(alpha = 0.75f) else Color.White.copy(alpha = 0.75f)
-    val border = if (dark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.9f)
+    val shape = RoundedCornerShape(34.dp)
+    val fill = if (dark) RepoBottomNavSurface else RepoBottomNavSurfaceLight
+    val border = if (dark) RepoBorderNormal else RepoBorderNormalLight
 
     Row(
         modifier
-            .padding(horizontal = 20.dp, vertical = 24.dp)
+            .padding(horizontal = 16.dp, vertical = 14.dp)
             .fillMaxWidth()
-            .height(64.dp)
+            .height(72.dp)
+            .shadow(18.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.18f), spotColor = Color.Black.copy(alpha = 0.18f))
             .clip(shape)
             .background(fill)
             .border(1.dp, border, shape)
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceEvenly
     ) {
@@ -564,13 +596,12 @@ private fun BottomNavItem(
     modifier: Modifier = Modifier
 ) {
     val dark = MaterialTheme.isDarkSurface
-    val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(50)
     val pillAlpha by animateFloatAsState(if (isSelected) 1f else 0f, label = "navPillAlpha")
     val contentColor = when {
         isSelected -> Color.White
-        dark -> Color.White.copy(alpha = 0.6f)
-        else -> scheme.onSurfaceVariant
+        dark -> RepoIconInactive
+        else -> RepoTextMutedLight
     }
 
     val interactionSource = remember { MutableInteractionSource() }
@@ -580,20 +611,22 @@ private fun BottomNavItem(
     Row(
         modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
+            .shadow(if (isSelected) 6.dp else 0.dp, shape, clip = false)
             .clip(shape)
             .background(
                 Brush.horizontalGradient(
                     listOf(
-                        scheme.primary.copy(alpha = pillAlpha),
-                        scheme.tertiary.copy(alpha = pillAlpha)
+                        RepoPillGradientLight.copy(alpha = pillAlpha),
+                        RepoPurpleGradientStart.copy(alpha = pillAlpha),
+                        RepoPurple.copy(alpha = pillAlpha)
                     )
                 )
             )
             .clickable(
                 onClick = onClick,
-                interactionSource = interactionSource,
+                interactionSource = interactionSource
             )
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
