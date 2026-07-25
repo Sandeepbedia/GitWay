@@ -30,6 +30,7 @@ object ComparisonEngine {
         context: Context,
         localFiles: List<LocalFile>,
         remotePaths: Map<String, String>,
+        contentOverrides: Map<String, ByteArray> = emptyMap(),
         onProgress: (completed: Int, total: Int) -> Unit = { _, _ -> }
     ): List<FileChange> = withContext(Dispatchers.Default) {
         val localByPath = localFiles.associateBy { it.relativePath }
@@ -52,7 +53,15 @@ object ComparisonEngine {
                     async {
                         semaphore.withPermit {
                             val file = localByPath.getValue(path)
-                            val localSha = GitBlobHasher.hash(context, file.documentUri)
+                            // Redacted/generated files (Smart Upload Protection) hash the
+                            // overridden bytes that will actually be uploaded, not the
+                            // real on-disk content, so the diff matches what's pushed.
+                            val override = contentOverrides[path]
+                            val localSha = if (override != null) {
+                                GitBlobHasher.hashBytes(override)
+                            } else {
+                                GitBlobHasher.hash(context, file.documentUri)
+                            }
                             val done = completed.incrementAndGet()
                             if (showProgress) onProgress(done, total)
                             if (localSha != remotePaths[path]) path else null

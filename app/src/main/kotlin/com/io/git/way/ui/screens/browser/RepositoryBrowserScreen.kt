@@ -1,9 +1,7 @@
 package com.io.git.way.ui.screens.browser
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,10 +12,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
@@ -25,9 +25,11 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
@@ -52,18 +54,22 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import com.io.git.way.domain.model.BrowserEntry
+import com.io.git.way.domain.model.TreeRow
 import com.io.git.way.ui.common.FileTypeIcons
 import com.io.git.way.ui.common.GitWaySessionViewModel
+import com.io.git.way.ui.common.SyntaxHighlightTransformation
+import com.io.git.way.ui.common.SyntaxHighlighter
 import com.io.git.way.ui.theme.GlassBlobBlue
 import com.io.git.way.ui.theme.GlassCard
 import com.io.git.way.ui.theme.GlassScaffold
 import com.io.git.way.ui.theme.GlassSecondaryButton
 
 /**
- * File-manager view of the selected GitHub repository: browse folders, see files with
- * type-aware icons, select/copy/paste files between folders, and read or edit a file's
- * content in place. Every write (create/paste/edit) lands as its own small commit via the
- * same tested sync pipeline used for the main upload flow.
+ * VS Code-style Explorer view of the selected GitHub repository: an indented, expandable
+ * tree (no drill-down navigation — folders open in place), type-aware file icons,
+ * multi-select with copy/paste/delete, and a read/edit viewer with syntax highlighting.
+ * Every write (create/paste/edit/delete) lands as its own small commit via the same
+ * tested sync pipeline used for the main upload flow.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -76,6 +82,8 @@ fun RepositoryBrowserScreen(
     var showCreateMenu by remember { mutableStateOf(false) }
     var showNewFileDialog by remember { mutableStateOf(false) }
     var showNewFolderDialog by remember { mutableStateOf(false) }
+    var pendingDelete by remember { mutableStateOf<BrowserEntry?>(null) }
+    var pendingDeleteSelection by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.selectedRepo) {
         if (state.selectedRepo != null && state.remoteTreeCache.isEmpty() && !state.isBrowserLoading) {
@@ -83,49 +91,34 @@ fun RepositoryBrowserScreen(
         }
     }
 
-    // The file viewer/editor replaces the browser list in place, so back/close behaviour
-    // stays intuitive without introducing a second nav-graph destination.
+    // The file viewer/editor replaces the tree in place, so back/close behaviour stays
+    // intuitive without introducing a second nav-graph destination.
     if (state.viewingFile != null) {
         FileViewerScreen(sessionViewModel = sessionViewModel)
         return
     }
 
     val selectionMode = state.selectedBrowserPaths.isNotEmpty()
-    val title = if (selectionMode) {
-        "${state.selectedBrowserPaths.size} selected"
-    } else {
-        state.browserPath.substringAfterLast("/").ifEmpty { state.selectedRepo?.name ?: "Repository" }
-    }
+    val title = if (selectionMode) "${state.selectedBrowserPaths.size} selected" else state.selectedRepo?.name ?: "Repository"
 
     GlassScaffold(
         title = title,
         navigationIcon = {
-            IconButton(
-                onClick = {
-                    when {
-                        selectionMode -> sessionViewModel.clearBrowserSelection()
-                        state.browserPath.isNotEmpty() -> sessionViewModel.navigateUp()
-                        else -> onBack()
-                    }
-                }
-            ) {
-                Icon(
-                    if (selectionMode) Icons.Filled.Close else Icons.Filled.ArrowBack,
-                    contentDescription = if (selectionMode) "Cancel selection" else "Back"
-                )
+            IconButton(onClick = { if (selectionMode) sessionViewModel.clearBrowserSelection() else onBack() }) {
+                Icon(if (selectionMode) Icons.Filled.Close else Icons.Filled.ArrowBack, contentDescription = if (selectionMode) "Cancel selection" else "Back")
             }
         },
         actions = {
             if (selectionMode) {
+                IconButton(onClick = { pendingDeleteSelection = true }) {
+                    Icon(Icons.Filled.Delete, contentDescription = "Delete selected")
+                }
                 IconButton(onClick = { sessionViewModel.copySelectionToClipboard() }) {
                     Icon(Icons.Filled.ContentCopy, contentDescription = "Copy selected")
                 }
             } else {
                 if (state.clipboard.isNotEmpty()) {
-                    IconButton(
-                        onClick = { sessionViewModel.pasteClipboardHere() },
-                        enabled = !state.isPasting
-                    ) {
+                    IconButton(onClick = { sessionViewModel.pasteClipboardHere() }, enabled = !state.isPasting) {
                         if (state.isPasting) {
                             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                         } else {
@@ -138,37 +131,32 @@ fun RepositoryBrowserScreen(
                         Icon(Icons.Filled.Add, contentDescription = "New file or folder")
                     }
                     DropdownMenu(expanded = showCreateMenu, onDismissRequest = { showCreateMenu = false }) {
-                        DropdownMenuItem(
-                            text = { Text("New file") },
-                            onClick = { showCreateMenu = false; showNewFileDialog = true }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("New folder") },
-                            onClick = { showCreateMenu = false; showNewFolderDialog = true }
-                        )
+                        DropdownMenuItem(text = { Text("New file") }, onClick = { showCreateMenu = false; showNewFileDialog = true })
+                        DropdownMenuItem(text = { Text("New folder") }, onClick = { showCreateMenu = false; showNewFolderDialog = true })
                     }
                 }
             }
         }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp)) {
-            if (state.browserPath.isNotEmpty() && !selectionMode) {
-                BreadcrumbRow(path = state.browserPath, onCrumbClick = sessionViewModel::navigateToBreadcrumb)
+            if (!selectionMode) {
+                Text(
+                    "New files go into: ${state.browserPath.ifEmpty { "root" }}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 6.dp)
+                )
             }
             if (state.pasteError != null) {
-                Text(
-                    state.pasteError,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(vertical = 4.dp)
-                )
+                Text(state.pasteError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
+            }
+            if (state.deleteEntryError != null) {
+                Text(state.deleteEntryError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
             }
 
             Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 when {
-                    state.isBrowserLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
+                    state.isBrowserLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
 
                     state.browserError != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -178,25 +166,31 @@ fun RepositoryBrowserScreen(
                     }
 
                     state.browserEntries.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("This folder is empty.")
+                        Text("This repository is empty.")
                     }
 
-                    else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(state.browserEntries, key = { it.path }) { entry ->
-                            BrowserRow(
-                                entry = entry,
+                    else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        items(state.browserEntries, key = { it.entry.path }) { row ->
+                            TreeRowItem(
+                                row = row,
                                 selectionMode = selectionMode,
-                                selected = entry.path in state.selectedBrowserPaths,
+                                selected = row.entry.path in state.selectedBrowserPaths,
                                 onClick = {
                                     when {
-                                        selectionMode -> sessionViewModel.toggleBrowserSelection(entry)
-                                        entry.isFolder -> sessionViewModel.navigateInto(entry)
-                                        else -> sessionViewModel.openFile(entry)
+                                        selectionMode && !row.entry.isFolder -> sessionViewModel.toggleBrowserSelection(row.entry)
+                                        row.entry.isFolder -> sessionViewModel.toggleFolderExpanded(row.entry)
+                                        else -> sessionViewModel.openFile(row.entry)
                                     }
                                 },
-                                onLongClick = { sessionViewModel.toggleBrowserSelection(entry) }
+                                onLongClick = { if (!row.entry.isFolder) sessionViewModel.toggleBrowserSelection(row.entry) },
+                                onDelete = { pendingDelete = row.entry }
                             )
                         }
+                    }
+                }
+                if (state.isDeletingEntry) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
                     }
                 }
             }
@@ -213,10 +207,8 @@ fun RepositoryBrowserScreen(
 
     if (showNewFileDialog) {
         NewEntryDialog(
-            title = "New file",
-            label = "File name (e.g. notes.md)",
-            isCreating = state.isCreatingEntry,
-            errorMessage = state.createEntryError,
+            title = "New file", label = "File name (e.g. notes.md)",
+            isCreating = state.isCreatingEntry, errorMessage = state.createEntryError,
             onDismiss = { showNewFileDialog = false; sessionViewModel.clearCreateEntryError() },
             onConfirm = { name -> sessionViewModel.createFile(name) },
             onCreated = { showNewFileDialog = false }
@@ -224,91 +216,109 @@ fun RepositoryBrowserScreen(
     }
     if (showNewFolderDialog) {
         NewEntryDialog(
-            title = "New folder",
-            label = "Folder name",
-            isCreating = state.isCreatingEntry,
-            errorMessage = state.createEntryError,
+            title = "New folder", label = "Folder name",
+            isCreating = state.isCreatingEntry, errorMessage = state.createEntryError,
             onDismiss = { showNewFolderDialog = false; sessionViewModel.clearCreateEntryError() },
             onConfirm = { name -> sessionViewModel.createFolder(name) },
             onCreated = { showNewFolderDialog = false }
         )
     }
-}
-
-@Composable
-private fun BreadcrumbRow(path: String, onCrumbClick: (String) -> Unit) {
-    val scrollState = rememberScrollState()
-    Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(scrollState).padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            "root",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.clickable { onCrumbClick("") }
+    pendingDelete?.let { entry ->
+        AlertDialog(
+            onDismissRequest = { if (!state.isDeletingEntry) pendingDelete = null },
+            title = { Text(if (entry.isFolder) "Delete folder?" else "Delete file?") },
+            text = { Text("\"${entry.name}\" ${if (entry.isFolder) "and everything inside it" else ""} will be removed from GitHub. This can't be undone from within Git Way.") },
+            confirmButton = {
+                TextButton(onClick = { sessionViewModel.deleteEntry(entry); pendingDelete = null }, enabled = !state.isDeletingEntry) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { pendingDelete = null }, enabled = !state.isDeletingEntry) { Text("Cancel") } }
         )
-        var accumulated = ""
-        path.split("/").forEach { segment ->
-            accumulated = if (accumulated.isEmpty()) segment else "$accumulated/$segment"
-            val target = accumulated
-            Text("  /  ", style = MaterialTheme.typography.labelMedium)
-            Text(
-                segment,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable { onCrumbClick(target) }
-            )
-        }
+    }
+    if (pendingDeleteSelection) {
+        AlertDialog(
+            onDismissRequest = { if (!state.isDeletingEntry) pendingDeleteSelection = false },
+            title = { Text("Delete ${state.selectedBrowserPaths.size} file(s)?") },
+            text = { Text("These files will be removed from GitHub. This can't be undone from within Git Way.") },
+            confirmButton = {
+                TextButton(onClick = { sessionViewModel.deleteSelected(); pendingDeleteSelection = false }, enabled = !state.isDeletingEntry) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { pendingDeleteSelection = false }, enabled = !state.isDeletingEntry) { Text("Cancel") } }
+        )
     }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun BrowserRow(
-    entry: BrowserEntry,
+private fun TreeRowItem(
+    row: TreeRow,
     selectionMode: Boolean,
     selected: Boolean,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onLongClick: () -> Unit,
+    onDelete: () -> Unit
 ) {
+    val entry = row.entry
+
     GlassCard(
         modifier = Modifier
             .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = { if (!entry.isFolder) onLongClick() }),
-        padding = 12.dp
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        padding = 10.dp
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (selectionMode && !entry.isFolder) {
+            Spacer(Modifier.width((row.depth * 16).dp))
+
+            if (entry.isFolder) {
+                Icon(
+                    if (row.isExpanded) Icons.Filled.ExpandMore else Icons.Filled.ExpandLess,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+            } else if (selectionMode) {
                 Icon(
                     if (selected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
                     contentDescription = if (selected) "Selected" else "Not selected",
                     tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(18.dp)
                 )
-                Spacer(Modifier.size(10.dp))
+            } else {
+                Spacer(Modifier.width(18.dp))
             }
+
+            Spacer(Modifier.width(8.dp))
             val icon = if (entry.isFolder) Icons.Filled.Folder else FileTypeIcons.iconFor(entry.name)
             val tint = if (entry.isFolder) GlassBlobBlue else FileTypeIcons.colorFor(entry.name)
-            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(26.dp))
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
             Text(
                 entry.name,
                 style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(start = 12.dp).weight(1f)
+                modifier = Modifier.padding(start = 10.dp).weight(1f)
             )
-            if (entry.isFolder) {
-                Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, modifier = Modifier.size(20.dp))
+
+            IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    Icons.Filled.Delete,
+                    contentDescription = "Delete ${entry.name}",
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
 }
 
-/** Read/edit view for a single file, shown in place of the browser list. */
+/** Read/edit view for a single file, shown in place of the tree — syntax-highlighted and
+ * properly scrollable in both read and edit modes. */
 @Composable
 private fun FileViewerScreen(sessionViewModel: GitWaySessionViewModel) {
     val state = sessionViewModel.state
     val entry = state.viewingFile ?: return
     var draft by remember(state.viewingContent) { mutableStateOf(state.viewingContent.orEmpty()) }
+    val scrollState = rememberScrollState()
 
     GlassScaffold(
         title = entry.name,
@@ -322,15 +332,8 @@ private fun FileViewerScreen(sessionViewModel: GitWaySessionViewModel) {
         actions = {
             if (state.viewingContent != null && state.viewerError == null) {
                 if (state.isEditingFile) {
-                    TextButton(
-                        onClick = { sessionViewModel.saveFileEdits(draft) },
-                        enabled = !state.isSavingFile
-                    ) {
-                        if (state.isSavingFile) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                        } else {
-                            Text("Save")
-                        }
+                    TextButton(onClick = { sessionViewModel.saveFileEdits(draft) }, enabled = !state.isSavingFile) {
+                        if (state.isSavingFile) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp) else Text("Save")
                     }
                 } else {
                     IconButton(onClick = { sessionViewModel.startEditingFile() }) {
@@ -341,41 +344,30 @@ private fun FileViewerScreen(sessionViewModel: GitWaySessionViewModel) {
         }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
-            Text(
-                entry.path,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
+            Text(entry.path, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
 
             if (state.saveFileError != null) {
-                Text(
-                    state.saveFileError,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
+                Text(state.saveFileError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 8.dp))
             }
 
             when {
-                state.isLoadingContent -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
+                state.isLoadingContent -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 state.viewerError != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(state.viewerError, color = MaterialTheme.colorScheme.error)
                 }
                 state.isEditingFile -> OutlinedTextField(
                     value = draft,
                     onValueChange = { draft = it },
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(scrollState),
                     textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                     enabled = !state.isSavingFile,
+                    visualTransformation = SyntaxHighlightTransformation(),
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None)
                 )
                 else -> Text(
-                    state.viewingContent.orEmpty(),
+                    SyntaxHighlighter.highlight(state.viewingContent.orEmpty()),
                     style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(scrollState)
                 )
             }
         }
@@ -396,9 +388,7 @@ private fun NewEntryDialog(
     var submitted by remember { mutableStateOf(false) }
 
     LaunchedEffect(isCreating, errorMessage) {
-        if (submitted && !isCreating && errorMessage == null) {
-            onCreated()
-        }
+        if (submitted && !isCreating && errorMessage == null) onCreated()
     }
 
     AlertDialog(
@@ -415,29 +405,15 @@ private fun NewEntryDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
                 if (errorMessage != null) {
-                    Text(
-                        errorMessage,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
+                    Text(errorMessage, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
                 }
             }
         },
         confirmButton = {
-            TextButton(
-                onClick = { submitted = true; onConfirm(name) },
-                enabled = name.isNotBlank() && !isCreating
-            ) {
-                if (isCreating) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                } else {
-                    Text("Create")
-                }
+            TextButton(onClick = { submitted = true; onConfirm(name) }, enabled = name.isNotBlank() && !isCreating) {
+                if (isCreating) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp) else Text("Create")
             }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !isCreating) { Text("Cancel") }
-        }
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !isCreating) { Text("Cancel") } }
     )
 }

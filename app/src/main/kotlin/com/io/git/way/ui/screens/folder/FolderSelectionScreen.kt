@@ -29,6 +29,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -130,7 +131,11 @@ fun FolderSelectionScreen(
                     }
 
                     state.scanReport?.let { report ->
-                        ProtectionSummaryCard(report)
+                        ProtectionSummaryCard(
+                            report = report,
+                            overrides = state.fileInclusionOverrides,
+                            onToggleOverride = sessionViewModel::setFileInclusionOverride
+                        )
                     }
 
                     OutlinedTextField(
@@ -154,7 +159,10 @@ fun FolderSelectionScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(visibleFiles, key = { it.relativePath }) { file ->
-                            FileRow(file)
+                            FileRow(
+                                file = file,
+                                onExclude = { sessionViewModel.setFileInclusionOverride(file.relativePath, false) }
+                            )
                         }
                     }
                 }
@@ -173,7 +181,7 @@ fun FolderSelectionScreen(
 }
 
 @Composable
-private fun FileRow(file: LocalFile) {
+private fun FileRow(file: LocalFile, onExclude: () -> Unit) {
     GlassCard(modifier = Modifier.fillMaxWidth(), padding = 12.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
@@ -200,17 +208,31 @@ private fun FileRow(file: LocalFile) {
             Text(
                 FileTypeIcons.formatSize(file.sizeBytes),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(end = 4.dp)
             )
+            IconButton(onClick = onExclude, modifier = Modifier.size(28.dp)) {
+                Icon(
+                    Icons.Filled.GppGood,
+                    contentDescription = "Exclude from upload",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
     }
 }
 
 /** PRD "Smart Upload Protection" §14/§16 — Upload Summary + expandable Ignored/Blocked
  * (secrets included in Blocked) lists, right where the file list already lives so the
- * user sees exactly what will and won't be uploaded before tapping Continue. */
+ * user sees exactly what will and won't be uploaded before tapping Continue. Every row
+ * is individually overridable — Smart Upload Protection flags files, the user decides. */
 @Composable
-private fun ProtectionSummaryCard(report: ScanReport) {
+private fun ProtectionSummaryCard(
+    report: ScanReport,
+    overrides: Map<String, Boolean>,
+    onToggleOverride: (path: String, include: Boolean?) -> Unit
+) {
     var showIgnored by remember { mutableStateOf(false) }
     var showBlocked by remember { mutableStateOf(false) }
 
@@ -220,7 +242,7 @@ private fun ProtectionSummaryCard(report: ScanReport) {
             Text("Smart Upload Protection", style = MaterialTheme.typography.titleSmall)
         }
         Text(
-            "${report.safeCount} safe · ${FileTypeIcons.formatSize(report.estimatedUploadBytes)} to upload",
+            "${report.safeCount} safe · tap any file below to include or exclude it",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp, bottom = 10.dp)
@@ -232,12 +254,24 @@ private fun ProtectionSummaryCard(report: ScanReport) {
             CountBadge(Icons.Filled.Warning, report.blockedCount + report.secretCount, "Blocked", DiffRemovedRed)
         }
 
+        if (report.sanitizedFiles.isNotEmpty()) {
+            Text(
+                "🔒 ${report.sanitizedFiles.size} credential file(s) had real passwords redacted " +
+                    "— see jks_config.txt for setup steps.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
+
         if (report.ignoredFiles.isNotEmpty()) {
             ExpandableIssueSection(
                 title = "View ${report.ignoredCount} ignored file(s)",
                 expanded = showIgnored,
                 onToggle = { showIgnored = !showIgnored },
-                issues = report.ignoredFiles
+                issues = report.ignoredFiles,
+                overrides = overrides,
+                onToggleOverride = onToggleOverride
             )
         }
 
@@ -248,6 +282,8 @@ private fun ProtectionSummaryCard(report: ScanReport) {
                 expanded = showBlocked,
                 onToggle = { showBlocked = !showBlocked },
                 issues = blockedAll,
+                overrides = overrides,
+                onToggleOverride = onToggleOverride,
                 accent = DiffRemovedRed
             )
         }
@@ -269,6 +305,8 @@ private fun ExpandableIssueSection(
     expanded: Boolean,
     onToggle: () -> Unit,
     issues: List<ScanIssue>,
+    overrides: Map<String, Boolean>,
+    onToggleOverride: (path: String, include: Boolean?) -> Unit,
     accent: androidx.compose.ui.graphics.Color? = null
 ) {
     Row(
@@ -291,20 +329,31 @@ private fun ExpandableIssueSection(
         }
     }
     AnimatedVisibility(visible = expanded) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.padding(top = 4.dp)) {
             issues.take(50).forEach { issue ->
-                Column {
-                    Text(
-                        issue.relativePath,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        issue.reason,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                val included = overrides[issue.relativePath] == true
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            issue.relativePath,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            issue.reason,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    TextButton(
+                        onClick = { onToggleOverride(issue.relativePath, if (included) null else true) }
+                    ) {
+                        Text(if (included) "Included ✓" else "Include anyway")
+                    }
                 }
             }
             if (issues.size > 50) {

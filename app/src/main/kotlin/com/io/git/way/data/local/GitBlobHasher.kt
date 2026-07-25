@@ -15,10 +15,16 @@ object GitBlobHasher {
 
     suspend fun hash(context: Context, uri: Uri): String = withContext(Dispatchers.IO) {
         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: ByteArray(0)
+        hashBytes(bytes)
+    }
+
+    /** Same algorithm as [hash] but for bytes already in memory — used for Smart Upload
+     * Protection's redacted/generated files, which don't have real on-disk content to read. */
+    fun hashBytes(bytes: ByteArray): String {
         val header = "blob ${bytes.size}\u0000".toByteArray(Charsets.UTF_8)
         val digest = MessageDigest.getInstance("SHA-1")
         digest.update(header)
         digest.update(bytes)
-        digest.digest().joinToString("") { "%02x".format(it) }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 }

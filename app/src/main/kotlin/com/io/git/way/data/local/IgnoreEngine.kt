@@ -61,35 +61,39 @@ object IgnoreEngine {
         val segments = file.relativePath.split("/")
         val name = file.displayName
 
-        if (segments.dropLast(1).any { it.lowercase() in IGNORED_DIR_NAMES }) {
-            return ScanIssue(file.relativePath, FileStatus.IGNORED, "Inside an auto-ignored folder")
+        // .github itself is an auto-ignored folder (repo metadata), but CI workflow
+        // definitions are real project files developers expect to push — carve them out.
+        val isGithubWorkflow = segments.size >= 2 && segments[0] == ".github" && segments[1] == "workflows"
+
+        if (!isGithubWorkflow && segments.dropLast(1).any { it.lowercase() in IGNORED_DIR_NAMES }) {
+            return ScanIssue(file, FileStatus.IGNORED, "Inside an auto-ignored folder")
         }
 
         matchAny(name, SECURITY_BLOCKED_GLOBS)?.let { glob ->
-            return ScanIssue(file.relativePath, FileStatus.BLOCKED, "Security-sensitive file ($glob) — never uploaded")
+            return ScanIssue(file, FileStatus.BLOCKED, "Security-sensitive file ($glob) — never uploaded")
         }
 
         matchAny(name, APK_BLOCKED_GLOBS)?.let { glob ->
-            return ScanIssue(file.relativePath, FileStatus.BLOCKED, "Generated app binary ($glob) should not be committed")
+            return ScanIssue(file, FileStatus.BLOCKED, "Generated app binary ($glob) should not be committed")
         }
 
         if (name.startsWith(".") && name !in ALLOWED_HIDDEN_FILES) {
-            return ScanIssue(file.relativePath, FileStatus.IGNORED, "Hidden file")
+            return ScanIssue(file, FileStatus.IGNORED, "Hidden file")
         }
 
         matchAny(name, IGNORED_FILE_GLOBS)?.let { glob ->
-            return ScanIssue(file.relativePath, FileStatus.IGNORED, "Matches internal ignore rule ($glob)")
+            return ScanIssue(file, FileStatus.IGNORED, "Matches internal ignore rule ($glob)")
         }
 
         if (gitignorePatterns.any { pattern -> matches(file.relativePath, pattern) || matches(name, pattern) }) {
-            return ScanIssue(file.relativePath, FileStatus.IGNORED, "Matches .gitignore")
+            return ScanIssue(file, FileStatus.IGNORED, "Matches .gitignore")
         }
 
         if (file.sizeBytes > largeFileThresholdBytes) {
             val mb = file.sizeBytes / (1024.0 * 1024.0)
             val limitMb = largeFileThresholdBytes / (1024 * 1024)
             return ScanIssue(
-                file.relativePath,
+                file,
                 FileStatus.BLOCKED,
                 "Large file (${"%.1f".format(mb)} MB) — over the $limitMb MB limit. Consider Git LFS."
             )

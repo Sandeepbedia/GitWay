@@ -18,6 +18,7 @@ import com.io.git.way.domain.model.FileChange
 import com.io.git.way.domain.model.GitRepository
 import com.io.git.way.domain.model.LocalFile
 import com.io.git.way.domain.model.ScanReport
+import com.io.git.way.domain.model.TreeRow
 import com.io.git.way.domain.model.UploadPhase
 import com.io.git.way.domain.repository.GitHubRepository
 import kotlinx.coroutines.CancellationException
@@ -39,6 +40,10 @@ data class GitWaySessionState(
      * already filtered down to [ScanReport.safeFiles], this is kept for the summary UI
      * (counts, ignored/blocked/secret lists). Null before a folder has been scanned. */
     val scanReport: ScanReport? = null,
+    /** Per-path user overrides of the Smart Upload Protection verdict — true = force
+     * include even though flagged, false = force exclude even though it looked safe.
+     * Absent = trust the scan's own verdict. The user gets the final say (PRD §16). */
+    val fileInclusionOverrides: Map<String, Boolean> = emptyMap(),
 
     val isComparing: Boolean = false,
     val compareProgress: Pair<Int, Int>? = null,
@@ -57,17 +62,24 @@ data class GitWaySessionState(
     val uploadError: String? = null,
     val commitSha: String? = null,
 
-    // ===== Repository Browser (file-manager view of the repo + manual file/folder create) =====
+    // ===== Repository Browser (VS Code-style tree explorer + manual file/folder create) =====
+    /** Last-tapped folder — the target for "New file/folder" and "Paste", not a navigation
+     * location; the whole tree stays visible at once (VS Code Explorer style, not drill-down). */
     val browserPath: String = "",
-    val browserEntries: List<BrowserEntry> = emptyList(),
+    /** Flattened, indentation-ready rows for the currently expanded parts of the tree. */
+    val browserEntries: List<TreeRow> = emptyList(),
+    val expandedFolders: Set<String> = emptySet(),
     val isBrowserLoading: Boolean = false,
     val browserError: String? = null,
     val remoteTreeCache: Map<String, String> = emptyMap(),
     val isCreatingEntry: Boolean = false,
     val createEntryError: String? = null,
+    val isDeletingEntry: Boolean = false,
+    val deleteEntryError: String? = null,
 
     /** Multi-select in the browser (long-press to start, tap to toggle). Only files are
-     * selectable — folders aren't copyable as a unit yet. */
+     * selectable — folders aren't copyable/deletable as a single selection unit yet, use
+     * the per-row delete action for a whole folder instead. */
     val selectedBrowserPaths: Set<String> = emptySet(),
     /** Files copied via the selection toolbar, ready to paste into another folder. */
     val clipboard: List<BrowserEntry> = emptyList(),
@@ -112,7 +124,7 @@ class GitWaySessionViewModel(
 
     fun onFolderPicked(context: Context, uri: Uri) {
         viewModelScope.launch {
-            state = state.copy(isScanning = true, scanError = null, folderUri = uri, scanReport = null)
+            state = state.copy(isScanning = true, scanError = null, folderUri = uri, scanReport = null, fileInclusionOverrides = emptyMap())
             try {
                 withContext(Dispatchers.IO) {
                     context.contentResolver.takePersistableUriPermission(
@@ -167,6 +179,35 @@ class GitWaySessionViewModel(
         state = state.copy(scanError = null)
     }
 
+    /** Lets the user override a single file's Smart Upload Protection verdict — force an
+     * ignored/blocked file in, or force a safe-looking file out. [include] null clears the
+     * override and goes back to trusting the scan. Recomputes [GitWaySessionState.localFiles]
+     * immediately so it stays the single source of truth the diff/upload pipeline reads. */
+    fun setFileInclusionOverride(path: String, include: Boolean?) {
+        val report = state.scanReport ?: return
+        val newOverrides = if (include == null) {
+            state.fileInclusionOverrides - path
+        } else {
+            state.fileInclusionOverrides + (path to include)
+        }
+        state = state.copy(
+            fileInclusionOverrides = newOverrides,
+            localFiles = effectiveLocalFiles(report, newOverrides)
+        )
+    }
+
+    private fun effectiveLocalFiles(report: ScanReport, overrides: Map<String, Boolean>): List<LocalFile> {
+        val flagged = (report.ignoredFiles + report.blockedFiles + report.secretsFound).associateBy { it.relativePath }
+        val included = mutableListOf<LocalFile>()
+        report.safeFiles.forEach { file ->
+            if (overrides[file.relativePath] != false) included += file
+        }
+        flagged.forEach { (path, issue) ->
+            if (overrides[path] == true) included += issue.file
+        }
+        return included
+    }
+
     fun runComparison(context: Context) {
         val repo = state.selectedRepo ?: return
         if (state.localFiles.isEmpty()) return
@@ -181,6 +222,7 @@ class GitWaySessionViewModel(
                             context = context,
                             localFiles = state.localFiles,
                             remotePaths = remoteMap,
+                            contentOverrides = state.scanReport?.contentOverrides.orEmpty(),
                             onProgress = { done, total ->
                                 state = state.copy(compareProgress = done to total)
                             }
@@ -252,8 +294,9 @@ class GitWaySessionViewModel(
         }
 
         val localByPath = state.localFiles.associateBy { it.relativePath }
+        val overrides = state.scanReport?.contentOverrides.orEmpty()
         val readBytes: suspend (String) -> ByteArray = { path ->
-            withContext(Dispatchers.IO) {
+            overrides[path] ?: withContext(Dispatchers.IO) {
                 val uri = localByPath.getValue(path).documentUri
                 context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: ByteArray(0)
             }
@@ -311,20 +354,21 @@ class GitWaySessionViewModel(
         state = GitWaySessionState()
     }
 
-    // ===== Repository Browser =====
+    // ===== Repository Browser (VS Code-style tree explorer) =====
 
-    /** Loads the repo's full file tree once and shows the root folder. Cheap to call again
-     * (e.g. pull-to-refresh) — it always re-fetches from GitHub rather than trusting the cache. */
+    /** Loads the repo's full file tree once and shows the root, collapsed. Cheap to call
+     * again (pull-to-refresh) — it always re-fetches from GitHub rather than trusting the
+     * cache, but keeps whatever folders were already expanded. */
     fun loadBrowserRoot() {
         val repo = state.selectedRepo ?: return
-        state = state.copy(isBrowserLoading = true, browserError = null, browserPath = "")
+        state = state.copy(isBrowserLoading = true, browserError = null)
         viewModelScope.launch {
             gitHubRepository.getRepositoryTree(repo)
                 .onSuccess { tree ->
                     state = state.copy(
                         isBrowserLoading = false,
                         remoteTreeCache = tree,
-                        browserEntries = childrenOf(tree.keys, "")
+                        browserEntries = buildVisibleRows(tree.keys, state.expandedFolders)
                     )
                 }
                 .onFailure { throwable ->
@@ -336,29 +380,17 @@ class GitWaySessionViewModel(
         }
     }
 
-    fun navigateInto(entry: BrowserEntry) {
+    /** Expands or collapses a folder in place (VS Code Explorer style — the whole tree
+     * stays on screen, no drill-down navigation). The tapped folder also becomes the
+     * target for the next "New file/folder" or "Paste". */
+    fun toggleFolderExpanded(entry: BrowserEntry) {
         if (!entry.isFolder) return
+        val expanded = state.expandedFolders
+        val newExpanded = if (entry.path in expanded) expanded - entry.path else expanded + entry.path
         state = state.copy(
+            expandedFolders = newExpanded,
             browserPath = entry.path,
-            browserEntries = childrenOf(state.remoteTreeCache.keys, entry.path),
-            selectedBrowserPaths = emptySet()
-        )
-    }
-
-    fun navigateUp() {
-        val parent = state.browserPath.substringBeforeLast("/", "")
-        state = state.copy(
-            browserPath = parent,
-            browserEntries = childrenOf(state.remoteTreeCache.keys, parent),
-            selectedBrowserPaths = emptySet()
-        )
-    }
-
-    fun navigateToBreadcrumb(path: String) {
-        state = state.copy(
-            browserPath = path,
-            browserEntries = childrenOf(state.remoteTreeCache.keys, path),
-            selectedBrowserPaths = emptySet()
+            browserEntries = buildVisibleRows(state.remoteTreeCache.keys, newExpanded)
         )
     }
 
@@ -366,9 +398,10 @@ class GitWaySessionViewModel(
         state = state.copy(createEntryError = null)
     }
 
-    /** Creates an empty text file at the current browser folder as a single, immediate
-     * commit — reuses the same tested [GitHubRepository.syncChanges] pipeline (validation,
-     * retries, atomic tree/commit/ref, post-push verification) as the main sync flow. */
+    /** Creates an empty text file inside [GitWaySessionState.browserPath] (the last-tapped
+     * folder, or root) as a single, immediate commit — reuses the same tested
+     * [GitHubRepository.syncChanges] pipeline (validation, retries, atomic tree/commit/ref,
+     * post-push verification) as the main sync flow. */
     fun createFile(fileName: String, content: String = "") {
         val repo = state.selectedRepo ?: return
         val name = fileName.trim()
@@ -390,10 +423,12 @@ class GitWaySessionViewModel(
                 onProgress = { _, _, _, _ -> }
             ).onSuccess {
                 val updatedTree = state.remoteTreeCache + (fullPath to "")
+                val expanded = if (state.browserPath.isEmpty()) state.expandedFolders else state.expandedFolders + state.browserPath
                 state = state.copy(
                     isCreatingEntry = false,
                     remoteTreeCache = updatedTree,
-                    browserEntries = childrenOf(updatedTree.keys, state.browserPath)
+                    expandedFolders = expanded,
+                    browserEntries = buildVisibleRows(updatedTree.keys, expanded)
                 )
             }.onFailure { throwable ->
                 state = state.copy(isCreatingEntry = false, createEntryError = throwable.message ?: "Couldn't create file.")
@@ -403,7 +438,8 @@ class GitWaySessionViewModel(
 
     /** Git has no real folder objects — an empty folder is created by committing a hidden
      * ".gitkeep" placeholder inside it, the standard convention. The placeholder itself is
-     * filtered out of [childrenOf] so the folder just looks empty until a real file is added. */
+     * filtered out of [buildVisibleRows] so the folder just looks empty until a real file
+     * is added. */
     fun createFolder(folderName: String) {
         val repo = state.selectedRepo ?: return
         val name = folderName.trim()
@@ -426,13 +462,68 @@ class GitWaySessionViewModel(
                 onProgress = { _, _, _, _ -> }
             ).onSuccess {
                 val updatedTree = state.remoteTreeCache + (placeholderPath to "")
+                val expanded = if (state.browserPath.isEmpty()) state.expandedFolders else state.expandedFolders + state.browserPath
                 state = state.copy(
                     isCreatingEntry = false,
                     remoteTreeCache = updatedTree,
-                    browserEntries = childrenOf(updatedTree.keys, state.browserPath)
+                    expandedFolders = expanded,
+                    browserEntries = buildVisibleRows(updatedTree.keys, expanded)
                 )
             }.onFailure { throwable ->
                 state = state.copy(isCreatingEntry = false, createEntryError = throwable.message ?: "Couldn't create folder.")
+            }
+        }
+    }
+
+    fun clearDeleteEntryError() {
+        state = state.copy(deleteEntryError = null)
+    }
+
+    /** Deletes a single file, or an entire folder (every path under it), as one commit.
+     * Reuses [GitHubRepository.syncChanges] with REMOVED changes — nothing is read from
+     * disk/GitHub for a delete, the tree/commit pipeline just drops those paths. */
+    fun deleteEntry(entry: BrowserEntry) {
+        val paths = if (entry.isFolder) {
+            state.remoteTreeCache.keys.filter { it == entry.path || it.startsWith("${entry.path}/") }
+        } else {
+            listOf(entry.path)
+        }
+        deletePaths(paths)
+    }
+
+    /** Deletes every currently selected file as one commit, then exits selection mode. */
+    fun deleteSelected() {
+        if (state.selectedBrowserPaths.isEmpty()) return
+        deletePaths(state.selectedBrowserPaths.toList())
+    }
+
+    private fun deletePaths(paths: List<String>) {
+        val repo = state.selectedRepo ?: return
+        if (paths.isEmpty() || state.isDeletingEntry) return
+
+        state = state.copy(isDeletingEntry = true, deleteEntryError = null)
+        viewModelScope.launch {
+            val changes = paths.map { path ->
+                FileChange(fileName = path.substringAfterLast('/'), filePath = path, type = ChangeType.REMOVED)
+            }
+            gitHubRepository.syncChanges(
+                repo = repo,
+                changes = changes,
+                readFileBytes = { ByteArray(0) }, // never invoked — REMOVED changes carry no content
+                onProgress = { _, _, _, _ -> }
+            ).onSuccess {
+                val pathSet = paths.toSet()
+                val updatedTree = state.remoteTreeCache - pathSet
+                val updatedExpanded = state.expandedFolders - pathSet
+                state = state.copy(
+                    isDeletingEntry = false,
+                    remoteTreeCache = updatedTree,
+                    expandedFolders = updatedExpanded,
+                    selectedBrowserPaths = state.selectedBrowserPaths - pathSet,
+                    browserEntries = buildVisibleRows(updatedTree.keys, updatedExpanded)
+                )
+            }.onFailure { throwable ->
+                state = state.copy(isDeletingEntry = false, deleteEntryError = throwable.message ?: "Couldn't delete.")
             }
         }
     }
@@ -454,7 +545,8 @@ class GitWaySessionViewModel(
     /** Copies every currently selected file into the in-memory clipboard and exits
      * selection mode. Only the path/sha is kept — bytes are fetched lazily on paste. */
     fun copySelectionToClipboard() {
-        val selectedEntries = state.browserEntries.filter { it.path in state.selectedBrowserPaths && !it.isFolder }
+        val selectedEntries = state.browserEntries.map { it.entry }
+            .filter { it.path in state.selectedBrowserPaths && !it.isFolder }
         if (selectedEntries.isEmpty()) return
         state = state.copy(clipboard = selectedEntries, selectedBrowserPaths = emptySet())
     }
@@ -463,9 +555,10 @@ class GitWaySessionViewModel(
         state = state.copy(clipboard = emptyList())
     }
 
-    /** Pastes every clipboard entry into the current browser folder as a single commit —
-     * reads each file's bytes from GitHub by its cached blob sha, then re-uploads them at
-     * the new path(s). Auto-renames on a name collision ("name (copy).ext", then " (2)"…). */
+    /** Pastes every clipboard entry into [GitWaySessionState.browserPath] (the last-tapped
+     * folder, or root) as a single commit — reads each file's bytes from GitHub by its
+     * cached blob sha, then re-uploads them at the new path(s). Auto-renames on a name
+     * collision ("name (copy).ext", then " (copy 2)"…). */
     fun pasteClipboardHere() {
         val repo = state.selectedRepo ?: return
         val toPaste = state.clipboard
@@ -474,10 +567,14 @@ class GitWaySessionViewModel(
         state = state.copy(isPasting = true, pasteError = null)
         viewModelScope.launch {
             try {
-                val existingNames = state.browserEntries.map { it.name }.toMutableSet()
+                val siblingNames = state.remoteTreeCache.keys
+                    .filter { it.substringBeforeLast("/", "") == state.browserPath }
+                    .map { it.substringAfterLast("/") }
+                    .toMutableSet()
+
                 val destinations = toPaste.map { entry ->
-                    val uniqueName = uniqueFileName(entry.name, existingNames)
-                    existingNames += uniqueName
+                    val uniqueName = uniqueFileName(entry.name, siblingNames)
+                    siblingNames += uniqueName
                     val destPath = if (state.browserPath.isEmpty()) uniqueName else "${state.browserPath}/$uniqueName"
                     entry to destPath
                 }
@@ -486,7 +583,7 @@ class GitWaySessionViewModel(
                 for ((entry, destPath) in destinations) {
                     val sha = state.remoteTreeCache[entry.path]
                     if (sha.isNullOrBlank()) {
-                        state = state.copy(isPasting = false, pasteError = "Couldn't read \"${entry.name}\" — try re-opening this folder.")
+                        state = state.copy(isPasting = false, pasteError = "Couldn't read \"${entry.name}\" — try reloading.")
                         return@launch
                     }
                     val bytes = gitHubRepository.getFileContent(repo, sha).getOrElse {
@@ -507,11 +604,13 @@ class GitWaySessionViewModel(
                     onProgress = { _, _, _, _ -> }
                 ).onSuccess {
                     val updatedTree = state.remoteTreeCache + byteCache.keys.associateWith { "" }
+                    val expanded = if (state.browserPath.isEmpty()) state.expandedFolders else state.expandedFolders + state.browserPath
                     state = state.copy(
                         isPasting = false,
                         clipboard = emptyList(),
                         remoteTreeCache = updatedTree,
-                        browserEntries = childrenOf(updatedTree.keys, state.browserPath)
+                        expandedFolders = expanded,
+                        browserEntries = buildVisibleRows(updatedTree.keys, expanded)
                     )
                 }.onFailure { throwable ->
                     state = state.copy(isPasting = false, pasteError = throwable.message ?: "Paste failed.")
@@ -636,5 +735,22 @@ class GitWaySessionViewModel(
             }
         }
         return entries.sortedWith(compareBy({ !it.isFolder }, { it.name.lowercase() }))
+    }
+
+    /** Flattens the tree into indentation-ready rows (VS Code Explorer style): every
+     * folder always appears, its children are spliced in right after it only while its
+     * path is in [expanded]. Rebuilt on every tree/expansion change — cheap enough for
+     * the file counts a mobile repo browser deals with. */
+    private fun buildVisibleRows(paths: Set<String>, expanded: Set<String>): List<TreeRow> {
+        val rows = mutableListOf<TreeRow>()
+        fun walk(currentPath: String, depth: Int) {
+            childrenOf(paths, currentPath).forEach { entry ->
+                val isExpanded = entry.isFolder && entry.path in expanded
+                rows += TreeRow(entry = entry, depth = depth, isExpanded = isExpanded)
+                if (isExpanded) walk(entry.path, depth + 1)
+            }
+        }
+        walk("", 0)
+        return rows
     }
 }

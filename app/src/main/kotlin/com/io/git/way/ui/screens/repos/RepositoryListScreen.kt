@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.Brightness7
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.FolderOff
@@ -38,6 +39,7 @@ import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SortByAlpha
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Divider
@@ -111,6 +113,7 @@ fun RepositoryListScreen(
     var sort by remember { mutableStateOf(RepoSort.RECENT) }
     var privacyFilter by remember { mutableStateOf(PrivacyFilter.ALL) }
     var showFilterSheet by remember { mutableStateOf(false) }
+    var searchExpanded by remember { mutableStateOf(false) }
 
     val visibleRepos = state.filtered
         .let { list ->
@@ -135,10 +138,17 @@ fun RepositoryListScreen(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             floatingActionButton = {
                 GlassFab(
-                    onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/new"))) },
+                    onClick = {
+                        searchExpanded = !searchExpanded
+                        if (!searchExpanded) viewModel.onSearchQueryChange("")
+                    },
                     size = 64.dp
                 ) {
-                    Icon(Icons.Filled.Add, contentDescription = "Create repository", modifier = Modifier.size(28.dp))
+                    Icon(
+                        if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
+                        contentDescription = if (searchExpanded) "Close search" else "Search repositories",
+                        modifier = Modifier.size(28.dp)
+                    )
                 }
             },
             bottomBar = {
@@ -168,12 +178,14 @@ fun RepositoryListScreen(
                     }
                 )
 
-                GlassSearchField(
-                    value = state.searchQuery,
-                    onValueChange = viewModel::onSearchQueryChange,
-                    placeholder = "Search repositories...",
-                    modifier = Modifier.padding(bottom = 14.dp)
-                )
+                if (searchExpanded) {
+                    GlassSearchField(
+                        value = state.searchQuery,
+                        onValueChange = viewModel::onSearchQueryChange,
+                        placeholder = "Search repositories...",
+                        modifier = Modifier.padding(bottom = 14.dp)
+                    )
+                }
 
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
