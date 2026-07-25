@@ -1,5 +1,8 @@
 package com.io.git.way.ui.theme
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -7,6 +10,10 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,6 +31,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -113,7 +121,11 @@ fun LiquidGlassBackground(
     }
 }
 
-/** Scaffold pre-wired with the liquid glass background + a transparent, frosted top bar. */
+/** Scaffold pre-wired with the liquid glass background + a transparent, frosted top bar.
+ * Also resolves [LocalContentColor] for the whole content area to the theme's real text
+ * colour — without this, any bare `Text(...)` with no explicit `color=` (i.e. anything
+ * not inside a [GlassCard]) fell back to the Compose default content colour, which reads
+ * as near-invisible on the dark background. */
 @Composable
 fun GlassScaffold(
     title: String,
@@ -124,6 +136,7 @@ fun GlassScaffold(
 ) {
     val dark = MaterialTheme.isDarkSurface
     val titleColor = if (dark) Color.White else MaterialTheme.colorScheme.onBackground
+    val bodyColor = if (dark) RepoTextPrimary else RepoTextPrimaryLight
 
     LiquidGlassBackground {
         Scaffold(
@@ -144,8 +157,12 @@ fun GlassScaffold(
                 )
             },
             bottomBar = bottomBar,
-            content = content
-        )
+            content = { padding ->
+                CompositionLocalProvider(LocalContentColor provides bodyColor) {
+                    content(padding)
+            }
+        }
+    )
     }
 }
 
@@ -564,16 +581,17 @@ fun GlassFloatingBottomNav(
     val fill = if (dark) RepoBottomNavSurface else RepoBottomNavSurfaceLight
     val border = if (dark) RepoBorderNormal else RepoBorderNormalLight
 
-    Row(
-        modifier
-            .padding(horizontal = 16.dp, vertical = 14.dp)
-            .fillMaxWidth()
-            .height(72.dp)
-            .shadow(18.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.18f), spotColor = Color.Black.copy(alpha = 0.18f))
-            .clip(shape)
-            .background(fill)
-            .border(1.dp, border, shape)
-            .padding(horizontal = 10.dp),
+    Box(modifier = modifier.fillMaxWidth().navigationBarsPadding()) {
+        Row(
+            modifier
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .fillMaxWidth()
+                .height(72.dp)
+                .shadow(18.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.18f), spotColor = Color.Black.copy(alpha = 0.18f))
+                .clip(shape)
+                .background(fill)
+                .border(1.dp, border, shape)
+                .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceEvenly
     ) {
@@ -586,6 +604,7 @@ fun GlassFloatingBottomNav(
             )
         }
     }
+}
 }
 
 @Composable
@@ -612,6 +631,11 @@ private fun BottomNavItem(
         modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .shadow(if (isSelected) 6.dp else 0.dp, shape, clip = false)
+            .clickable(
+                onClick = onClick,
+                interactionSource = interactionSource
+            )
+            .animateContentSize(animationSpec = tween(300, easing = FastOutSlowInEasing))
             .clip(shape)
             .background(
                 Brush.horizontalGradient(
@@ -622,17 +646,19 @@ private fun BottomNavItem(
                     )
                 )
             )
-            .clickable(
-                onClick = onClick,
-                interactionSource = interactionSource
-            )
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Icon(bottomNavIcon(tab), contentDescription = tab.label, tint = contentColor, modifier = Modifier.size(20.dp))
         if (isSelected) {
-            Text(tab.label, color = contentColor, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
+            Text(
+                tab.label,
+                color = contentColor,
+                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1
+            )
         }
     }
 }

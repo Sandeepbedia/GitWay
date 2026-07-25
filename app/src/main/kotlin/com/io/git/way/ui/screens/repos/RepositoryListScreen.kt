@@ -2,10 +2,7 @@ package com.io.git.way.ui.screens.repos
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -51,7 +48,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -86,7 +82,6 @@ import com.io.git.way.ui.theme.GlassSkeletonCard
 import com.io.git.way.ui.theme.LiquidGlassBackground
 import com.io.git.way.ui.theme.repoLanguageLabel
 import com.io.git.way.ui.theme.repoVisualFor
-import kotlinx.coroutines.delay
 
 private enum class RepoSort { RECENT, NAME, NEWEST, OLDEST }
 private enum class PrivacyFilter { ALL, PRIVATE_ONLY, PUBLIC_ONLY }
@@ -217,10 +212,9 @@ fun RepositoryListScreen(
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 12.dp)
                     ) {
-                        itemsIndexed(visibleRepos, key = { _, repo -> repo.fullName }) { index, repo ->
-                            AnimatedRepoCard(
+                        itemsIndexed(visibleRepos, key = { _, repo -> repo.fullName }) { _, repo ->
+                            RepoCard(
                                 repo = repo,
-                                index = index,
                                 onClick = { onRepositorySelected(repo) },
                                 modifier = Modifier.animateItem()
                             )
@@ -280,31 +274,6 @@ private fun RepositoryHeader(
 }
 
 @Composable
-private fun AnimatedRepoCard(
-    repo: GitRepository,
-    index: Int,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var visible by remember(repo.fullName) { mutableStateOf(false) }
-    LaunchedEffect(repo.fullName) {
-        delay((index * 45L).coerceAtMost(400L))
-        visible = true
-    }
-
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn(animationSpec = androidx.compose.animation.core.tween(280)) +
-            slideInVertically(
-                animationSpec = androidx.compose.animation.core.tween(280),
-                initialOffsetY = { it / 4 }
-            )
-    ) {
-        RepoCard(repo = repo, onClick = onClick, modifier = modifier)
-    }
-}
-
-@Composable
 private fun RepoCard(
     repo: GitRepository,
     onClick: () -> Unit,
@@ -323,7 +292,7 @@ private fun RepoCard(
             .fillMaxWidth()
             .graphicsLayer { scaleX = scale; scaleY = scale }
     ) {
-        Row(modifier = Modifier.fillMaxWidth().height(120.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().height(80.dp)) {
             Box(
                 modifier = Modifier
                     .width(5.dp)
