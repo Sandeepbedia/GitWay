@@ -1,5 +1,7 @@
 package com.io.git.way.data.remote.dto
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -116,8 +118,23 @@ data class TreeEntryInput(
     val sha: String? = null
 )
 
+/**
+ * The app-wide Json config uses `encodeDefaults = true` (needed so [CreateCommitRequest]'s
+ * `parents` is always sent, even as `[]`, to explicitly signal "root commit, no parent" —
+ * omitting it would make GitHub infer a parent from the branch's current commit instead).
+ * But that same setting would also force `base_tree` to serialize as an explicit JSON
+ * `null` whenever it's unset, and GitHub's Git Data API does NOT treat an explicit
+ * `"base_tree": null` the same as the key being absent — on a brand-new/empty repository
+ * (no git objects at all yet) sending that explicit null makes /git/trees fail with
+ * "409 Git Repository is empty." instead of creating a fresh root tree. Per GitHub's own
+ * docs, base_tree must simply be omitted to build a tree with no base. @EncodeDefault(NEVER)
+ * overrides the file-wide setting for just this one property: still omitted when null
+ * (the default), still sent normally whenever a real tree sha is provided.
+ */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class CreateTreeRequest(
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     @SerialName("base_tree") val baseTree: String? = null,
     val tree: List<TreeEntryInput>
 )

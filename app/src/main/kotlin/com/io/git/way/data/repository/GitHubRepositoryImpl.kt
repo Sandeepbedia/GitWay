@@ -143,9 +143,14 @@ class GitHubRepositoryImpl(
         withContext(Dispatchers.IO) {
             runCatching {
                 try {
-                    val treeResponse = githubCall {
-                        apiService.getTree(repo.owner, repo.name, repo.defaultBranch, recursive = 1)
-                    }
+                    // Deliberately NOT wrapped in githubCall()/githubCallWithRetry() — both
+                    // of those catch HttpException and rethrow it as a plain IOException,
+                    // which meant the catch block right below could never actually see a
+                    // 404/409 to special-case. That bug made a brand-new/empty repository's
+                    // real "Git Repository is empty." GitHub error leak straight to the UI
+                    // as a hard failure (with no way to continue) instead of being treated
+                    // as "no remote files yet".
+                    val treeResponse = apiService.getTree(repo.owner, repo.name, repo.defaultBranch, recursive = 1)
                     treeResponse.tree
                         .filter { it.type == "blob" }
                         .associate { it.path to it.sha.orEmpty() }
@@ -295,12 +300,17 @@ class GitHubRepositoryImpl(
             onProgress(UploadPhase.UPDATING_BRANCH, total, total, "")
 
             try {
+                // Deliberately NOT wrapped in githubCallWithRetry() here — same bug as
+                // getRepositoryTree above: that wrapper catches HttpException and rethrows
+                // it as IOException, so the catch block below (which needs the real
+                // HttpException to check e.code() for the 409/422-fast-forward race
+                // condition) could never fire. That silently disabled the fast-forward
+                // retry this whole method exists for — every ref-update conflict was
+                // surfacing as an immediate failure instead of retrying.
                 if (branchExists) {
-                    githubCallWithRetry { apiService.updateRef(owner, repoName, branch, UpdateRefRequest(sha = newCommit.sha)) }
+                    apiService.updateRef(owner, repoName, branch, UpdateRefRequest(sha = newCommit.sha))
                 } else {
-                    githubCallWithRetry {
-                        apiService.createRef(owner, repoName, CreateRefRequest(ref = "refs/heads/$branch", sha = newCommit.sha))
-                    }
+                    apiService.createRef(owner, repoName, CreateRefRequest(ref = "refs/heads/$branch", sha = newCommit.sha))
                 }
                 return newCommit.sha
             } catch (e: HttpException) {
@@ -309,7 +319,11 @@ class GitHubRepositoryImpl(
                 val bodyText = runCatching { e.response()?.errorBody()?.string() }.getOrNull()
                 val isRaceCondition = e.code() == 409 ||
                     (e.code() == 422 && bodyText?.contains("fast forward", ignoreCase = true) == true)
-                if (isRaceCondition && attempt < MAX_RACE_RETRIES - 1) {
+                // Transient server errors get the same retry-from-step-1 treatment as a
+                // race condition (this loop's own backoff replaces the retry that
+                // githubCallWithRetry used to provide before it was removed above).
+                val isTransient = e.code() in intArrayOf(500, 502, 503, 504)
+                if ((isRaceCondition || isTransient) && attempt < MAX_RACE_RETRIES - 1) {
                     lastError = e
                     Log.w(TAG, "Ref update raced (code=${e.code()}), retrying from step 1 (attempt=$attempt)")
                     delay(500L * (attempt + 1))
