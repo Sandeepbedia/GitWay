@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -142,7 +143,14 @@ fun RepositoryListScreen(
                         searchExpanded = !searchExpanded
                         if (!searchExpanded) viewModel.onSearchQueryChange("")
                     },
-                    size = 64.dp
+                    size = 64.dp,
+                    // With the floating nav now an overlay (not Scaffold's bottomBar,
+                    // which used to lift the FAB above it automatically), the FAB needs
+                    // its own clearance so it floats above the nav dock instead of
+                    // behind/under it.
+                    modifier = Modifier
+                        .navigationBarsPadding()
+                        .padding(bottom = 96.dp)
                 ) {
                     Icon(
                         if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
@@ -150,18 +158,6 @@ fun RepositoryListScreen(
                         modifier = Modifier.size(28.dp)
                     )
                 }
-            },
-            bottomBar = {
-                GlassFloatingBottomNav(
-                    selected = BottomNavTab.REPOSITORIES,
-                    onSelect = { tab ->
-                        when (tab) {
-                            BottomNavTab.OVERVIEW -> onNavigateOverview()
-                            BottomNavTab.REPOSITORIES -> Unit
-                            BottomNavTab.PROFILE -> onNavigateProfile()
-                        }
-                    }
-                )
             }
         ) { padding ->
             Column(
@@ -206,7 +202,10 @@ fun RepositoryListScreen(
                 }
 
                 when {
-                    state.isLoading -> LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    state.isLoading -> LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 110.dp)
+                    ) {
                         items(6) { GlassSkeletonCard() }
                     }
 
@@ -222,7 +221,9 @@ fun RepositoryListScreen(
                     else -> LazyColumn(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(14.dp),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 12.dp)
+                        // Bottom clearance for the floating nav dock, which now overlays
+                        // the screen instead of reserving Scaffold bottomBar space.
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 110.dp)
                     ) {
                         itemsIndexed(visibleRepos, key = { _, repo -> repo.fullName }) { _, repo ->
                             RepoCard(
@@ -235,6 +236,18 @@ fun RepositoryListScreen(
                 }
             }
         }
+
+        GlassFloatingBottomNav(
+            selected = BottomNavTab.REPOSITORIES,
+            onSelect = { tab ->
+                when (tab) {
+                    BottomNavTab.OVERVIEW -> onNavigateOverview()
+                    BottomNavTab.REPOSITORIES -> Unit
+                    BottomNavTab.PROFILE -> onNavigateProfile()
+                }
+            },
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
     }
 
     if (showFilterSheet) {

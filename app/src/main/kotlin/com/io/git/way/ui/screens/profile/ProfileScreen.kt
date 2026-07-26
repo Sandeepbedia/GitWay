@@ -24,6 +24,9 @@ import com.io.git.way.ui.theme.LiquidGlassBackground
 /**
  * Profile tab — reachable from the floating bottom nav. Intentionally left blank
  * for now (placeholder); the nav destination exists so it isn't the only missing tab.
+ *
+ * See [com.io.git.way.ui.screens.overview.OverviewScreen] for why the nav is an overlay
+ * rather than Scaffold's `bottomBar` slot.
  */
 @Composable
 fun ProfileScreen(
@@ -33,19 +36,7 @@ fun ProfileScreen(
     LiquidGlassBackground {
         Scaffold(
             containerColor = Color.Transparent,
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            bottomBar = {
-                GlassFloatingBottomNav(
-                    selected = BottomNavTab.PROFILE,
-                    onSelect = { tab ->
-                        when (tab) {
-                            BottomNavTab.OVERVIEW -> onNavigateOverview()
-                            BottomNavTab.REPOSITORIES -> onNavigateRepositories()
-                            BottomNavTab.PROFILE -> Unit
-                        }
-                    }
-                )
-            }
+            contentWindowInsets = WindowInsets(0, 0, 0, 0)
         ) { padding ->
             Column(
                 modifier = Modifier.fillMaxSize().padding(padding).statusBarsPadding(),
@@ -66,5 +57,17 @@ fun ProfileScreen(
                 )
             }
         }
+
+        GlassFloatingBottomNav(
+            selected = BottomNavTab.PROFILE,
+            onSelect = { tab ->
+                when (tab) {
+                    BottomNavTab.OVERVIEW -> onNavigateOverview()
+                    BottomNavTab.REPOSITORIES -> onNavigateRepositories()
+                    BottomNavTab.PROFILE -> Unit
+                }
+            },
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
     }
 }

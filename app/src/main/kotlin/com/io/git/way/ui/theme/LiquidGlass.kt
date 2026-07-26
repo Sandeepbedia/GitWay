@@ -28,11 +28,14 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -125,7 +128,13 @@ fun LiquidGlassBackground(
  * Also resolves [LocalContentColor] for the whole content area to the theme's real text
  * colour — without this, any bare `Text(...)` with no explicit `color=` (i.e. anything
  * not inside a [GlassCard]) fell back to the Compose default content colour, which reads
- * as near-invisible on the dark background. */
+ * as near-invisible on the dark background.
+ *
+ * Bottom inset: only the *content* padding includes the navigation-bar/gesture-area
+ * height — the [LiquidGlassBackground] behind it is unaffected and still paints all the
+ * way to the true bottom edge. That's what keeps things like the "Sync updated project
+ * from device" button (or any other bottom-docked action) clear of the gesture handle,
+ * without bringing back a solid bar behind it. */
 @Composable
 fun GlassScaffold(
     title: String,
@@ -141,7 +150,7 @@ fun GlassScaffold(
     LiquidGlassBackground {
         Scaffold(
             containerColor = Color.Transparent,
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            contentWindowInsets = WindowInsets.navigationBars.only(WindowInsetsSides.Bottom),
             topBar = {
                 TopAppBar(
                     title = { Text(title, fontWeight = FontWeight.SemiBold, color = titleColor) },
@@ -596,11 +605,19 @@ fun GlassFloatingBottomNav(
         horizontalArrangement = Arrangement.SpaceEvenly
     ) {
         BottomNavTab.entries.forEach { tab ->
+            val isSelected = tab == selected
+            // Unequal, animated weights — the selected pill grows to fit its label and
+            // the inactive tabs shrink to icon-only width, instead of three fixed equal
+            // thirds with dead space around a short icon.
+            val weight by animateFloatAsState(
+                targetValue = if (isSelected) 1.6f else 1f,
+                label = "navItemWeight"
+            )
             BottomNavItem(
                 tab = tab,
-                isSelected = tab == selected,
+                isSelected = isSelected,
                 onClick = { onSelect(tab) },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(weight)
             )
         }
     }
@@ -648,7 +665,7 @@ private fun BottomNavItem(
             )
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)
     ) {
         Icon(bottomNavIcon(tab), contentDescription = tab.label, tint = contentColor, modifier = Modifier.size(20.dp))
         if (isSelected) {

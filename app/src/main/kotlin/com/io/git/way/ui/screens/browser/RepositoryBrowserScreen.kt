@@ -200,7 +200,7 @@ fun RepositoryBrowserScreen(
                 text = "Sync updated project from device",
                 onClick = onSyncFromDevice,
                 leadingIcon = { Icon(Icons.Filled.Sync, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                modifier = Modifier.padding(bottom = 16.dp)
+                modifier = Modifier.padding(bottom = 12.dp)
             )
         }
     }

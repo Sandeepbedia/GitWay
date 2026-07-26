@@ -24,6 +24,12 @@ import com.io.git.way.ui.theme.LiquidGlassBackground
 /**
  * Overview tab — reachable from the floating bottom nav. Intentionally left blank
  * for now (placeholder); the nav destination exists so Repositories isn't the only tab.
+ *
+ * The floating nav is drawn as an overlay on top of the screen (not in Scaffold's
+ * `bottomBar` slot) — `bottomBar` reserves its own layout row and pushes content up
+ * above it, which is exactly the "doesn't reach the very bottom" look. Overlaying it
+ * instead lets the background and content extend the full height of the screen, with
+ * only the nav's own translucent card floating above the gesture area.
  */
 @Composable
 fun OverviewScreen(
@@ -33,19 +39,7 @@ fun OverviewScreen(
     LiquidGlassBackground {
         Scaffold(
             containerColor = Color.Transparent,
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            bottomBar = {
-                GlassFloatingBottomNav(
-                    selected = BottomNavTab.OVERVIEW,
-                    onSelect = { tab ->
-                        when (tab) {
-                            BottomNavTab.OVERVIEW -> Unit
-                            BottomNavTab.REPOSITORIES -> onNavigateRepositories()
-                            BottomNavTab.PROFILE -> onNavigateProfile()
-                        }
-                    }
-                )
-            }
+            contentWindowInsets = WindowInsets(0, 0, 0, 0)
         ) { padding ->
             Column(
                 modifier = Modifier.fillMaxSize().padding(padding).statusBarsPadding(),
@@ -66,5 +60,17 @@ fun OverviewScreen(
                 )
             }
         }
+
+        GlassFloatingBottomNav(
+            selected = BottomNavTab.OVERVIEW,
+            onSelect = { tab ->
+                when (tab) {
+                    BottomNavTab.OVERVIEW -> Unit
+                    BottomNavTab.REPOSITORIES -> onNavigateRepositories()
+                    BottomNavTab.PROFILE -> onNavigateProfile()
+                }
+            },
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
     }
 }
