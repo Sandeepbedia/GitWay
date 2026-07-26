@@ -72,7 +72,7 @@ fun FolderSelectionScreen(
         }
     }
 
-    val canContinue = !state.isScanning && !state.isCheckingAppIdentity &&
+    val canContinue = !state.isScanning &&
         state.localFiles.isNotEmpty() && state.scanError == null && !state.appIdentityMismatch
     val visibleFiles = if (query.isBlank()) {
         state.localFiles
@@ -100,89 +100,110 @@ fun FolderSelectionScreen(
                 leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp)) }
             )
 
-            when {
-                state.isScanning -> Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp))
-                    Text("Scanning folder…", style = MaterialTheme.typography.bodyMedium)
-                }
-
-                state.scanError != null -> GlassCard(modifier = Modifier.fillMaxWidth()) {
-                    Text(state.scanError, color = MaterialTheme.colorScheme.error)
-                    androidx.compose.material3.TextButton(
-                        onClick = { folderPickerLauncher.launch(null) },
-                        modifier = Modifier.padding(top = 4.dp)
-                    ) { Text("Re-select folder") }
-                }
-
-                state.localFiles.isNotEmpty() -> {
-                    GlassCard(modifier = Modifier.fillMaxWidth()) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Icon(Icons.Filled.Folder, contentDescription = null)
-                            Column {
-                                Text(state.folderName, style = MaterialTheme.typography.titleMedium)
-                                Text(
-                                    "${state.localFiles.size} file(s) · ${FileTypeIcons.formatSize(totalSize)}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-
-                    state.scanReport?.let { report ->
-                        ProtectionSummaryCard(
-                            report = report,
-                            overrides = state.fileInclusionOverrides,
-                            onToggleOverride = sessionViewModel::setFileInclusionOverride
-                        )
-                    }
-
-                    if (state.isCheckingAppIdentity) {
+            // Everything below — status/summary cards AND the file list — lives in one
+            // LazyColumn so the whole thing scrolls as a unit. Splitting the summary
+            // cards into a plain (non-scrolling) Column above a weighted LazyColumn was
+            // the previous layout, but that meant a tall summary (Smart Upload
+            // Protection details, the identity-mismatch warning, etc.) could push the
+            // file list down with no way to scroll back up to see the cards or down to
+            // see the rest of the files.
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                when {
+                    state.isScanning -> item {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp))
-                            Text(
-                                "Checking this folder matches the repository…",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                            Text("Scanning folder…", style = MaterialTheme.typography.bodyMedium)
                         }
                     }
 
-                    if (state.appIdentityMismatch) {
-                        AppMismatchWarningCard(
-                            repoName = state.selectedRepo?.name.orEmpty(),
-                            localPackage = state.localAppIdentity?.packageName.orEmpty(),
-                            remotePackage = state.remoteAppIdentity?.packageName.orEmpty(),
-                            onReselectFolder = { folderPickerLauncher.launch(null) }
-                        )
+                    state.scanError != null -> item {
+                        GlassCard(modifier = Modifier.fillMaxWidth()) {
+                            Text(state.scanError, color = MaterialTheme.colorScheme.error)
+                            androidx.compose.material3.TextButton(
+                                onClick = { folderPickerLauncher.launch(null) },
+                                modifier = Modifier.padding(top = 4.dp)
+                            ) { Text("Re-select folder") }
+                        }
                     }
 
-                    OutlinedTextField(
-                        value = query,
-                        onValueChange = { query = it },
-                        placeholder = { Text("Search this folder") },
-                        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                        trailingIcon = {
-                            if (query.isNotEmpty()) {
-                                IconButton(onClick = { query = "" }) {
-                                    Icon(Icons.Filled.Close, contentDescription = "Clear search")
+                    state.localFiles.isNotEmpty() -> {
+                        item {
+                            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    Icon(Icons.Filled.Folder, contentDescription = null)
+                                    Column {
+                                        Text(state.folderName, style = MaterialTheme.typography.titleMedium)
+                                        Text(
+                                            "${state.localFiles.size} file(s) · ${FileTypeIcons.formatSize(totalSize)}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                             }
-                        },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                        }
 
-                    LazyColumn(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                        state.scanReport?.let { report ->
+                            item {
+                                ProtectionSummaryCard(
+                                    report = report,
+                                    overrides = state.fileInclusionOverrides,
+                                    onToggleOverride = sessionViewModel::setFileInclusionOverride
+                                )
+                            }
+                        }
+
+                        if (state.isCheckingAppIdentity) {
+                            item {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                                    Text(
+                                        "Checking this folder matches the repository…",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+
+                        if (state.appIdentityMismatch) {
+                            item {
+                                AppMismatchWarningCard(
+                                    repoName = state.selectedRepo?.name.orEmpty(),
+                                    localPackage = state.localAppIdentity?.packageName.orEmpty(),
+                                    remotePackage = state.remoteAppIdentity?.packageName.orEmpty(),
+                                    onReselectFolder = { folderPickerLauncher.launch(null) }
+                                )
+                            }
+                        }
+
+                        item {
+                            OutlinedTextField(
+                                value = query,
+                                onValueChange = { query = it },
+                                placeholder = { Text("Search this folder") },
+                                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                                trailingIcon = {
+                                    if (query.isNotEmpty()) {
+                                        IconButton(onClick = { query = "" }) {
+                                            Icon(Icons.Filled.Close, contentDescription = "Clear search")
+                                        }
+                                    }
+                                },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
                         items(visibleFiles, key = { it.relativePath }) { file ->
                             FileRow(
                                 file = file,

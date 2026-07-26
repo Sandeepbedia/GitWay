@@ -28,6 +28,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 data class GitWaySessionState(
     val selectedRepo: GitRepository? = null,
@@ -212,10 +213,12 @@ class GitWaySessionViewModel(
      * tappable): detects the local folder's and the selected repo's Android
      * package/applicationId and flags a mismatch immediately, rather than waiting until
      * the diff or the upload itself. Best-effort on both sides — a check that can't run
-     * right now (offline, token problem) never blocks by itself; it just leaves the
-     * identity fields null and lets the real pre-upload validation catch connectivity
-     * issues later. Also caches the fetched remote tree so [runComparison] doesn't have
-     * to fetch it a second time right after. */
+     * right now (offline, token problem, slow network) never blocks by itself; it just
+     * leaves the identity fields null and lets the real pre-upload validation catch
+     * connectivity issues later. A hard 10s timeout guarantees this never gets stuck
+     * mid-check — a brand-new/empty repository in particular must never be unable to
+     * accept an upload just because this check didn't finish. Also caches the fetched
+     * remote tree so [runComparison] doesn't have to fetch it a second time right after. */
     private fun checkAppIdentity(context: Context, repo: GitRepository?, localFiles: List<LocalFile>) {
         if (repo == null) return
         viewModelScope.launch {
@@ -223,11 +226,12 @@ class GitWaySessionViewModel(
 
             val local = runCatching { AppIdentityDetector.detectLocal(context, localFiles) }.getOrNull()
 
-            gitHubRepository.getRepositoryTree(repo)
-                .onSuccess { remoteTree ->
+            val outcome = withTimeoutOrNull(10_000L) {
+                gitHubRepository.getRepositoryTree(repo).map { remoteTree ->
                     val remote = if (remoteTree.isEmpty()) {
                         // Empty/new default branch — nothing pushed yet, so there's
-                        // nothing to disagree with. Not a mismatch.
+                        // nothing to disagree with. Not a mismatch, and the single most
+                        // common case: a repository created just for this upload.
                         null
                     } else {
                         runCatching {
@@ -236,18 +240,17 @@ class GitWaySessionViewModel(
                             }
                         }.getOrNull()
                     }
-                    state = state.copy(
-                        isCheckingAppIdentity = false,
-                        localAppIdentity = local,
-                        remoteAppIdentity = remote,
-                        remoteTreeCache = remoteTree
-                    )
+                    remote to remoteTree
                 }
-                .onFailure {
-                    // Couldn't reach GitHub right now — don't hard-block on an
-                    // unverifiable check; leave remoteAppIdentity null.
-                    state = state.copy(isCheckingAppIdentity = false, localAppIdentity = local)
-                }
+            }
+
+            val (remote, remoteTree) = outcome?.getOrNull() ?: (null to state.remoteTreeCache)
+            state = state.copy(
+                isCheckingAppIdentity = false,
+                localAppIdentity = local,
+                remoteAppIdentity = remote,
+                remoteTreeCache = remoteTree
+            )
         }
     }
 
