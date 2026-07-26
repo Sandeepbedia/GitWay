@@ -33,12 +33,30 @@ fun ConfirmationScreen(
     val state = sessionViewModel.state
     var showDeleteWarning by remember { mutableStateOf(false) }
     val selectedTotal = state.selectedPaths.size
+    val isBlocked = state.appIdentityMismatch
 
     GlassScaffold(title = "Confirm Upload") { padding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            if (isBlocked) {
+                GlassCard(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        "Upload blocked",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Text(
+                        "This folder's package (${state.localAppIdentity?.packageName}) doesn't match " +
+                            "${state.selectedRepo?.name.orEmpty()}'s (${state.remoteAppIdentity?.packageName}). " +
+                            "Go back and pick the matching folder or repository.",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+            }
+
             GlassCard(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     "${state.selectedRepo?.name.orEmpty()}",
@@ -68,7 +86,11 @@ fun ConfirmationScreen(
             }
 
             GlassPrimaryButton(
-                text = if (selectedTotal > 0) "Upload $selectedTotal change(s) to GitHub" else "Nothing selected",
+                text = when {
+                    isBlocked -> "Blocked — project mismatch"
+                    selectedTotal > 0 -> "Upload $selectedTotal change(s) to GitHub"
+                    else -> "Nothing selected"
+                },
                 onClick = {
                     if (state.selectedRemovedCount > 0) {
                         showDeleteWarning = true
@@ -77,7 +99,7 @@ fun ConfirmationScreen(
                         onConfirmUpload()
                     }
                 },
-                enabled = selectedTotal > 0 && !state.isUploading,
+                enabled = !isBlocked && selectedTotal > 0 && !state.isUploading,
                 loading = state.isUploading
             )
         }

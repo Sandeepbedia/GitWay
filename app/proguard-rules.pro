@@ -52,7 +52,6 @@
 }
 -keep,includedescriptorclasses class com.io.git.way.**$$serializer { *; }
 
-# Google Tink references error_prone_annotations at compile time; the annotations
-# are RetentionPolicy.CLASS (not RUNTIME) so they can be stripped safely.
+# Google Tink (via security-crypto) references error_prone_annotations at compile
+# time only — RetentionPolicy.CLASS, not needed at runtime. Suppress R8 warnings.
 -dontwarn com.google.errorprone.annotations.**
--keep class com.google.errorprone.annotations.** { *; }

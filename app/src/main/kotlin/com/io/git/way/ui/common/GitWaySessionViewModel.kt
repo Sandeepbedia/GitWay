@@ -8,10 +8,12 @@ import androidx.compose.runtime.setValue
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.io.git.way.data.local.AppIdentityDetector
 import com.io.git.way.data.local.FolderScanner
 import com.io.git.way.data.local.NetworkUtils
 import com.io.git.way.data.local.ProtectionScanner
 import com.io.git.way.domain.ComparisonEngine
+import com.io.git.way.domain.model.AppIdentity
 import com.io.git.way.domain.model.BrowserEntry
 import com.io.git.way.domain.model.ChangeType
 import com.io.git.way.domain.model.FileChange
@@ -35,6 +37,15 @@ data class GitWaySessionState(
     val localFiles: List<LocalFile> = emptyList(),
     val isScanning: Boolean = false,
     val scanError: String? = null,
+
+    /** Repository / Project Match Protection: package/applicationId detected from the
+     * local folder and from the selected repo's remote tree, checked right after the
+     * folder is scanned — before any diff or upload. Null on either side just means
+     * "couldn't detect a package name there" (non-Android project, unusual layout),
+     * which is never itself treated as a mismatch. */
+    val isCheckingAppIdentity: Boolean = false,
+    val localAppIdentity: AppIdentity? = null,
+    val remoteAppIdentity: AppIdentity? = null,
 
     /** Smart Upload Protection result for the current [localFiles] — [localFiles] is
      * already filtered down to [ScanReport.safeFiles], this is kept for the summary UI
@@ -103,6 +114,16 @@ data class GitWaySessionState(
     val selectedAddedCount get() = selectedChanges.count { it.type == ChangeType.ADDED }
     val selectedModifiedCount get() = selectedChanges.count { it.type == ChangeType.MODIFIED }
     val selectedRemovedCount get() = selectedChanges.count { it.type == ChangeType.REMOVED }
+
+    /** True only when BOTH sides yielded a detected package name AND they disagree —
+     * this is the hard-block condition. A repo with no Android project yet (first
+     * push) or a folder whose package couldn't be detected never trips this. */
+    val appIdentityMismatch: Boolean
+        get() {
+            val local = localAppIdentity?.packageName
+            val remote = remoteAppIdentity?.packageName
+            return local != null && remote != null && local != remote
+        }
 }
 
 /**
@@ -164,6 +185,14 @@ class GitWaySessionViewModel(
                         "Every file was ignored or blocked by Smart Upload Protection — nothing safe to upload."
                     } else null
                 )
+
+                // Repository / Project Match Protection: runs right away, before the
+                // user can tap Continue, so a wrong-folder-for-this-repo mistake is
+                // caught here instead of surfacing later as a confusing diff or a
+                // broken upload.
+                if (report.safeFiles.isNotEmpty()) {
+                    checkAppIdentity(context, repo = state.selectedRepo, localFiles = report.safeFiles)
+                }
             } catch (e: SecurityException) {
                 state = state.copy(
                     isScanning = false,
@@ -177,6 +206,49 @@ class GitWaySessionViewModel(
 
     fun clearScanError() {
         state = state.copy(scanError = null)
+    }
+
+    /** Repository / Project Match Protection (advance warning, before Continue is even
+     * tappable): detects the local folder's and the selected repo's Android
+     * package/applicationId and flags a mismatch immediately, rather than waiting until
+     * the diff or the upload itself. Best-effort on both sides — a check that can't run
+     * right now (offline, token problem) never blocks by itself; it just leaves the
+     * identity fields null and lets the real pre-upload validation catch connectivity
+     * issues later. Also caches the fetched remote tree so [runComparison] doesn't have
+     * to fetch it a second time right after. */
+    private fun checkAppIdentity(context: Context, repo: GitRepository?, localFiles: List<LocalFile>) {
+        if (repo == null) return
+        viewModelScope.launch {
+            state = state.copy(isCheckingAppIdentity = true, localAppIdentity = null, remoteAppIdentity = null)
+
+            val local = runCatching { AppIdentityDetector.detectLocal(context, localFiles) }.getOrNull()
+
+            gitHubRepository.getRepositoryTree(repo)
+                .onSuccess { remoteTree ->
+                    val remote = if (remoteTree.isEmpty()) {
+                        // Empty/new default branch — nothing pushed yet, so there's
+                        // nothing to disagree with. Not a mismatch.
+                        null
+                    } else {
+                        runCatching {
+                            AppIdentityDetector.detectRemote(remoteTree) { sha ->
+                                gitHubRepository.getFileContent(repo, sha).getOrNull()
+                            }
+                        }.getOrNull()
+                    }
+                    state = state.copy(
+                        isCheckingAppIdentity = false,
+                        localAppIdentity = local,
+                        remoteAppIdentity = remote,
+                        remoteTreeCache = remoteTree
+                    )
+                }
+                .onFailure {
+                    // Couldn't reach GitHub right now — don't hard-block on an
+                    // unverifiable check; leave remoteAppIdentity null.
+                    state = state.copy(isCheckingAppIdentity = false, localAppIdentity = local)
+                }
+        }
     }
 
     /** Lets the user override a single file's Smart Upload Protection verdict — force an
@@ -211,11 +283,22 @@ class GitWaySessionViewModel(
     fun runComparison(context: Context) {
         val repo = state.selectedRepo ?: return
         if (state.localFiles.isEmpty()) return
+        // Safety net — the Folder screen already keeps Continue disabled on a
+        // mismatch, but never let a comparison run against a wrong repo/folder pair
+        // even if this is reached some other way.
+        if (state.appIdentityMismatch) return
 
         viewModelScope.launch {
             state = state.copy(isComparing = true, compareError = null, compareProgress = null, fileChanges = emptyList())
 
-            gitHubRepository.getRepositoryTree(repo)
+            val cachedTree = state.remoteTreeCache
+            val treeResult = if (cachedTree.isNotEmpty()) {
+                Result.success(cachedTree)
+            } else {
+                gitHubRepository.getRepositoryTree(repo)
+            }
+
+            treeResult
                 .onSuccess { remoteMap ->
                     try {
                         val changes = ComparisonEngine.computeDiff(
@@ -230,6 +313,7 @@ class GitWaySessionViewModel(
                         state = state.copy(
                             isComparing = false,
                             fileChanges = changes,
+                            remoteTreeCache = remoteMap,
                             compareProgress = null,
                             // Everything starts selected — the user can then manually
                             // uncheck items or use "Select all" / "Clear" per section.
@@ -285,6 +369,18 @@ class GitWaySessionViewModel(
         val repo = state.selectedRepo ?: return
         val changesToUpload = state.selectedChanges
         if (changesToUpload.isEmpty() || state.isUploading) return
+
+        // Repository / Project Match Protection — final safety net. The Folder and
+        // Confirmation screens already keep the user from reaching this point on a
+        // mismatch, but nothing ever pushes to GitHub while one is flagged.
+        if (state.appIdentityMismatch) {
+            state = state.copy(
+                uploadError = "Blocked: this folder's package (${state.localAppIdentity?.packageName}) " +
+                    "doesn't match ${state.selectedRepo?.name}'s (${state.remoteAppIdentity?.packageName}). " +
+                    "Go back and select the matching folder or repository."
+            )
+            return
+        }
 
         // §2 Validate Repository Before Upload: fail fast on no connection rather than
         // letting blob creation start and die partway through.

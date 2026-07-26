@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
@@ -71,7 +72,8 @@ fun FolderSelectionScreen(
         }
     }
 
-    val canContinue = !state.isScanning && state.localFiles.isNotEmpty() && state.scanError == null
+    val canContinue = !state.isScanning && !state.isCheckingAppIdentity &&
+        state.localFiles.isNotEmpty() && state.scanError == null && !state.appIdentityMismatch
     val visibleFiles = if (query.isBlank()) {
         state.localFiles
     } else {
@@ -138,6 +140,29 @@ fun FolderSelectionScreen(
                         )
                     }
 
+                    if (state.isCheckingAppIdentity) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                            Text(
+                                "Checking this folder matches the repository…",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    if (state.appIdentityMismatch) {
+                        AppMismatchWarningCard(
+                            repoName = state.selectedRepo?.name.orEmpty(),
+                            localPackage = state.localAppIdentity?.packageName.orEmpty(),
+                            remotePackage = state.remoteAppIdentity?.packageName.orEmpty(),
+                            onReselectFolder = { folderPickerLauncher.launch(null) }
+                        )
+                    }
+
                     OutlinedTextField(
                         value = query,
                         onValueChange = { query = it },
@@ -176,6 +201,45 @@ fun FolderSelectionScreen(
                 },
                 enabled = canContinue
             )
+        }
+    }
+}
+
+/** Repository / Project Match Protection — PRD "block wrong project upload". Shown the
+ * moment a package mismatch is detected, before the user can even tap Continue.
+ * Deliberately has no "upload anyway" escape hatch: the only ways forward are picking a
+ * different folder here, or pressing back to pick a different repository. */
+@Composable
+private fun AppMismatchWarningCard(
+    repoName: String,
+    localPackage: String,
+    remotePackage: String,
+    onReselectFolder: () -> Unit
+) {
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(Icons.Filled.CloudOff, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+            Text(
+                "Wrong project for this repository",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+        Text(
+            "This folder's app package is \"$localPackage\", but \"$repoName\" on GitHub already " +
+                "contains \"$remotePackage\". Uploading would mix two different apps into one " +
+                "repository, so it's blocked.",
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = 6.dp)
+        )
+        Text(
+            "Select the correct local folder below, or go back and choose the matching repository.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 6.dp)
+        )
+        TextButton(onClick = onReselectFolder, modifier = Modifier.padding(top = 4.dp)) {
+            Text("Choose a different folder")
         }
     }
 }
