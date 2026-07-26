@@ -5,7 +5,6 @@ import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 
@@ -25,20 +24,24 @@ object RetrofitProvider {
                 .addHeader("Accept", "application/vnd.github+json")
                 .addHeader("X-GitHub-Api-Version", "2022-11-28")
             if (!token.isNullOrBlank()) {
-                // Never logged: logging interceptor below is set to BODY level only for
-                // non-sensitive debugging and headers are not printed by BASIC level.
+                // Never logged: the debug-only logging interceptor below runs at BASIC
+                // level (method/URL/status only), which never prints headers, and it
+                // isn't present at all in release builds.
                 requestBuilder.addHeader("Authorization", "Bearer $token")
             }
             chain.proceed(requestBuilder.build())
         }
 
-        val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BASIC
-        }
-
         val okHttpClient = OkHttpClient.Builder()
             .addInterceptor(authInterceptor)
-            .addInterceptor(loggingInterceptor)
+            .apply {
+                // debugLoggingInterceptor() is provided per build-variant source set
+                // (src/debug vs src/release, see DebugLogging.kt in each) so the
+                // HttpLoggingInterceptor class — a debugImplementation-only dependency —
+                // is never referenced from code that compiles for release, and never
+                // ends up in the release DEX.
+                debugLoggingInterceptor()?.let { addInterceptor(it) }
+            }
             .build()
 
         // encodeDefaults = true is critical: kotlinx.serialization's Json defaults to

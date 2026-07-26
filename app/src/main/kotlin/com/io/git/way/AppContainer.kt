@@ -12,7 +12,14 @@ import com.io.git.way.domain.repository.GitHubRepository
  */
 class AppContainer(context: Context) {
     private val tokenManager = TokenManager(context)
-    private val apiService = RetrofitProvider.create(tokenManager)
 
-    val gitHubRepository: GitHubRepository = GitHubRepositoryImpl(tokenManager, apiService)
+    // Deferred: building the OkHttpClient + Retrofit involves real work (TLS setup,
+    // interceptor construction) that has no reason to happen synchronously during
+    // Application.onCreate, before any screen even asks for network access. `by lazy`
+    // pushes that cost to the first actual API call instead of app cold start.
+    private val apiService by lazy { RetrofitProvider.create(tokenManager) }
+
+    val gitHubRepository: GitHubRepository by lazy {
+        GitHubRepositoryImpl(tokenManager, apiService)
+    }
 }
