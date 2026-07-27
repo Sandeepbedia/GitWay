@@ -2,6 +2,8 @@ package com.io.git.way.data.remote
 
 import com.io.git.way.data.remote.dto.CreateBlobRequest
 import com.io.git.way.data.remote.dto.CreateCommitRequest
+import com.io.git.way.data.remote.dto.CreateFileContentRequest
+import com.io.git.way.data.remote.dto.CreateFileContentResponseDto
 import com.io.git.way.data.remote.dto.CreateRefRequest
 import com.io.git.way.data.remote.dto.CreateTreeRequest
 import com.io.git.way.data.remote.dto.GitBlobContentDto
@@ -18,6 +20,7 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -102,6 +105,21 @@ interface GitHubApiService {
         @Path("repo") repo: String,
         @Body body: CreateRefRequest
     ): GitRefDto
+
+    /** Bootstraps a genuinely empty repository (zero commits). GitHub's Git Data API
+     * (createBlob/createTree/createCommit/getRef, everything above) returns
+     * "409 Git Repository is empty." for EVERY call — not just tree/ref lookups —
+     * until the repo has at least one commit; see GitHub's own Git Data API docs.
+     * The Contents API is the one endpoint that can create that first commit (and the
+     * branch ref along with it) on a repo with zero git objects. Used once, for exactly
+     * one file, before the normal blob/tree/commit flow runs for everything else. */
+    @PUT("repos/{owner}/{repo}/contents/{path}")
+    suspend fun createFileContent(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Path("path", encoded = true) path: String,
+        @Body body: CreateFileContentRequest
+    ): CreateFileContentResponseDto
 
     /** Reads a blob's raw content by sha — the sha is already known from the cached repo
      * tree, so this powers the Repository Browser's file viewer/editor without a second

@@ -65,6 +65,14 @@ fun CompletionScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(top = 4.dp)
                     )
+                    if (!state.lastCommitMessage.isNullOrBlank()) {
+                        Text(
+                            text = "\"${state.lastCommitMessage}\"",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
                 }
             }
 

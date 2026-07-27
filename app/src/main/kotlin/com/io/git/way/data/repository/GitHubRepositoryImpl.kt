@@ -7,6 +7,7 @@ import com.io.git.way.data.local.TokenManager
 import com.io.git.way.data.remote.GitHubApiService
 import com.io.git.way.data.remote.dto.CreateBlobRequest
 import com.io.git.way.data.remote.dto.CreateCommitRequest
+import com.io.git.way.data.remote.dto.CreateFileContentRequest
 import com.io.git.way.data.remote.dto.CreateRefRequest
 import com.io.git.way.data.remote.dto.CreateTreeRequest
 import com.io.git.way.data.remote.dto.GitHubErrorResponseDto
@@ -62,6 +63,16 @@ class GitHubRepositoryImpl(
     }
 
     private val errorJson = Json { ignoreUnknownKeys = true }
+
+    /** The Contents API path segment needs each directory/file name percent-encoded
+     * (spaces, unicode, etc.) but the "/" separators themselves must survive — this
+     * endpoint is declared with `@Path(..., encoded = true)` specifically so Retrofit
+     * doesn't also escape those slashes into "%2F", which would turn a nested path like
+     * "src/main/MainActivity.kt" into a single invalid path segment. */
+    private fun String.encodedForContentsPath(): String =
+        split("/").joinToString("/") { segment ->
+            java.net.URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
+        }
 
     override suspend fun validateTokenAndFetchUser(token: String): Result<GitUser> =
         withContext(Dispatchers.IO) {
@@ -164,6 +175,7 @@ class GitHubRepositoryImpl(
     override suspend fun syncChanges(
         repo: GitRepositoryModel,
         changes: List<FileChange>,
+        commitMessage: String,
         readFileBytes: suspend (relativePath: String) -> ByteArray,
         onProgress: (phase: UploadPhase, completed: Int, total: Int, currentFile: String) -> Unit
     ): Result<String> = withContext(Dispatchers.IO) {
@@ -193,11 +205,45 @@ class GitHubRepositoryImpl(
             onProgress(UploadPhase.CREATING_BLOBS, 0, total, "")
             Log.d(TAG, "Sync start: repo=${repo.owner}/${repo.name} branch=$branch total=$total (${toUpload.size} upload, ${toDelete.size} delete)")
 
+            // Bootstrap a genuinely empty repository (zero commits). GitHub's Git Data
+            // API — createBlob included, not just createTree/getRef — returns
+            // "409 Git Repository is empty." for every call until the repo has at least
+            // one commit. getRepositoryTree() already treats that 409 as "no remote
+            // files", which is correct for the diff, but it doesn't make createBlob work
+            // below. The Contents API is the one endpoint that can create that first
+            // commit (and the branch ref with it), so it's used once here, for exactly
+            // one file, before anything touches the normal blob/tree/commit flow.
+            val branchAlreadyExists = runCatching {
+                githubCallWithRetry { apiService.getRef(repo.owner, repo.name, branch) }
+            }.isSuccess
+            val remainingUpload = if (!branchAlreadyExists && toUpload.isNotEmpty()) {
+                val bootstrap = toUpload.first()
+                Log.d(TAG, "Repo has zero commits — bootstrapping via Contents API with ${bootstrap.cleanPath}")
+                val bytes = readFileBytes(bootstrap.original.filePath)
+                val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+                githubCallWithRetry {
+                    apiService.createFileContent(
+                        repo.owner, repo.name,
+                        path = bootstrap.cleanPath.encodedForContentsPath(),
+                        body = CreateFileContentRequest(
+                            message = "Initial commit",
+                            content = base64,
+                            branch = branch
+                        )
+                    )
+                }
+                val done = completed.incrementAndGet()
+                onProgress(UploadPhase.CREATING_BLOBS, done, total, bootstrap.cleanPath)
+                toUpload.drop(1)
+            } else {
+                toUpload
+            }
+
             // §8 Skip Duplicate Files: unchanged files never reach here — ComparisonEngine
             // only emits ADDED/MODIFIED for paths whose hash actually differs.
             val semaphore = Semaphore(MAX_CONCURRENT_BLOBS)
             val blobEntries: List<TreeEntryInput> = coroutineScope {
-                toUpload.map { change ->
+                remainingUpload.map { change ->
                     async {
                         semaphore.withPermit {
                             val bytes = readFileBytes(change.original.filePath)
@@ -219,6 +265,9 @@ class GitHubRepositoryImpl(
                 onProgress(UploadPhase.CREATING_BLOBS, done, total, change.cleanPath)
                 TreeEntryInput(path = change.cleanPath, sha = null)
             }
+            if (deleteEntries.isNotEmpty()) {
+                Log.d(TAG, "Deleting ${deleteEntries.size} path(s): ${deleteEntries.joinToString { it.path }}")
+            }
 
             // §10 Atomic Upload: one tree + commit + ref update lands everything at once.
             // Nothing is written to the branch until this succeeds.
@@ -227,7 +276,7 @@ class GitHubRepositoryImpl(
                 repoName = repo.name,
                 branch = branch,
                 treeEntries = blobEntries + deleteEntries,
-                message = buildCommitMessage(changes),
+                message = commitMessage,
                 total = total,
                 onProgress = onProgress
             )
@@ -333,13 +382,6 @@ class GitHubRepositoryImpl(
             }
         }
         throw lastError ?: IOException("Failed to update branch ref after retries.")
-    }
-
-    private fun buildCommitMessage(changes: List<FileChange>): String {
-        val added = changes.count { it.type == ChangeType.ADDED }
-        val modified = changes.count { it.type == ChangeType.MODIFIED }
-        val removed = changes.count { it.type == ChangeType.REMOVED }
-        return "Git Way sync: $added added, $modified modified, $removed removed"
     }
 
     /** Wraps a raw API call so every HttpException carries GitHub's real error body

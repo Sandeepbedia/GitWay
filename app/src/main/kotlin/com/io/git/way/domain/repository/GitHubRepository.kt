@@ -35,10 +35,15 @@ interface GitHubRepository {
      * ADDED/MODIFIED path, then one tree + commit + ref update lands the whole change set
      * atomically. Nothing is written to the branch until the final ref update, so a failure
      * before then leaves the repo untouched. Returns the new commit sha on success.
+     * [commitMessage] is always the final, resolved text for this commit (the caller has
+     * already substituted its own default if the user left the field blank) — this
+     * function never invents or alters it, so what the user sees on the Confirmation
+     * screen is exactly what lands on GitHub.
      */
     suspend fun syncChanges(
         repo: GitRepository,
         changes: List<FileChange>,
+        commitMessage: String,
         readFileBytes: suspend (relativePath: String) -> ByteArray,
         onProgress: (phase: UploadPhase, completed: Int, total: Int, currentFile: String) -> Unit
     ): Result<String>

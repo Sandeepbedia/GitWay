@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -17,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.io.git.way.domain.CommitMessageBuilder
 import com.io.git.way.ui.common.GitWaySessionViewModel
 import com.io.git.way.ui.theme.GlassCard
 import com.io.git.way.ui.theme.GlassPrimaryButton
@@ -33,7 +35,7 @@ fun ConfirmationScreen(
     val state = sessionViewModel.state
     var showDeleteWarning by remember { mutableStateOf(false) }
     val selectedTotal = state.selectedPaths.size
-    val isBlocked = state.appIdentityMismatch
+    val isBlocked = state.appIdentityMismatch || state.identityCheckError != null
 
     GlassScaffold(title = "Confirm Upload") { padding ->
         Column(
@@ -84,6 +86,19 @@ fun ConfirmationScreen(
                     style = MaterialTheme.typography.bodySmall
                 )
             }
+
+            OutlinedTextField(
+                value = state.commitMessageDraft,
+                onValueChange = sessionViewModel::setCommitMessageDraft,
+                label = { Text("Commit message") },
+                placeholder = { Text(CommitMessageBuilder.summary(state.selectedChanges)) },
+                prefix = { Text("Git Way Sync: ", color = MaterialTheme.colorScheme.primary) },
+                supportingText = {
+                    Text("Will appear on GitHub as: \"${CommitMessageBuilder.resolve(state.commitMessageDraft, state.selectedChanges)}\"")
+                },
+                enabled = !isBlocked && !state.isUploading,
+                modifier = Modifier.fillMaxWidth()
+            )
 
             GlassPrimaryButton(
                 text = when {

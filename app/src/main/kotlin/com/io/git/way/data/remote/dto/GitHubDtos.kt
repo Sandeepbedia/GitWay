@@ -118,6 +118,28 @@ data class TreeEntryInput(
     val sha: String? = null
 )
 
+/** Body for the Contents API "create file" call used only to bootstrap a genuinely
+ * empty repository (see [com.io.git.way.data.remote.GitHubApiService.createFileContent]).
+ * `branch` must be sent explicitly — omitting it makes GitHub guess the default branch,
+ * which is unreliable for a repo that has no commits/refs yet. */
+@Serializable
+data class CreateFileContentRequest(
+    val message: String,
+    val content: String,
+    val branch: String
+)
+
+@Serializable
+data class ContentsCommitDto(
+    val sha: String,
+    val tree: GitTreeRefDto
+)
+
+@Serializable
+data class CreateFileContentResponseDto(
+    val commit: ContentsCommitDto
+)
+
 /**
  * The app-wide Json config uses `encodeDefaults = true` (needed so [CreateCommitRequest]'s
  * `parents` is always sent, even as `[]`, to explicitly signal "root commit, no parent" —

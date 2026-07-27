@@ -41,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.io.git.way.domain.model.AppIdentity
 import com.io.git.way.domain.model.LocalFile
 import com.io.git.way.domain.model.ScanIssue
 import com.io.git.way.domain.model.ScanReport
@@ -73,7 +74,8 @@ fun FolderSelectionScreen(
     }
 
     val canContinue = !state.isScanning &&
-        state.localFiles.isNotEmpty() && state.scanError == null && !state.appIdentityMismatch
+        state.localFiles.isNotEmpty() && state.scanError == null &&
+        !state.isCheckingAppIdentity && state.identityCheckError == null && !state.appIdentityMismatch
     val visibleFiles = if (query.isBlank()) {
         state.localFiles
     } else {
@@ -175,12 +177,21 @@ fun FolderSelectionScreen(
                             }
                         }
 
+                        if (state.identityCheckError != null) {
+                            item {
+                                IdentityCheckErrorCard(
+                                    message = state.identityCheckError,
+                                    onRetry = { sessionViewModel.retryIdentityCheck(context) }
+                                )
+                            }
+                        }
+
                         if (state.appIdentityMismatch) {
                             item {
                                 AppMismatchWarningCard(
                                     repoName = state.selectedRepo?.name.orEmpty(),
-                                    localPackage = state.localAppIdentity?.packageName.orEmpty(),
-                                    remotePackage = state.remoteAppIdentity?.packageName.orEmpty(),
+                                    local = state.localAppIdentity,
+                                    remote = state.remoteAppIdentity,
                                     onReselectFolder = { folderPickerLauncher.launch(null) }
                                 )
                             }
@@ -231,30 +242,72 @@ fun FolderSelectionScreen(
  * Deliberately has no "upload anyway" escape hatch: the only ways forward are picking a
  * different folder here, or pressing back to pick a different repository. */
 @Composable
-private fun AppMismatchWarningCard(
-    repoName: String,
-    localPackage: String,
-    remotePackage: String,
-    onReselectFolder: () -> Unit
-) {
+private fun IdentityCheckErrorCard(message: String, onRetry: () -> Unit) {
     GlassCard(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon(Icons.Filled.CloudOff, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+            Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
             Text(
-                "Wrong project for this repository",
+                "Couldn't verify project match",
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.error
             )
         }
         Text(
-            "This folder's app package is \"$localPackage\", but \"$repoName\" on GitHub already " +
-                "contains \"$remotePackage\". Uploading would mix two different apps into one " +
-                "repository, so it's blocked.",
+            message,
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(top = 6.dp)
         )
         Text(
-            "Select the correct local folder below, or go back and choose the matching repository.",
+            "Continue stays blocked until this check succeeds — a connection hiccup should " +
+                "never be the reason two different app projects end up mixed into one repository.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 6.dp)
+        )
+        TextButton(onClick = onRetry, modifier = Modifier.padding(top = 4.dp)) {
+            Text("Retry check")
+        }
+    }
+}
+
+@Composable
+@Composable
+private fun AppMismatchWarningCard(
+    repoName: String,
+    local: AppIdentity?,
+    remote: AppIdentity?,
+    onReselectFolder: () -> Unit
+) {
+    val packageMismatch = local?.packageName != null && remote?.packageName != null &&
+        local.packageName != remote.packageName
+    val nameMismatch = local?.appName != null && remote?.appName != null &&
+        local.appName != remote.appName
+
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(Icons.Filled.CloudOff, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+            Text(
+                "Selected project does not match this repository",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+
+        if (packageMismatch) {
+            MismatchFieldRow("Package Name", local?.packageName.orEmpty(), remote?.packageName.orEmpty())
+        }
+        if (nameMismatch) {
+            MismatchFieldRow("App Name", local?.appName.orEmpty(), remote?.appName.orEmpty())
+        }
+
+        Text(
+            "\"$repoName\" on GitHub already belongs to a different project. Uploading would mix " +
+                "two different apps into one repository, so it's blocked to protect your repository.",
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = 8.dp)
+        )
+        Text(
+            "Please select the correct project folder before continuing.",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 6.dp)
@@ -262,6 +315,26 @@ private fun AppMismatchWarningCard(
         TextButton(onClick = onReselectFolder, modifier = Modifier.padding(top = 4.dp)) {
             Text("Choose a different folder")
         }
+    }
+}
+
+@Composable
+private fun MismatchFieldRow(label: String, localValue: String, remoteValue: String) {
+    Column(modifier = Modifier.padding(top = 8.dp)) {
+        Text(
+            "$label mismatch",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.error
+        )
+        Text(
+            "Selected project: $localValue",
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = 2.dp)
+        )
+        Text(
+            "Repository: $remoteValue",
+            style = MaterialTheme.typography.bodySmall
+        )
     }
 }
 

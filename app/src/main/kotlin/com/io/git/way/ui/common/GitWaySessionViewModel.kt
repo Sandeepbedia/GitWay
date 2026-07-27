@@ -13,6 +13,7 @@ import com.io.git.way.data.local.FolderScanner
 import com.io.git.way.data.local.NetworkUtils
 import com.io.git.way.data.local.ProtectionScanner
 import com.io.git.way.domain.ComparisonEngine
+import com.io.git.way.domain.CommitMessageBuilder
 import com.io.git.way.domain.model.AppIdentity
 import com.io.git.way.domain.model.BrowserEntry
 import com.io.git.way.domain.model.ChangeType
@@ -47,6 +48,11 @@ data class GitWaySessionState(
     val isCheckingAppIdentity: Boolean = false,
     val localAppIdentity: AppIdentity? = null,
     val remoteAppIdentity: AppIdentity? = null,
+    /** Set only when the remote half of the check genuinely couldn't run (network error,
+     * timeout) — as opposed to running cleanly and finding no identity to compare. This
+     * keeps Continue/Upload blocked on a connectivity hiccup instead of silently treating
+     * "couldn't check" the same as "checked, no mismatch". */
+    val identityCheckError: String? = null,
 
     /** Smart Upload Protection result for the current [localFiles] — [localFiles] is
      * already filtered down to [ScanReport.safeFiles], this is kept for the summary UI
@@ -73,6 +79,14 @@ data class GitWaySessionState(
     val uploadCurrentFile: String = "",
     val uploadError: String? = null,
     val commitSha: String? = null,
+
+    /** User-editable commit message on the Confirmation screen. Blank means "use the
+     * auto-generated default" ([com.io.git.way.domain.CommitMessageBuilder.summary]) —
+     * [lastCommitMessage] is the actual, resolved text used for the most recent
+     * successful push, shown on the Completion screen so the user sees exactly what
+     * they (or the default) wrote, not just a generic success message. */
+    val commitMessageDraft: String = "",
+    val lastCommitMessage: String? = null,
 
     // ===== Repository Browser (VS Code-style tree explorer + manual file/folder create) =====
     /** Last-tapped folder — the target for "New file/folder" and "Paste", not a navigation
@@ -119,11 +133,23 @@ data class GitWaySessionState(
     /** True only when BOTH sides yielded a detected package name AND they disagree —
      * this is the hard-block condition. A repo with no Android project yet (first
      * push) or a folder whose package couldn't be detected never trips this. */
+    /** PRD "Validation Rules": Package Name, Application ID (both captured in
+     * [AppIdentity.packageName] — Android's applicationId/namespace and a repo's
+     * `package` attribute are the same signal at different project ages), and App Name
+     * each independently block on a disagreement. Only compares a field when BOTH sides
+     * actually yielded a value for it — a repo with no Android project yet (first push)
+     * or a folder/field that couldn't be detected never trips this. */
     val appIdentityMismatch: Boolean
         get() {
-            val local = localAppIdentity?.packageName
-            val remote = remoteAppIdentity?.packageName
-            return local != null && remote != null && local != remote
+            val localPackage = localAppIdentity?.packageName
+            val remotePackage = remoteAppIdentity?.packageName
+            val packageMismatch = localPackage != null && remotePackage != null && localPackage != remotePackage
+
+            val localName = localAppIdentity?.appName
+            val remoteName = remoteAppIdentity?.appName
+            val appNameMismatch = localName != null && remoteName != null && localName != remoteName
+
+            return packageMismatch || appNameMismatch
         }
 }
 
@@ -210,48 +236,87 @@ class GitWaySessionViewModel(
     }
 
     /** Repository / Project Match Protection (advance warning, before Continue is even
-     * tappable): detects the local folder's and the selected repo's Android
-     * package/applicationId and flags a mismatch immediately, rather than waiting until
-     * the diff or the upload itself. Best-effort on both sides — a check that can't run
-     * right now (offline, token problem, slow network) never blocks by itself; it just
-     * leaves the identity fields null and lets the real pre-upload validation catch
-     * connectivity issues later. A hard 10s timeout guarantees this never gets stuck
-     * mid-check — a brand-new/empty repository in particular must never be unable to
-     * accept an upload just because this check didn't finish. Also caches the fetched
-     * remote tree so [runComparison] doesn't have to fetch it a second time right after. */
+     * tappable): detects the local folder's and the selected repo's app
+     * package/applicationId/project name and flags a mismatch immediately, rather than
+     * waiting until the diff or the upload itself.
+     *
+     * Best-effort ONLY in the sense that a repo/folder with no recognisable identifier on
+     * either side never blocks — there's genuinely nothing to compare. A network error or
+     * timeout while trying to fetch the repo's tree is a completely different case and is
+     * NOT treated as "no mismatch": it sets [GitWaySessionState.identityCheckError] and
+     * keeps Continue/Upload blocked until the check actually succeeds (or the folder/repo
+     * is changed) — silently waving an upload through just because a connectivity hiccup
+     * happened during the safety check would defeat the entire point of this feature.
+     * Also caches the fetched remote tree so [runComparison] doesn't have to fetch it a
+     * second time right after. */
     private fun checkAppIdentity(context: Context, repo: GitRepository?, localFiles: List<LocalFile>) {
         if (repo == null) return
-        viewModelScope.launch {
-            state = state.copy(isCheckingAppIdentity = true, localAppIdentity = null, remoteAppIdentity = null)
+        identityCheckJob?.cancel()
+        identityCheckJob = viewModelScope.launch {
+            state = state.copy(
+                isCheckingAppIdentity = true,
+                localAppIdentity = null,
+                remoteAppIdentity = null,
+                identityCheckError = null
+            )
 
             val local = runCatching { AppIdentityDetector.detectLocal(context, localFiles) }.getOrNull()
 
-            val outcome = withTimeoutOrNull(10_000L) {
-                gitHubRepository.getRepositoryTree(repo).map { remoteTree ->
+            val treeResult = withTimeoutOrNull(25_000L) { gitHubRepository.getRepositoryTree(repo) }
+            if (treeResult == null) {
+                // Timed out — could not verify. Block, with a clear retry path, rather
+                // than proceeding as if there were no mismatch.
+                state = state.copy(
+                    isCheckingAppIdentity = false,
+                    localAppIdentity = local,
+                    identityCheckError = "Couldn't verify this folder matches \"${repo.name}\" (timed out). " +
+                        "Check your connection and retry before continuing."
+                )
+                return@launch
+            }
+
+            treeResult
+                .onSuccess { remoteTree ->
                     val remote = if (remoteTree.isEmpty()) {
                         // Empty/new default branch — nothing pushed yet, so there's
                         // nothing to disagree with. Not a mismatch, and the single most
                         // common case: a repository created just for this upload.
                         null
                     } else {
+                        // Detection itself failing (no recognisable file on the remote
+                        // side) is a normal, expected outcome — not a connectivity error —
+                        // so it correctly stays fail-open (remote = null, no block).
                         runCatching {
                             AppIdentityDetector.detectRemote(remoteTree) { sha ->
                                 gitHubRepository.getFileContent(repo, sha).getOrNull()
                             }
                         }.getOrNull()
                     }
-                    remote to remoteTree
+                    state = state.copy(
+                        isCheckingAppIdentity = false,
+                        localAppIdentity = local,
+                        remoteAppIdentity = remote,
+                        remoteTreeCache = remoteTree,
+                        identityCheckError = null
+                    )
                 }
-            }
-
-            val (remote, remoteTree) = outcome?.getOrNull() ?: (null to state.remoteTreeCache)
-            state = state.copy(
-                isCheckingAppIdentity = false,
-                localAppIdentity = local,
-                remoteAppIdentity = remote,
-                remoteTreeCache = remoteTree
-            )
+                .onFailure { throwable ->
+                    // A real failure (network/auth/API error) — block with a retry
+                    // option instead of quietly clearing the mismatch check.
+                    state = state.copy(
+                        isCheckingAppIdentity = false,
+                        localAppIdentity = local,
+                        identityCheckError = "Couldn't verify this folder matches \"${repo.name}\": " +
+                            (throwable.message ?: "unknown error") + ". Retry before continuing."
+                    )
+                }
         }
+    }
+
+    /** Retries [checkAppIdentity] with the current repo/folder — shown next to
+     * [GitWaySessionState.identityCheckError] on the Folder Selection screen. */
+    fun retryIdentityCheck(context: Context) {
+        checkAppIdentity(context, repo = state.selectedRepo, localFiles = state.localFiles)
     }
 
     /** Lets the user override a single file's Smart Upload Protection verdict — force an
@@ -294,12 +359,12 @@ class GitWaySessionViewModel(
         viewModelScope.launch {
             state = state.copy(isComparing = true, compareError = null, compareProgress = null, fileChanges = emptyList())
 
-            val cachedTree = state.remoteTreeCache
-            val treeResult = if (cachedTree.isNotEmpty()) {
-                Result.success(cachedTree)
-            } else {
-                gitHubRepository.getRepositoryTree(repo)
-            }
+            // Deliberately NOT reusing state.remoteTreeCache here, even though
+            // checkAppIdentity() may have just fetched one: reusing a tree from an
+            // earlier repo/folder pairing is exactly how a file that's genuinely still
+            // on GitHub can look locally like it was "already removed" — the diff must
+            // always be computed fresh against GitHub's actual current state.
+            val treeResult = gitHubRepository.getRepositoryTree(repo)
 
             treeResult
                 .onSuccess { remoteMap ->
@@ -366,7 +431,14 @@ class GitWaySessionViewModel(
         state = state.copy(selectedPaths = emptySet())
     }
 
+    /** Commit message the user typed on the Confirmation screen — blank is fine, the
+     * default is substituted at upload time (see [uploadChanges]). */
+    fun setCommitMessageDraft(message: String) {
+        state = state.copy(commitMessageDraft = message)
+    }
+
     private var uploadJob: Job? = null
+    private var identityCheckJob: Job? = null
 
     fun uploadChanges(context: Context) {
         val repo = state.selectedRepo ?: return
@@ -375,12 +447,27 @@ class GitWaySessionViewModel(
 
         // Repository / Project Match Protection — final safety net. The Folder and
         // Confirmation screens already keep the user from reaching this point on a
-        // mismatch, but nothing ever pushes to GitHub while one is flagged.
+        // mismatch or an unresolved check error, but nothing ever pushes to GitHub while
+        // either is flagged — a connectivity hiccup during the check must never silently
+        // downgrade to "assume it's fine".
+        if (state.identityCheckError != null) {
+            state = state.copy(uploadError = "Blocked: ${state.identityCheckError}")
+            return
+        }
         if (state.appIdentityMismatch) {
+            val local = state.localAppIdentity
+            val remote = state.remoteAppIdentity
+            val reasons = buildList {
+                if (local?.packageName != null && remote?.packageName != null && local.packageName != remote.packageName) {
+                    add("Package Name (\"${local.packageName}\" vs \"${remote.packageName}\")")
+                }
+                if (local?.appName != null && remote?.appName != null && local.appName != remote.appName) {
+                    add("App Name (\"${local.appName}\" vs \"${remote.appName}\")")
+                }
+            }
             state = state.copy(
-                uploadError = "Blocked: this folder's package (${state.localAppIdentity?.packageName}) " +
-                    "doesn't match ${state.selectedRepo?.name}'s (${state.remoteAppIdentity?.packageName}). " +
-                    "Go back and select the matching folder or repository."
+                uploadError = "Blocked: selected project does not match \"${state.selectedRepo?.name}\". " +
+                    "Mismatch: ${reasons.joinToString("; ")}. Select the correct project folder before continuing."
             )
             return
         }
@@ -401,19 +488,28 @@ class GitWaySessionViewModel(
             }
         }
 
+        // Always "Git Way Sync: <body>" — <body> is the user's own custom text if they
+        // typed one, otherwise the "N added, M modified, K removed" summary already
+        // previewed on the Confirmation screen. Resolved once, here, so what's sent to
+        // GitHub and what ends up in [lastCommitMessage] for the Completion screen are
+        // guaranteed to be the exact same string.
+        val resolvedMessage = CommitMessageBuilder.resolve(state.commitMessageDraft, changesToUpload)
+
         uploadJob = viewModelScope.launch {
             state = state.copy(
                 isUploading = true,
                 uploadError = null,
                 uploadPhase = UploadPhase.VALIDATING,
                 uploadProgress = 0 to changesToUpload.size,
-                uploadCurrentFile = ""
+                uploadCurrentFile = "",
+                lastCommitMessage = resolvedMessage
             )
 
             try {
                 gitHubRepository.syncChanges(
                     repo = repo,
                     changes = changesToUpload,
+                    commitMessage = resolvedMessage,
                     readFileBytes = readBytes,
                     onProgress = { phase, completed, total, currentFile ->
                         state = state.copy(
@@ -423,7 +519,12 @@ class GitWaySessionViewModel(
                         )
                     }
                 ).onSuccess { sha ->
-                    state = state.copy(isUploading = false, uploadPhase = UploadPhase.DONE, commitSha = sha)
+                    state = state.copy(
+                        isUploading = false,
+                        uploadPhase = UploadPhase.DONE,
+                        commitSha = sha,
+                        commitMessageDraft = ""
+                    )
                 }.onFailure { throwable ->
                     state = state.copy(
                         isUploading = false,
@@ -518,6 +619,7 @@ class GitWaySessionViewModel(
             gitHubRepository.syncChanges(
                 repo = repo,
                 changes = listOf(FileChange(fileName = name, filePath = fullPath, type = ChangeType.ADDED)),
+                commitMessage = "Git Way: create $fullPath",
                 readFileBytes = { bytes },
                 onProgress = { _, _, _, _ -> }
             ).onSuccess {
@@ -557,6 +659,7 @@ class GitWaySessionViewModel(
             gitHubRepository.syncChanges(
                 repo = repo,
                 changes = listOf(FileChange(fileName = ".gitkeep", filePath = placeholderPath, type = ChangeType.ADDED)),
+                commitMessage = "Git Way: create folder $folderPath",
                 readFileBytes = { ByteArray(0) },
                 onProgress = { _, _, _, _ -> }
             ).onSuccess {
@@ -608,6 +711,11 @@ class GitWaySessionViewModel(
             gitHubRepository.syncChanges(
                 repo = repo,
                 changes = changes,
+                commitMessage = if (paths.size == 1) {
+                    "Git Way: delete ${paths.first()}"
+                } else {
+                    "Git Way: delete ${paths.size} files"
+                },
                 readFileBytes = { ByteArray(0) }, // never invoked — REMOVED changes carry no content
                 onProgress = { _, _, _, _ -> }
             ).onSuccess {
@@ -699,6 +807,11 @@ class GitWaySessionViewModel(
                 gitHubRepository.syncChanges(
                     repo = repo,
                     changes = changes,
+                    commitMessage = if (changes.size == 1) {
+                        "Git Way: paste ${changes.first().filePath}"
+                    } else {
+                        "Git Way: paste ${changes.size} files"
+                    },
                     readFileBytes = { path -> byteCache.getValue(path) },
                     onProgress = { _, _, _, _ -> }
                 ).onSuccess {
@@ -802,6 +915,7 @@ class GitWaySessionViewModel(
             gitHubRepository.syncChanges(
                 repo = repo,
                 changes = listOf(FileChange(fileName = entry.name, filePath = entry.path, type = ChangeType.MODIFIED)),
+                commitMessage = "Git Way: edit ${entry.path}",
                 readFileBytes = { bytes },
                 onProgress = { _, _, _, _ -> }
             ).onSuccess {
