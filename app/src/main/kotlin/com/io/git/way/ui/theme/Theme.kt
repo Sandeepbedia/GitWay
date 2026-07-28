@@ -86,7 +86,13 @@ fun GitWayTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
+            WindowCompat.setDecorFitsSystemWindows(window, false)
             window.statusBarColor = colorScheme.background.toArgb()
+            window.navigationBarColor = Color.Transparent.toArgb()
+            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !useDark
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                window.isNavigationBarContrastEnforced = false
+            }
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !useDark
         }
     }

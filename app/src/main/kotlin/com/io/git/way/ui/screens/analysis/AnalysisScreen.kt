@@ -89,6 +89,10 @@ fun AnalysisScreen(
         }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
+            if (!state.isComparing && state.compareError == null && state.ignoredScaffoldFiles.isNotEmpty()) {
+                ScaffoldFilesNotice(files = state.ignoredScaffoldFiles)
+            }
+
             when {
                 state.isComparing -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -307,5 +311,53 @@ private fun CountBadge(count: Int, color: Color) {
             .padding(horizontal = 8.dp, vertical = 2.dp)
     ) {
         Text(count.toString(), style = MaterialTheme.typography.labelSmall, color = color)
+    }
+}
+
+/** Explains, in place, why README/LICENSE/.github/etc. that only exist on GitHub don't
+ * show up under Removed — they're repository scaffolding, not app project files, so
+ * this app never treats them as something the person deleted locally. */
+@Composable
+private fun ScaffoldFilesNotice(files: List<String>) {
+    var expanded by remember { mutableStateOf(false) }
+
+    GlassCard(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp).clickable { expanded = !expanded },
+        padding = 12.dp
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Filled.DoneAll,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+            Text(
+                "${files.size} repository file${if (files.size == 1) "" else "s"} kept as-is (not part of your project)",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f).padding(start = 8.dp)
+            )
+            Icon(
+                if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        AnimatedVisibility(visible = expanded) {
+            Column(modifier = Modifier.padding(top = 8.dp)) {
+                files.forEach { path ->
+                    Text(
+                        path,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(vertical = 2.dp)
+                    )
+                }
+            }
+        }
     }
 }

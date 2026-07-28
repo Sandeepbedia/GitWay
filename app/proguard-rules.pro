@@ -20,6 +20,13 @@
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
 
+# Error Prone annotations referenced by com.google.crypto.tink (via
+# androidx.security.crypto) at compile time only — not needed at runtime.
+-dontwarn com.google.errorprone.annotations.CanIgnoreReturnValue
+-dontwarn com.google.errorprone.annotations.CheckReturnValue
+-dontwarn com.google.errorprone.annotations.Immutable
+-dontwarn com.google.errorprone.annotations.RestrictedApi
+
 # ---------------------------------------------------------------------------
 # Git Way release R8 rules
 #

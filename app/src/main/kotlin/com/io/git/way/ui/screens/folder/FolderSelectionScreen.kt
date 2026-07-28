@@ -271,7 +271,6 @@ private fun IdentityCheckErrorCard(message: String, onRetry: () -> Unit) {
 }
 
 @Composable
-@Composable
 private fun AppMismatchWarningCard(
     repoName: String,
     local: AppIdentity?,

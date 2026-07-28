@@ -150,7 +150,7 @@ fun GlassScaffold(
     LiquidGlassBackground {
         Scaffold(
             containerColor = Color.Transparent,
-            contentWindowInsets = WindowInsets.navigationBars.only(WindowInsetsSides.Bottom),
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
                 TopAppBar(
                     title = { Text(title, fontWeight = FontWeight.SemiBold, color = titleColor) },

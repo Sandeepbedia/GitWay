@@ -45,16 +45,6 @@
         },
         {
           "type": "library",
-          "name": "androidx.datastore:datastore-core-okio-jvm:1.1.4",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
-          "name": "transformed:datastore-release:jars:classes",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
           "name": "transformed:runtime-annotation:jars:classes",
           "scope": "compile"
         },
@@ -90,16 +80,6 @@
         },
         {
           "type": "library",
-          "name": "transformed:coil-compose-base-2.7.0:jars:classes",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
-          "name": "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.0",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
           "name": "com.squareup.okhttp3:logging-interceptor:4.12.0",
           "scope": "compile"
         },
@@ -125,17 +105,7 @@
         },
         {
           "type": "library",
-          "name": "transformed:exifinterface-1.3.7:jars:classes",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
           "name": "transformed:runtime-saveable:jars:classes",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
-          "name": "com.squareup.okio:okio-jvm:3.9.0",
           "scope": "compile"
         },
         {
@@ -185,17 +155,22 @@
         },
         {
           "type": "library",
+          "name": "com.squareup.okio:okio-jvm:3.6.0",
+          "scope": "compile"
+        },
+        {
+          "type": "library",
           "name": "transformed:activity-compose-1.11.0:jars:classes",
           "scope": "compile"
         },
         {
           "type": "library",
-          "name": "transformed:coil-2.7.0:jars:classes",
+          "name": "transformed:lifecycle-runtime-ktx:jars:classes",
           "scope": "compile"
         },
         {
           "type": "library",
-          "name": "transformed:lifecycle-runtime-ktx:jars:classes",
+          "name": "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.10",
           "scope": "compile"
         },
         {
@@ -206,11 +181,6 @@
         {
           "type": "library",
           "name": "transformed:runtime:jars:classes",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
-          "name": "transformed:coil-compose-2.7.0:jars:classes",
           "scope": "compile"
         },
         {
@@ -250,11 +220,6 @@
         },
         {
           "type": "library",
-          "name": "org.jetbrains.kotlin:kotlin-android-extensions-runtime:1.9.22",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
           "name": "org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.7.3",
           "scope": "compile"
         },
@@ -266,11 +231,6 @@
         {
           "type": "library",
           "name": "transformed:startup-runtime-1.1.1:jars:classes",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
-          "name": "org.jetbrains.kotlin:kotlin-parcelize-runtime:1.9.22",
           "scope": "compile"
         },
         {
@@ -310,11 +270,6 @@
         },
         {
           "type": "library",
-          "name": "androidx.datastore:datastore-preferences-proto:1.1.4",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
           "name": "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0",
           "scope": "compile"
         },
@@ -335,11 +290,6 @@
         },
         {
           "type": "library",
-          "name": "transformed:datastore-core-release:jars:classes",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
           "name": "org.jetbrains:annotations:23.0.0",
           "scope": "compile"
         },
@@ -350,17 +300,7 @@
         },
         {
           "type": "library",
-          "name": "transformed:vectordrawable-1.1.0:jars:classes",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
           "name": "transformed:interpolator-1.0.0:jars:classes",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
-          "name": "transformed:coil-base-2.7.0:jars:classes",
           "scope": "compile"
         },
         {
@@ -381,11 +321,6 @@
         {
           "type": "library",
           "name": "androidx.lifecycle:lifecycle-common-java8:2.9.4",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
-          "name": "transformed:datastore-preferences-release:jars:classes",
           "scope": "compile"
         },
         {
@@ -430,12 +365,7 @@
         },
         {
           "type": "library",
-          "name": "androidx.datastore:datastore-preferences-core-jvm:1.1.4",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
-          "name": "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.0",
+          "name": "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.10",
           "scope": "compile"
         },
         {
@@ -451,11 +381,6 @@
         {
           "type": "library",
           "name": "transformed:core-ktx-1.17.0:jars:classes",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
-          "name": "transformed:vectordrawable-animated-1.1.0:jars:classes",
           "scope": "compile"
         },
         {
@@ -490,11 +415,6 @@
         },
         {
           "type": "library",
-          "name": "transformed:accompanist-drawablepainter-0.32.0:jars:classes",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
           "name": "transformed:core-runtime-2.2.0:jars:classes",
           "scope": "compile"
         },
@@ -520,17 +440,7 @@
         },
         {
           "type": "library",
-          "name": "transformed:appcompat-resources-1.6.1:jars:classes",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
           "name": "com.google.crypto.tink:tink-android:1.8.0",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
-          "name": "androidx.datastore:datastore-preferences-external-protobuf:1.1.4",
           "scope": "compile"
         },
         {
@@ -555,6 +465,10 @@
             {
               "path": "/storage/emulated/0/AndroidCSProjects/Git_Way/app/src/main/kotlin",
               "type": "kotlin-source"
+            },
+            {
+              "path": "/storage/emulated/0/AndroidCSProjects/Git_Way/app/src/debug/kotlin",
+              "type": "kotlin-source"
             }
           ]
         },
@@ -565,6 +479,17 @@
           "sourceRoots": [
             {
               "path": "/storage/emulated/0/AndroidCSProjects/Git_Way/app/src/main/kotlin",
+              "type": "kotlin-source"
+            }
+          ]
+        },
+        {
+          "path": "/storage/emulated/0/AndroidCSProjects/Git_Way/app/src/debug/kotlin",
+          "excludedPatterns": [],
+          "excludedUrls": [],
+          "sourceRoots": [
+            {
+              "path": "/storage/emulated/0/AndroidCSProjects/Git_Way/app/src/debug/kotlin",
               "type": "kotlin-source"
             }
           ]
@@ -607,16 +532,6 @@
         },
         {
           "type": "library",
-          "name": "androidx.datastore:datastore-core-okio-jvm:1.1.4",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
-          "name": "transformed:datastore-release:jars:classes",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
           "name": "transformed:runtime-annotation:jars:classes",
           "scope": "compile"
         },
@@ -652,16 +567,6 @@
         },
         {
           "type": "library",
-          "name": "transformed:coil-compose-base-2.7.0:jars:classes",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
-          "name": "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.0",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
           "name": "com.squareup.okhttp3:logging-interceptor:4.12.0",
           "scope": "compile"
         },
@@ -687,17 +592,7 @@
         },
         {
           "type": "library",
-          "name": "transformed:exifinterface-1.3.7:jars:classes",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
           "name": "transformed:runtime-saveable:jars:classes",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
-          "name": "com.squareup.okio:okio-jvm:3.9.0",
           "scope": "compile"
         },
         {
@@ -747,17 +642,22 @@
         },
         {
           "type": "library",
+          "name": "com.squareup.okio:okio-jvm:3.6.0",
+          "scope": "compile"
+        },
+        {
+          "type": "library",
           "name": "transformed:activity-compose-1.11.0:jars:classes",
           "scope": "compile"
         },
         {
           "type": "library",
-          "name": "transformed:coil-2.7.0:jars:classes",
+          "name": "transformed:lifecycle-runtime-ktx:jars:classes",
           "scope": "compile"
         },
         {
           "type": "library",
-          "name": "transformed:lifecycle-runtime-ktx:jars:classes",
+          "name": "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.10",
           "scope": "compile"
         },
         {
@@ -768,11 +668,6 @@
         {
           "type": "library",
           "name": "transformed:runtime:jars:classes",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
-          "name": "transformed:coil-compose-2.7.0:jars:classes",
           "scope": "compile"
         },
         {
@@ -812,11 +707,6 @@
         },
         {
           "type": "library",
-          "name": "org.jetbrains.kotlin:kotlin-android-extensions-runtime:1.9.22",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
           "name": "org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.7.3",
           "scope": "compile"
         },
@@ -828,11 +718,6 @@
         {
           "type": "library",
           "name": "transformed:startup-runtime-1.1.1:jars:classes",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
-          "name": "org.jetbrains.kotlin:kotlin-parcelize-runtime:1.9.22",
           "scope": "compile"
         },
         {
@@ -872,11 +757,6 @@
         },
         {
           "type": "library",
-          "name": "androidx.datastore:datastore-preferences-proto:1.1.4",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
           "name": "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0",
           "scope": "compile"
         },
@@ -897,11 +777,6 @@
         },
         {
           "type": "library",
-          "name": "transformed:datastore-core-release:jars:classes",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
           "name": "org.jetbrains:annotations:23.0.0",
           "scope": "compile"
         },
@@ -912,17 +787,7 @@
         },
         {
           "type": "library",
-          "name": "transformed:vectordrawable-1.1.0:jars:classes",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
           "name": "transformed:interpolator-1.0.0:jars:classes",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
-          "name": "transformed:coil-base-2.7.0:jars:classes",
           "scope": "compile"
         },
         {
@@ -943,11 +808,6 @@
         {
           "type": "library",
           "name": "androidx.lifecycle:lifecycle-common-java8:2.9.4",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
-          "name": "transformed:datastore-preferences-release:jars:classes",
           "scope": "compile"
         },
         {
@@ -992,12 +852,7 @@
         },
         {
           "type": "library",
-          "name": "androidx.datastore:datastore-preferences-core-jvm:1.1.4",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
-          "name": "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.0",
+          "name": "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.10",
           "scope": "compile"
         },
         {
@@ -1013,11 +868,6 @@
         {
           "type": "library",
           "name": "transformed:core-ktx-1.17.0:jars:classes",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
-          "name": "transformed:vectordrawable-animated-1.1.0:jars:classes",
           "scope": "compile"
         },
         {
@@ -1052,11 +902,6 @@
         },
         {
           "type": "library",
-          "name": "transformed:accompanist-drawablepainter-0.32.0:jars:classes",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
           "name": "transformed:core-runtime-2.2.0:jars:classes",
           "scope": "compile"
         },
@@ -1082,17 +927,7 @@
         },
         {
           "type": "library",
-          "name": "transformed:appcompat-resources-1.6.1:jars:classes",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
           "name": "com.google.crypto.tink:tink-android:1.8.0",
-          "scope": "compile"
-        },
-        {
-          "type": "library",
-          "name": "androidx.datastore:datastore-preferences-external-protobuf:1.1.4",
           "scope": "compile"
         },
         {
@@ -1129,27 +964,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/f219fcf774a45bf2a3d4357ffe29eea7/transformed/lifecycle-viewmodel-savedstate-release/jars/classes.jar",
-          "type": "CLASSES"
-        }
-      ]
-    },
-    {
-      "name": "androidx.datastore:datastore-core-okio-jvm:1.1.4",
-      "type": "COMPILE",
-      "roots": [
-        {
-          "path": "/home/.gradle/caches/modules-2/files-2.1/androidx.datastore/datastore-core-okio-jvm/1.1.4/ce08f132812044a9778547b299fd812e34dbd602/datastore-core-okio-jvm-1.1.4.jar",
-          "type": "CLASSES"
-        }
-      ]
-    },
-    {
-      "name": "transformed:datastore-release:jars:classes",
-      "type": "COMPILE",
-      "roots": [
-        {
-          "path": "/home/.gradle/caches/9.0.0/transforms/461c2da7f970a5ab9431b18e40e430da/transformed/datastore-release/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/69a1e5e2d52e3e6bdc3a8686eadf36e1/transformed/lifecycle-viewmodel-savedstate-release/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1159,7 +974,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/7cdad811e7bb5c57afe0494d6ac474aa/transformed/runtime-annotation/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/fd3c4931bae7e309c32207a1f60e1b7c/transformed/runtime-annotation/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1169,7 +984,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/97460cf1d06a2bb81253cad32c1677b7/transformed/activity-ktx-1.11.0/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/ac07de8b9581862c59abb717f7bfb1a1/transformed/activity-ktx-1.11.0/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1179,7 +994,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/72d9165e2af90a39c3394a1c1ac31165/transformed/ui-unit/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/53b3bdecad3e1f9940be9cca391d969e/transformed/ui-unit/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1189,7 +1004,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/7ba0c002179f878dcdea16b5b14f1be9/transformed/ui-text/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/6f78919cbf487f11c754447c38cb9326/transformed/ui-text/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1209,7 +1024,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/5a9e0ff1565901e2141eb842371420d1/transformed/material-ripple/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/ecdbe72725743feb97e67bf12eeedc0b/transformed/material-ripple/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1220,26 +1035,6 @@
       "roots": [
         {
           "path": "/home/.gradle/caches/modules-2/files-2.1/com.google.guava/listenablefuture/1.0/c949a840a6acbc5268d088e47b04177bf90b3cad/listenablefuture-1.0.jar",
-          "type": "CLASSES"
-        }
-      ]
-    },
-    {
-      "name": "transformed:coil-compose-base-2.7.0:jars:classes",
-      "type": "COMPILE",
-      "roots": [
-        {
-          "path": "/home/.gradle/caches/9.0.0/transforms/e6d47d6d10227901e6c7740d419dae1c/transformed/coil-compose-base-2.7.0/jars/classes.jar",
-          "type": "CLASSES"
-        }
-      ]
-    },
-    {
-      "name": "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.0",
-      "type": "COMPILE",
-      "roots": [
-        {
-          "path": "/home/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib-jdk7/1.9.0/f320478990d05e0cfaadd74f9619fd6027adbf37/kotlin-stdlib-jdk7-1.9.0.jar",
           "type": "CLASSES"
         }
       ]
@@ -1259,7 +1054,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/842c35ca3811a1a574056f4292236b1d/transformed/savedstate-release/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/827ee133b131b56d76b56c1b8b8c61cb/transformed/savedstate-release/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1269,7 +1064,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/ef37095d0590a17b61ea08ca70f35122/transformed/ui-tooling-data/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/2eaad7a8183235d5471c087c1f1e017b/transformed/ui-tooling-data/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1279,7 +1074,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/8d1d23efba0970d26b1eb373e88307cc/transformed/ui-release/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/8cd401c887b36c4a875580cd791eb533/transformed/ui-release/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1295,31 +1090,11 @@
       ]
     },
     {
-      "name": "transformed:exifinterface-1.3.7:jars:classes",
-      "type": "COMPILE",
-      "roots": [
-        {
-          "path": "/home/.gradle/caches/9.0.0/transforms/00173813bb9877332649356e763ec9c2/transformed/exifinterface-1.3.7/jars/classes.jar",
-          "type": "CLASSES"
-        }
-      ]
-    },
-    {
       "name": "transformed:runtime-saveable:jars:classes",
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/b81c31fcb374cc1b305ac9d906a8c624/transformed/runtime-saveable/jars/classes.jar",
-          "type": "CLASSES"
-        }
-      ]
-    },
-    {
-      "name": "com.squareup.okio:okio-jvm:3.9.0",
-      "type": "COMPILE",
-      "roots": [
-        {
-          "path": "/home/.gradle/caches/modules-2/files-2.1/com.squareup.okio/okio-jvm/3.9.0/eaa4f7858a1e80908b1a2e861e662edd7c6cbbb5/okio-jvm-3.9.0.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/dc0758c7b82717b4fdf8e1b8ea04273a/transformed/runtime-saveable/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1329,7 +1104,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/fa10e33bb707ec5b8aa7df27b624a135/transformed/animation/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/bad37d27744d90062851bff6d2b23bff/transformed/animation/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1339,7 +1114,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/ea159a72eeb59649c7c0e9f97134d29a/transformed/annotation-experimental-1.4.1/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/08e821ee534e0ef1e2c5a010c2fb6b2e/transformed/annotation-experimental-1.4.1/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1349,7 +1124,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/48c4c4918bc500ac50cc2c6f261304f0/transformed/material3/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/53f980a2facaba9e7ee2d0ecf94eeecd/transformed/material3/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1369,7 +1144,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/aff6ae710c203dbcc408f5e3a522cdd7/transformed/foundation-layout/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/9e138663589c59ba436bd0272edc0906/transformed/foundation-layout/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1389,7 +1164,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/76a02a7a7af0bcf5c5794c97a28c06fb/transformed/navigation-common-release/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/bc8efb3d2264afa1671572620b420278/transformed/navigation-common-release/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1399,7 +1174,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/5f6f1548fbb31a0d7b9f90f97179e6ea/transformed/core-viewtree-1.0.0/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/13788cab383f7e7a1f87f5832e72c04d/transformed/core-viewtree-1.0.0/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1409,7 +1184,17 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/b9615aa9b99acdf5e13972ba03ef0437/transformed/lifecycle-viewmodel-compose-release/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/c07338162f3f3a940fcc04c890276f53/transformed/lifecycle-viewmodel-compose-release/jars/classes.jar",
+          "type": "CLASSES"
+        }
+      ]
+    },
+    {
+      "name": "com.squareup.okio:okio-jvm:3.6.0",
+      "type": "COMPILE",
+      "roots": [
+        {
+          "path": "/home/.gradle/caches/modules-2/files-2.1/com.squareup.okio/okio-jvm/3.6.0/5600569133b7bdefe1daf9ec7f4abeb6d13e1786/okio-jvm-3.6.0.jar",
           "type": "CLASSES"
         }
       ]
@@ -1419,17 +1204,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/02f9659c337936b1a30b7c13f1f0b3d7/transformed/activity-compose-1.11.0/jars/classes.jar",
-          "type": "CLASSES"
-        }
-      ]
-    },
-    {
-      "name": "transformed:coil-2.7.0:jars:classes",
-      "type": "COMPILE",
-      "roots": [
-        {
-          "path": "/home/.gradle/caches/9.0.0/transforms/189c70a5989fd42542291906a144911e/transformed/coil-2.7.0/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/7fc0c40e401245863a188e0c73cc28cb/transformed/activity-compose-1.11.0/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1439,7 +1214,17 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/a95e2dc7dceda2f6f87f485d12e2e8af/transformed/lifecycle-runtime-ktx/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/fe25abe1dc9841c21b299a0122cfd214/transformed/lifecycle-runtime-ktx/jars/classes.jar",
+          "type": "CLASSES"
+        }
+      ]
+    },
+    {
+      "name": "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.10",
+      "type": "COMPILE",
+      "roots": [
+        {
+          "path": "/home/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib-jdk8/1.9.10/c7510d64a83411a649c76f2778304ddf71d7437b/kotlin-stdlib-jdk8-1.9.10.jar",
           "type": "CLASSES"
         }
       ]
@@ -1459,17 +1244,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/abf98fe364a4796ebdec9ec56ac96bce/transformed/runtime/jars/classes.jar",
-          "type": "CLASSES"
-        }
-      ]
-    },
-    {
-      "name": "transformed:coil-compose-2.7.0:jars:classes",
-      "type": "COMPILE",
-      "roots": [
-        {
-          "path": "/home/.gradle/caches/9.0.0/transforms/3a5aafb936042edfb986df183427bd2f/transformed/coil-compose-2.7.0/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/7362e69b74399a52c46a8169e8f0b623/transformed/runtime/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1489,7 +1264,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/df6cf77d8dc5caeb07dee70d205b0272/transformed/core-1.17.0/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/8427b4fa961f12db5eabf224bdf32eaa/transformed/core-1.17.0/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1499,7 +1274,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/906b2db678600f44cab0a811ce0e3450/transformed/ui-util/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/1bb867b43dc9e92c7635438e5a580146/transformed/ui-util/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1509,7 +1284,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/45d08483b0d2ca9adfb50e270024dfb3/transformed/ui-graphics-release/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/311d7f92c927aa4d3e3cfe7f74898cac/transformed/ui-graphics-release/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1519,7 +1294,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/5ae43a7d188d9b72bfa6315b10a48e7c/transformed/lifecycle-livedata-core-2.9.4/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/861585029d5638fb3d8ba261b0d35308/transformed/lifecycle-livedata-core-2.9.4/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1529,7 +1304,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/5f40d0b7a8fb19ea0555fb0e46f254ed/transformed/navigation-runtime-release/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/d388d19cb4f7b35510b210c08e94c3e9/transformed/navigation-runtime-release/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1539,17 +1314,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/cf347c2615af11d89c4ceacad7ae26d6/transformed/ui-tooling-preview/jars/classes.jar",
-          "type": "CLASSES"
-        }
-      ]
-    },
-    {
-      "name": "org.jetbrains.kotlin:kotlin-android-extensions-runtime:1.9.22",
-      "type": "COMPILE",
-      "roots": [
-        {
-          "path": "/home/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-android-extensions-runtime/1.9.22/ee3bc0c3b55cb516ac92d6a093e1b939166b86a2/kotlin-android-extensions-runtime-1.9.22.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/6b723484ab019004edd58605055af0d8/transformed/ui-tooling-preview/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1569,7 +1334,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/9791b515f28e6f6ceaded1beb0b3f29d/transformed/versionedparcelable-1.1.1/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/362daa3eef6ab14ba514400b929ba98f/transformed/versionedparcelable-1.1.1/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1579,17 +1344,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/84ea3a26bfaec7e8fa185099f2a8a645/transformed/startup-runtime-1.1.1/jars/classes.jar",
-          "type": "CLASSES"
-        }
-      ]
-    },
-    {
-      "name": "org.jetbrains.kotlin:kotlin-parcelize-runtime:1.9.22",
-      "type": "COMPILE",
-      "roots": [
-        {
-          "path": "/home/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-parcelize-runtime/1.9.22/de4a21d6560cadd035c69ba3af3ad1afecc95299/kotlin-parcelize-runtime-1.9.22.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/7178acbf5845d2011d1f9a92c8883857/transformed/startup-runtime-1.1.1/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1599,7 +1354,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/c848cdb564b03c0ca265900467f7ac62/transformed/material-icons-core-release/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/f93c392752317f9156f6d32c334169ed/transformed/material-icons-core-release/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1619,7 +1374,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/b5ab607b4f8c96289cf3aee889d78f9d/transformed/graphics-path-1.0.1/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/6563ecc8253cb4e3e4d7f1f76dc5e2d1/transformed/graphics-path-1.0.1/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1629,7 +1384,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/995e64ea3e544dc02ae68d87968aea91/transformed/activity-1.11.0/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/1e0911fe2f854e73245b78d2d4f68979/transformed/activity-1.11.0/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1639,7 +1394,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/5391c383f87da349f0759b845f026c2d/transformed/ui-test-manifest-1.9.4/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/64cc845faf697db3d48d61af1b9c347d/transformed/ui-test-manifest-1.9.4/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1649,7 +1404,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/4e2302f81aab91b7f3cdf128e5b5e00e/transformed/ui-tooling/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/cf1bbf1c9d6a177b51743940a494b469/transformed/ui-tooling/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1659,17 +1414,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/7c7a7bdb47e22bea38842039c15752e5/transformed/lifecycle-process-2.9.4/jars/classes.jar",
-          "type": "CLASSES"
-        }
-      ]
-    },
-    {
-      "name": "androidx.datastore:datastore-preferences-proto:1.1.4",
-      "type": "COMPILE",
-      "roots": [
-        {
-          "path": "/home/.gradle/caches/modules-2/files-2.1/androidx.datastore/datastore-preferences-proto/1.1.4/6d7430ed8d2b5f2b8675dad8d196ba5dd710921b/datastore-preferences-proto-1.1.4.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/91aa76866f9c5dd2d26a08502bc67ab1/transformed/lifecycle-process-2.9.4/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1689,7 +1434,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/3c0bebfd56fdabe667dd131fdaf33824/transformed/savedstate-ktx-1.3.3/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/7812ce62c361d290378223275c980785/transformed/savedstate-ktx-1.3.3/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1709,17 +1454,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/d732446d9ccd7005f9e60e496545656e/transformed/lifecycle-runtime-compose-release/jars/classes.jar",
-          "type": "CLASSES"
-        }
-      ]
-    },
-    {
-      "name": "transformed:datastore-core-release:jars:classes",
-      "type": "COMPILE",
-      "roots": [
-        {
-          "path": "/home/.gradle/caches/9.0.0/transforms/0fd8dda9f16cd5b8203303b337a466e8/transformed/datastore-core-release/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/e99f354c53663c3c946d01da7c65b89c/transformed/lifecycle-runtime-compose-release/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1739,17 +1474,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/7d7cc52141ebeb31f18a99e094306153/transformed/documentfile-1.0.1/jars/classes.jar",
-          "type": "CLASSES"
-        }
-      ]
-    },
-    {
-      "name": "transformed:vectordrawable-1.1.0:jars:classes",
-      "type": "COMPILE",
-      "roots": [
-        {
-          "path": "/home/.gradle/caches/9.0.0/transforms/d26e61a98c2076fb47d1eccd689df559/transformed/vectordrawable-1.1.0/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/0407e69652d9146922903b1a300de6ff/transformed/documentfile-1.0.1/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1759,17 +1484,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/c55ef00e913ffc8468872ef0e3182b4c/transformed/interpolator-1.0.0/jars/classes.jar",
-          "type": "CLASSES"
-        }
-      ]
-    },
-    {
-      "name": "transformed:coil-base-2.7.0:jars:classes",
-      "type": "COMPILE",
-      "roots": [
-        {
-          "path": "/home/.gradle/caches/9.0.0/transforms/b81cd22e8408fac8f9d8b8871dce7c6e/transformed/coil-base-2.7.0/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/2127c0e399d57e3a42a4ff036aed40c9/transformed/interpolator-1.0.0/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1779,7 +1494,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/24c5fa261e34cdb474c00c6844b1dd75/transformed/savedstate-compose/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/67a5e112f5ea67a2ee6e7fe729360a6a/transformed/savedstate-compose/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1799,7 +1514,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/95b4a58b3b3e56b7fd9cb453083206e8/transformed/ui-geometry/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/cf29bb4a8c15487e1fdb145126c43f55/transformed/ui-geometry/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1815,21 +1530,11 @@
       ]
     },
     {
-      "name": "transformed:datastore-preferences-release:jars:classes",
-      "type": "COMPILE",
-      "roots": [
-        {
-          "path": "/home/.gradle/caches/9.0.0/transforms/52e5f9bc74c8fb847e2b98b7ef445754/transformed/datastore-preferences-release/jars/classes.jar",
-          "type": "CLASSES"
-        }
-      ]
-    },
-    {
       "name": "transformed:material:jars:classes",
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/19dc9f4ea752142f7b816f8d3a9e9bd2/transformed/material/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/106e17d01f7e75ca20ae9fa3bfcddae3/transformed/material/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1839,7 +1544,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/56252cf5fc62bbcdecd5a698bc3f137c/transformed/lifecycle-viewmodel-release/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/dabef486b63422cc90ae7dc259287169/transformed/lifecycle-viewmodel-release/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1849,7 +1554,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/593e58cc82f3dee3fa9dd4a46a9f802d/transformed/animation-core/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/bf9836a4f97054ed92e808f89d3e1949/transformed/animation-core/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1859,7 +1564,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/1a0c5c98fa42e4777080fc57997784ae/transformed/customview-poolingcontainer-1.0.0/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/f5299ed60ce00d2e51bf9e05f7205fa5/transformed/customview-poolingcontainer-1.0.0/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1869,7 +1574,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/d94685f81e08261baee76f3747164218/transformed/lifecycle-viewmodel-ktx-2.9.4/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/12ab5f09728f8f4686df815b8ca24da1/transformed/lifecycle-viewmodel-ktx-2.9.4/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1889,7 +1594,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/413ddafa02ca17bc30a541959841466d/transformed/material-icons-extended-release/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/8bb479439c9dd4ba567aca6036580c04/transformed/material-icons-extended-release/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1905,21 +1610,11 @@
       ]
     },
     {
-      "name": "androidx.datastore:datastore-preferences-core-jvm:1.1.4",
+      "name": "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.10",
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/modules-2/files-2.1/androidx.datastore/datastore-preferences-core-jvm/1.1.4/fb991f11389ccf2a5d5d4c99783ff958bc400/datastore-preferences-core-jvm-1.1.4.jar",
-          "type": "CLASSES"
-        }
-      ]
-    },
-    {
-      "name": "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.0",
-      "type": "COMPILE",
-      "roots": [
-        {
-          "path": "/home/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib-jdk8/1.9.0/e000bd084353d84c9e888f6fb341dc1f5b79d948/kotlin-stdlib-jdk8-1.9.0.jar",
+          "path": "/home/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib-jdk7/1.9.10/bc5bfc2690338defd5195b05c57562f2194eeb10/kotlin-stdlib-jdk7-1.9.10.jar",
           "type": "CLASSES"
         }
       ]
@@ -1939,7 +1634,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/1d7d880141d32df4aeb6579b3f1f9793/transformed/autofill-1.0.0/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/53f79c8af485192e1c6099090ebe89de/transformed/autofill-1.0.0/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1949,17 +1644,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/cf373046b8758a8fba69ae00a3363958/transformed/core-ktx-1.17.0/jars/classes.jar",
-          "type": "CLASSES"
-        }
-      ]
-    },
-    {
-      "name": "transformed:vectordrawable-animated-1.1.0:jars:classes",
-      "type": "COMPILE",
-      "roots": [
-        {
-          "path": "/home/.gradle/caches/9.0.0/transforms/5ea5dedb0ae53f990e38864ef46c246b/transformed/vectordrawable-animated-1.1.0/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/ced9fc2f4da3b95776ca48c42dfba81e/transformed/core-ktx-1.17.0/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1969,7 +1654,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/78eadccc28db4c55f448669c6791435b/transformed/foundation-release/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/5464685534f413004d352f489aa4ed2c/transformed/foundation-release/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1979,7 +1664,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/f08ec05982629f334a398dc69fabb6bc/transformed/lifecycle-runtime-release/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/ec62e68aec2d930a884fde853fa505b3/transformed/lifecycle-runtime-release/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1989,7 +1674,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/c2293a4f1eda836a57b27447b13fb6ce/transformed/emoji2-1.4.0/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/7360c4d24cf79b804b4077d80f903fac/transformed/emoji2-1.4.0/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -1999,7 +1684,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/c2293a4f1eda836a57b27447b13fb6ce/transformed/emoji2-1.4.0/jars/libs/repackaged.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/7360c4d24cf79b804b4077d80f903fac/transformed/emoji2-1.4.0/jars/libs/repackaged.jar",
           "type": "CLASSES"
         }
       ]
@@ -2019,17 +1704,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/aba9560dd4d5ff7e84d48b5a4c896af1/transformed/tracing-1.2.0/jars/classes.jar",
-          "type": "CLASSES"
-        }
-      ]
-    },
-    {
-      "name": "transformed:accompanist-drawablepainter-0.32.0:jars:classes",
-      "type": "COMPILE",
-      "roots": [
-        {
-          "path": "/home/.gradle/caches/9.0.0/transforms/596c0ead43acf63836f0d4a716659de7/transformed/accompanist-drawablepainter-0.32.0/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/8f8ffea161e5be942c112adc35f0008a/transformed/tracing-1.2.0/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -2039,7 +1714,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/14fe91a5ebf5ce795f23f23a1413d7fd/transformed/core-runtime-2.2.0/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/9d375d8a64ac48c8f1253a956f6c1d2f/transformed/core-runtime-2.2.0/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -2049,7 +1724,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/ce9aecf94475f1cb549d35297e36846a/transformed/profileinstaller-1.4.0/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/6f7fcb40bf09b46f26ae43e17efe6f69/transformed/profileinstaller-1.4.0/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -2059,7 +1734,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/62767be1e5735f1f63da8d31751fcaca/transformed/security-crypto-1.1.0/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/dfacadafde95fc1e98c8a2039cf9523f/transformed/security-crypto-1.1.0/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -2069,7 +1744,7 @@
       "type": "COMPILE",
       "roots": [
         {
-          "path": "/home/.gradle/caches/9.0.0/transforms/6cc6ca4aa2d20973049bb784134a55d9/transformed/navigation-compose-release/jars/classes.jar",
+          "path": "/home/.gradle/caches/9.0.0/transforms/bbefc9f6da77bcbff9b1d4f3b48dc8c7/transformed/navigation-compose-release/jars/classes.jar",
           "type": "CLASSES"
         }
       ]
@@ -2085,31 +1760,11 @@
       ]
     },
     {
-      "name": "transformed:appcompat-resources-1.6.1:jars:classes",
-      "type": "COMPILE",
-      "roots": [
-        {
-          "path": "/home/.gradle/caches/9.0.0/transforms/8a0d4b0cc16d717136bb089ace253cf4/transformed/appcompat-resources-1.6.1/jars/classes.jar",
-          "type": "CLASSES"
-        }
-      ]
-    },
-    {
       "name": "com.google.crypto.tink:tink-android:1.8.0",
       "type": "COMPILE",
       "roots": [
         {
           "path": "/home/.gradle/caches/modules-2/files-2.1/com.google.crypto.tink/tink-android/1.8.0/bda82b49568d444a3b54773ca5aa487816473295/tink-android-1.8.0.jar",
-          "type": "CLASSES"
-        }
-      ]
-    },
-    {
-      "name": "androidx.datastore:datastore-preferences-external-protobuf:1.1.4",
-      "type": "COMPILE",
-      "roots": [
-        {
-          "path": "/home/.gradle/caches/modules-2/files-2.1/androidx.datastore/datastore-preferences-external-protobuf/1.1.4/ddd0a2d64e3c928359c993d1291e535d5d7fc9a3/datastore-preferences-external-protobuf-1.1.4.jar",
           "type": "CLASSES"
         }
       ]

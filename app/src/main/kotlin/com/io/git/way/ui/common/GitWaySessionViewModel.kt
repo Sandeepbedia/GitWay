@@ -67,6 +67,9 @@ data class GitWaySessionState(
     val compareProgress: Pair<Int, Int>? = null,
     val compareError: String? = null,
     val fileChanges: List<FileChange> = emptyList(),
+    /** Repository scaffolding (README, LICENSE, .github/, etc.) that exists on GitHub
+     * but was correctly excluded from Removed detection — see [RepositoryScaffoldFiles]. */
+    val ignoredScaffoldFiles: List<String> = emptyList(),
 
     /** Which changes the user has chosen to actually push — defaults to "all selected"
      * as soon as a comparison finishes, but can be narrowed manually per file or per
@@ -369,7 +372,7 @@ class GitWaySessionViewModel(
             treeResult
                 .onSuccess { remoteMap ->
                     try {
-                        val changes = ComparisonEngine.computeDiff(
+                        val diff = ComparisonEngine.computeDiff(
                             context = context,
                             localFiles = state.localFiles,
                             remotePaths = remoteMap,
@@ -380,12 +383,13 @@ class GitWaySessionViewModel(
                         )
                         state = state.copy(
                             isComparing = false,
-                            fileChanges = changes,
+                            fileChanges = diff.changes,
+                            ignoredScaffoldFiles = diff.ignoredScaffoldFiles,
                             remoteTreeCache = remoteMap,
                             compareProgress = null,
                             // Everything starts selected — the user can then manually
                             // uncheck items or use "Select all" / "Clear" per section.
-                            selectedPaths = changes.map { it.filePath }.toSet()
+                            selectedPaths = diff.changes.map { it.filePath }.toSet()
                         )
                     } catch (e: Exception) {
                         state = state.copy(
