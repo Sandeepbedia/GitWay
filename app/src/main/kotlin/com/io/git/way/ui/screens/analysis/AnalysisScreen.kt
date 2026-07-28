@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.RemoveDone
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -178,7 +179,8 @@ fun AnalysisScreen(
                                 items = visibleChanges.filter { it.type == ChangeType.REMOVED },
                                 selectedPaths = state.selectedPaths,
                                 onToggleItem = sessionViewModel::toggleChangeSelection,
-                                onToggleSection = { selected -> sessionViewModel.setSelectionForType(ChangeType.REMOVED, selected) }
+                                onToggleSection = { selected -> sessionViewModel.setSelectionForType(ChangeType.REMOVED, selected) },
+                                onIgnoreItem = { path -> sessionViewModel.ignoreFileForever(context, path) }
                             )
                         }
                     }
@@ -203,7 +205,8 @@ private fun DiffSection(
     items: List<FileChange>,
     selectedPaths: Set<String>,
     onToggleItem: (String) -> Unit,
-    onToggleSection: (Boolean) -> Unit
+    onToggleSection: (Boolean) -> Unit,
+    onIgnoreItem: ((String) -> Unit)? = null
 ) {
     var expanded by remember { mutableStateOf(true) }
     val selectedInSection = items.count { selectedPaths.contains(it.filePath) }
@@ -294,6 +297,16 @@ private fun DiffSection(
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
+                            }
+                            if (onIgnoreItem != null) {
+                                IconButton(onClick = { onIgnoreItem(change.filePath) }) {
+                                    Icon(
+                                        Icons.Filled.VisibilityOff,
+                                        contentDescription = "Don't track this file",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
                             }
                         }
                     }

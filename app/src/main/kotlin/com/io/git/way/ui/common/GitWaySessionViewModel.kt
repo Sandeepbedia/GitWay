@@ -10,6 +10,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.io.git.way.data.local.AppIdentityDetector
 import com.io.git.way.data.local.FolderScanner
+import com.io.git.way.data.local.IgnoreListManager
 import com.io.git.way.data.local.NetworkUtils
 import com.io.git.way.data.local.ProtectionScanner
 import com.io.git.way.domain.ComparisonEngine
@@ -377,6 +378,7 @@ class GitWaySessionViewModel(
                             localFiles = state.localFiles,
                             remotePaths = remoteMap,
                             contentOverrides = state.scanReport?.contentOverrides.orEmpty(),
+                            customIgnoredPaths = IgnoreListManager(context).getAll(),
                             onProgress = { done, total ->
                                 state = state.copy(compareProgress = done to total)
                             }
@@ -433,6 +435,18 @@ class GitWaySessionViewModel(
     /** Global "Clear selection". */
     fun deselectAllChanges() {
         state = state.copy(selectedPaths = emptySet())
+    }
+
+    /** "Don't track this file" — persists [path] so it's never flagged Removed again in
+     * any future comparison (see [IgnoreListManager]), and immediately drops it out of
+     * the current diff without needing to re-run the whole comparison against GitHub. */
+    fun ignoreFileForever(context: Context, path: String) {
+        IgnoreListManager(context).add(path)
+        state = state.copy(
+            fileChanges = state.fileChanges.filterNot { it.filePath == path },
+            selectedPaths = state.selectedPaths - path,
+            ignoredScaffoldFiles = (state.ignoredScaffoldFiles + path).distinct().sorted()
+        )
     }
 
     /** Commit message the user typed on the Confirmation screen — blank is fine, the

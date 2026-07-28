@@ -15,8 +15,9 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Result of a comparison: the actual Added/Modified/Removed changes, plus how many
- * remote-only paths were repository scaffolding (README, LICENSE, .github/, etc.) and
- * therefore deliberately excluded from [ChangeType.REMOVED] — see [RepositoryScaffoldFiles].
+ * remote-only paths were excluded from [ChangeType.REMOVED] — either built-in
+ * repository scaffolding (README, LICENSE, .github/, etc. — see
+ * [RepositoryScaffoldFiles]) or paths the person manually marked "don't track".
  */
 data class DiffResult(
     val changes: List<FileChange>,
@@ -47,6 +48,7 @@ object ComparisonEngine {
         localFiles: List<LocalFile>,
         remotePaths: Map<String, String>,
         contentOverrides: Map<String, ByteArray> = emptyMap(),
+        customIgnoredPaths: Set<String> = emptySet(),
         onProgress: (completed: Int, total: Int) -> Unit = { _, _ -> }
     ): DiffResult = withContext(Dispatchers.Default) {
         val localByPath = localFiles.associateBy { it.relativePath }
@@ -55,7 +57,9 @@ object ComparisonEngine {
 
         val added = localPaths - remoteKeys
         val remoteOnly = remoteKeys - localPaths
-        val (scaffold, removed) = remoteOnly.partition { RepositoryScaffoldFiles.isScaffoldFile(it) }
+        val (scaffold, removed) = remoteOnly.partition {
+            RepositoryScaffoldFiles.isScaffoldFile(it) || it in customIgnoredPaths
+        }
         val common = localPaths intersect remoteKeys
 
         val modified = mutableListOf<String>()
