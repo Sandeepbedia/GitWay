@@ -114,6 +114,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.documentfile)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.coil.compose)
     // Only used for request/response logging during development — never linked
     // into the release build (also keeps its transitive size out of release DEX).
     debugImplementation(libs.squareup.okhttp.logging.interceptor)

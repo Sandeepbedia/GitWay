@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -34,12 +35,16 @@ import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -53,10 +58,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
+import com.io.git.way.domain.WorkflowTemplate
+import com.io.git.way.domain.WorkflowTemplates
 import com.io.git.way.domain.model.BrowserEntry
 import com.io.git.way.domain.model.TreeRow
 import com.io.git.way.ui.common.FileTypeIcons
 import com.io.git.way.ui.common.GitWaySessionViewModel
+import com.io.git.way.ui.common.MarkdownLinkResolver
+import com.io.git.way.ui.common.MarkdownView
 import com.io.git.way.ui.common.SyntaxHighlightTransformation
 import com.io.git.way.ui.common.SyntaxHighlighter
 import com.io.git.way.ui.theme.GlassBlobBlue
@@ -84,6 +93,7 @@ fun RepositoryBrowserScreen(
     var showNewFolderDialog by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<BrowserEntry?>(null) }
     var pendingDeleteSelection by remember { mutableStateOf(false) }
+    var showWorkflowPicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.selectedRepo) {
         if (state.selectedRepo != null && state.remoteTreeCache.isEmpty() && !state.isBrowserLoading) {
@@ -154,6 +164,26 @@ fun RepositoryBrowserScreen(
                 Text(state.deleteEntryError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
             }
 
+            if (state.showWorkflowSuggestion && !selectionMode) {
+                GlassCard(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
+                    Text("No GitHub Actions CI workflow found", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "This repository has nothing under .github/workflows/. Git Way can add a ready-made CI workflow — you choose exactly which one(s), nothing is added automatically.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 10.dp)
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GlassSecondaryButton(
+                            text = "Add workflow",
+                            onClick = { showWorkflowPicker = true },
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = { sessionViewModel.dismissWorkflowSuggestion() }) { Text("Not now") }
+                    }
+                }
+            }
+
             Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 when {
                     state.isBrowserLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -221,6 +251,15 @@ fun RepositoryBrowserScreen(
             onDismiss = { showNewFolderDialog = false; sessionViewModel.clearCreateEntryError() },
             onConfirm = { name -> sessionViewModel.createFolder(name) },
             onCreated = { showNewFolderDialog = false }
+        )
+    }
+    if (showWorkflowPicker) {
+        WorkflowPickerDialog(
+            isAdding = state.isAddingWorkflows,
+            errorMessage = state.addWorkflowsError,
+            onDismiss = { showWorkflowPicker = false },
+            onConfirm = { selected -> sessionViewModel.addWorkflowFiles(selected) },
+            onAdded = { showWorkflowPicker = false }
         )
     }
     pendingDelete?.let { entry ->
@@ -312,13 +351,17 @@ private fun TreeRowItem(
 }
 
 /** Read/edit view for a single file, shown in place of the tree — syntax-highlighted and
- * properly scrollable in both read and edit modes. */
+ * properly scrollable in both read and edit modes. Markdown files (README.md and friends)
+ * also get a rendered Preview mode — headings, bold/italic, links, and images resolved
+ * against this repo — alongside the raw source, toggled with a segmented control. */
 @Composable
 private fun FileViewerScreen(sessionViewModel: GitWaySessionViewModel) {
     val state = sessionViewModel.state
     val entry = state.viewingFile ?: return
     var draft by remember(state.viewingContent) { mutableStateOf(state.viewingContent.orEmpty()) }
     val scrollState = rememberScrollState()
+    val isMarkdown = entry.name.endsWith(".md", ignoreCase = true) || entry.name.endsWith(".markdown", ignoreCase = true)
+    var showPreview by remember(entry.path) { mutableStateOf(isMarkdown) }
 
     GlassScaffold(
         title = entry.name,
@@ -350,6 +393,21 @@ private fun FileViewerScreen(sessionViewModel: GitWaySessionViewModel) {
                 Text(state.saveFileError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 8.dp))
             }
 
+            if (isMarkdown && !state.isEditingFile && state.viewingContent != null && state.viewerError == null) {
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.padding(bottom = 10.dp)) {
+                    SegmentedButton(
+                        selected = showPreview,
+                        onClick = { showPreview = true },
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                    ) { Text("Preview") }
+                    SegmentedButton(
+                        selected = !showPreview,
+                        onClick = { showPreview = false },
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                    ) { Text("Raw") }
+                }
+            }
+
             when {
                 state.isLoadingContent -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 state.viewerError != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -364,6 +422,21 @@ private fun FileViewerScreen(sessionViewModel: GitWaySessionViewModel) {
                     visualTransformation = SyntaxHighlightTransformation(),
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None)
                 )
+                isMarkdown && showPreview -> {
+                    val repo = state.selectedRepo
+                    if (repo != null) {
+                        MarkdownView(
+                            markdown = state.viewingContent.orEmpty(),
+                            resolver = MarkdownLinkResolver(
+                                owner = repo.owner,
+                                repo = repo.name,
+                                branch = repo.defaultBranch,
+                                currentFileDir = entry.path.substringBeforeLast('/', "")
+                            ),
+                            modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(scrollState)
+                        )
+                    }
+                }
                 else -> Text(
                     SyntaxHighlighter.highlight(state.viewingContent.orEmpty()),
                     style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
@@ -415,5 +488,91 @@ private fun NewEntryDialog(
             }
         },
         dismissButton = { TextButton(onClick = onDismiss, enabled = !isCreating) { Text("Cancel") } }
+    )
+}
+
+/** Lets the user tick exactly which CI workflow template(s) to add — each option shows
+ * its full YAML so nothing is a surprise before it lands as a commit. Manual opt-in only:
+ * there's no "add all" shortcut and no default selection. */
+@Composable
+private fun WorkflowPickerDialog(
+    isAdding: Boolean,
+    errorMessage: String?,
+    onDismiss: () -> Unit,
+    onConfirm: (List<WorkflowTemplate>) -> Unit,
+    onAdded: () -> Unit
+) {
+    var selected by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var submitted by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isAdding, errorMessage) {
+        if (submitted && !isAdding && errorMessage == null) onAdded()
+    }
+
+    AlertDialog(
+        onDismissRequest = { if (!isAdding) onDismiss() },
+        title = { Text("Add CI workflow") },
+        text = {
+            Column(modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                WorkflowTemplates.all.forEach { template ->
+                    val isSelected = template.id in selected
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.Top) {
+                            Checkbox(
+                                checked = isSelected,
+                                onCheckedChange = { checked ->
+                                    selected = if (checked) selected + template.id else selected - template.id
+                                },
+                                enabled = !isAdding
+                            )
+                            Column(modifier = Modifier.padding(top = 12.dp)) {
+                                Text(template.title, style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    template.description,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    template.path,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
+                        }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 40.dp, top = 4.dp)
+                        ) {
+                            Text(
+                                SyntaxHighlighter.highlight(template.yaml),
+                                fontFamily = FontFamily.Monospace,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
+                }
+                if (errorMessage != null) {
+                    Text(errorMessage, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    submitted = true
+                    onConfirm(WorkflowTemplates.all.filter { it.id in selected })
+                },
+                enabled = selected.isNotEmpty() && !isAdding
+            ) {
+                if (isAdding) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp) else Text("Add selected")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !isAdding) { Text("Cancel") } }
     )
 }
