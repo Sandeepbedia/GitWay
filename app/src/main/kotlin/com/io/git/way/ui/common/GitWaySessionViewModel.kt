@@ -15,8 +15,6 @@ import com.io.git.way.data.local.NetworkUtils
 import com.io.git.way.data.local.ProtectionScanner
 import com.io.git.way.domain.ComparisonEngine
 import com.io.git.way.domain.CommitMessageBuilder
-import com.io.git.way.domain.WorkflowTemplate
-import com.io.git.way.domain.WorkflowTemplates
 import com.io.git.way.domain.model.AppIdentity
 import com.io.git.way.domain.model.BrowserEntry
 import com.io.git.way.domain.model.ChangeType
@@ -109,13 +107,6 @@ data class GitWaySessionState(
     val isDeletingEntry: Boolean = false,
     val deleteEntryError: String? = null,
 
-    /** Manual-opt-in "add a CI workflow" suggestion (PRD: "CI Workflow Suggestions") — the
-     * banner is shown whenever the loaded repo tree has nothing under `.github/workflows/`
-     * and hasn't been dismissed yet this session; nothing is ever added automatically. */
-    val workflowSuggestionDismissed: Boolean = false,
-    val isAddingWorkflows: Boolean = false,
-    val addWorkflowsError: String? = null,
-
     /** Multi-select in the browser (long-press to start, tap to toggle). Only files are
      * selectable — folders aren't copyable/deletable as a single selection unit yet, use
      * the per-row delete action for a whole folder instead. */
@@ -164,14 +155,6 @@ data class GitWaySessionState(
 
             return packageMismatch || appNameMismatch
         }
-
-    /** Shown only once the tree has actually loaded (an empty map before that would
-     * false-positive as "no workflows") and only until the user dismisses it or adds one. */
-    val showWorkflowSuggestion: Boolean
-        get() = !workflowSuggestionDismissed &&
-            !isBrowserLoading &&
-            remoteTreeCache.isNotEmpty() &&
-            WorkflowTemplates.hasNoWorkflows(remoteTreeCache.keys)
 }
 
 /**
@@ -714,52 +697,6 @@ class GitWaySessionViewModel(
 
     fun clearDeleteEntryError() {
         state = state.copy(deleteEntryError = null)
-    }
-
-    /** User closed the "no CI workflow" banner without adding anything — stays dismissed
-     * for the rest of this repo session (reappears next time the repo is opened fresh). */
-    fun dismissWorkflowSuggestion() {
-        state = state.copy(workflowSuggestionDismissed = true)
-    }
-
-    /** Adds every template the user checked in the picker as ONE commit — reuses the same
-     * tested sync pipeline as every other write in the app. Nothing here is automatic:
-     * this only ever runs from the picker's own "Add" button, after the user has read
-     * each template's YAML and ticked the ones they actually want (PRD "CI Workflow
-     * Suggestions" — manual opt-in per file, never added silently). */
-    fun addWorkflowFiles(templates: List<WorkflowTemplate>) {
-        val repo = state.selectedRepo ?: return
-        if (templates.isEmpty() || state.isAddingWorkflows) return
-
-        val changes = templates.map { FileChange(fileName = it.path.substringAfterLast('/'), filePath = it.path, type = ChangeType.ADDED) }
-        val bytesByPath = templates.associate { it.path to it.yaml.toByteArray(Charsets.UTF_8) }
-
-        state = state.copy(isAddingWorkflows = true, addWorkflowsError = null)
-        viewModelScope.launch {
-            gitHubRepository.syncChanges(
-                repo = repo,
-                changes = changes,
-                commitMessage = if (templates.size == 1) {
-                    "Git Way: add ${templates.first().path}"
-                } else {
-                    "Git Way: add ${templates.size} GitHub Actions workflows"
-                },
-                readFileBytes = { path -> bytesByPath.getValue(path) },
-                onProgress = { _, _, _, _ -> }
-            ).onSuccess {
-                val updatedTree = state.remoteTreeCache + templates.associate { it.path to "" }
-                val expandedWithGithub = state.expandedFolders + ".github" + ".github/workflows"
-                state = state.copy(
-                    isAddingWorkflows = false,
-                    workflowSuggestionDismissed = true,
-                    remoteTreeCache = updatedTree,
-                    expandedFolders = expandedWithGithub,
-                    browserEntries = buildVisibleRows(updatedTree.keys, expandedWithGithub)
-                )
-            }.onFailure { throwable ->
-                state = state.copy(isAddingWorkflows = false, addWorkflowsError = throwable.message ?: "Couldn't add workflow file(s).")
-            }
-        }
     }
 
     /** Deletes a single file, or an entire folder (every path under it), as one commit.

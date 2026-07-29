@@ -1,0 +1,78 @@
+Git Way Custom License (Source-Available, Contribution-Friendly, No Redistribution)
+Version 1.0 — 2026
+
+Copyright (c) 2026 Sandeep Bedia. All rights reserved.
+
+This license governs use of the source code, assets, and documentation in this
+repository (the "Software"). It is written to do two things at once: make it easy
+for anyone to read the code, learn from it, and send improvements back — while
+making sure no one can take the app and publish it, in whole or in part, as their
+own product.
+
+1. WHAT YOU MAY DO
+
+   1.1  View, read, and study the source code in this repository.
+   1.2  Fork or clone the repository for personal, educational, or non-public use
+        (e.g. running a local debug build on your own device for testing).
+   1.3  Modify the source code and build it locally for your own private use.
+   1.4  Submit Pull Requests to this repository with bug fixes, features, or
+        improvements, subject to Section 3.
+   1.5  Reference or quote short excerpts of the code (e.g. in a blog post, talk,
+        or Stack Overflow answer) with attribution back to this repository.
+
+2. WHAT YOU MAY NOT DO
+
+   2.1  You may NOT publish, distribute, sell, sublicense, rent, or otherwise make
+        available the Software, or any modified or derivative version of it, as a
+        standalone or bundled application — this includes, without limitation,
+        publishing an APK/AAB to the Google Play Store, F-Droid, an APK mirror
+        site, a third-party app store, or any other distribution channel — without
+        prior written permission from the copyright holder.
+   2.2  You may NOT rebrand, whitewash, or present the Software or a derivative of
+        it as your own original work, including changing the app name, package
+        name/applicationId, or icon and re-releasing it.
+   2.3  You may NOT remove or alter this license, the copyright notice, or any
+        attribution present in the Software when redistributing source code
+        copies (source-code sharing for contribution/education purposes under
+        Section 1 is fine; shipping a compiled app to end users is not).
+   2.4  You may NOT use the Software, in whole or in part, as a component of a
+        commercial product or service without prior written permission.
+
+3. CONTRIBUTIONS (PULL REQUESTS)
+
+   3.1  By submitting a Pull Request or any other contribution to this
+        repository, you agree that your contribution is licensed to the
+        copyright holder under the same terms as this license, and you grant
+        the copyright holder a perpetual, worldwide, royalty-free,
+        non-exclusive license to use, modify, merge, publish, and distribute
+        your contribution as part of the Software.
+   3.2  You confirm that you have the right to submit the contribution (i.e. it
+        is your own original work, or you otherwise have the right to license it
+        under these terms).
+   3.3  Contributors are credited in the project's commit history and, where
+        applicable, in release notes — see CONTRIBUTING.md.
+
+4. TERMINATION
+
+   Any use of the Software in violation of Section 2 automatically terminates
+   your rights under this license. The copyright holder reserves the right to
+   request takedown of any unauthorized redistribution.
+
+5. NO WARRANTY
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM,
+   OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.
+
+6. CONTACT
+
+   For permission requests (e.g. to redistribute, publish, or use the Software
+   commercially), open an issue on this repository or contact the copyright
+   holder directly.
+
+---
+This is a custom license, not a lawyer-drafted legal document. If you need
+airtight legal enforceability (e.g. for a company), have it reviewed by a
+qualified lawyer in your jurisdiction before relying on it.
