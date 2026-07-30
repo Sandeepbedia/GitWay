@@ -196,3 +196,22 @@ data class GitBlobContentDto(
     val encoding: String,
     val size: Long = 0
 )
+
+/** GET repos/{owner}/{repo}/releases/latest — used by the in-app update checker. Only
+ * the fields the update dialog actually needs are modeled; unknown fields are ignored. */
+@Serializable
+data class GitHubReleaseDto(
+    @SerialName("tag_name") val tagName: String,
+    val name: String? = null,
+    val body: String? = null,
+    @SerialName("html_url") val htmlUrl: String,
+    val prerelease: Boolean = false,
+    val draft: Boolean = false,
+    val assets: List<GitHubReleaseAssetDto> = emptyList()
+)
+
+@Serializable
+data class GitHubReleaseAssetDto(
+    val name: String,
+    @SerialName("browser_download_url") val browserDownloadUrl: String
+)

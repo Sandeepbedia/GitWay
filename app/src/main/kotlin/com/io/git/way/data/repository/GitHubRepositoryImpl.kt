@@ -13,6 +13,8 @@ import com.io.git.way.data.remote.dto.CreateTreeRequest
 import com.io.git.way.data.remote.dto.GitHubErrorResponseDto
 import com.io.git.way.data.remote.dto.TreeEntryInput
 import com.io.git.way.data.remote.dto.UpdateRefRequest
+import com.io.git.way.domain.VersionComparator
+import com.io.git.way.domain.model.AppUpdateInfo
 import com.io.git.way.domain.model.ChangeType
 import com.io.git.way.domain.model.FileChange
 import com.io.git.way.domain.model.GitRepository as GitRepositoryModel
@@ -499,4 +501,34 @@ class GitHubRepositoryImpl(
                 }
             }
         }
+
+    override suspend fun checkForUpdate(
+        owner: String,
+        repo: String,
+        currentVersionName: String
+    ): Result<AppUpdateInfo?> = withContext(Dispatchers.IO) {
+        runCatching {
+            val release = try {
+                apiService.getLatestRelease(owner, repo)
+            } catch (e: HttpException) {
+                // No releases published yet is not an error — just means no update.
+                if (e.code() == 404) return@withContext Result.success(null)
+                throw IOException(e.toFriendlyMessage(), e)
+            }
+
+            if (release.draft || release.prerelease) return@withContext Result.success(null)
+            if (!VersionComparator.isNewer(release.tagName, currentVersionName)) {
+                return@withContext Result.success(null)
+            }
+
+            val apkAsset = release.assets.firstOrNull { it.name.endsWith(".apk", ignoreCase = true) }
+            AppUpdateInfo(
+                versionTag = release.tagName,
+                releaseTitle = release.name?.takeIf { it.isNotBlank() } ?: release.tagName,
+                releaseNotes = release.body?.takeIf { it.isNotBlank() } ?: "No release notes provided.",
+                apkDownloadUrl = apkAsset?.browserDownloadUrl,
+                releasePageUrl = release.htmlUrl
+            )
+        }
+    }
 }

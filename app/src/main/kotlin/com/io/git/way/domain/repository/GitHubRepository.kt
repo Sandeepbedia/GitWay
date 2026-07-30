@@ -1,5 +1,6 @@
 package com.io.git.way.domain.repository
 
+import com.io.git.way.domain.model.AppUpdateInfo
 import com.io.git.way.domain.model.FileChange
 import com.io.git.way.domain.model.GitRepository
 import com.io.git.way.domain.model.GitUser
@@ -58,4 +59,17 @@ interface GitHubRepository {
      * repo tree — see [getRepositoryTree]). Powers the Repository Browser's read/edit view.
      */
     suspend fun getFileContent(repo: GitRepository, blobSha: String): Result<ByteArray>
+
+    /**
+     * Checks GitHub's latest release against [currentVersionName] and returns update
+     * info if a newer tagged release exists, or `null` if the app is already current
+     * (or the repo has no releases yet). Never throws for "no releases" (404) — that's
+     * treated as "no update", not a failure; only genuine network/parse errors surface
+     * as [Result.failure].
+     */
+    suspend fun checkForUpdate(
+        owner: String,
+        repo: String,
+        currentVersionName: String
+    ): Result<AppUpdateInfo?>
 }

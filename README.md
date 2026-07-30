@@ -9,6 +9,8 @@
 [![Kotlin](https://img.shields.io/badge/Kotlin-100%25-8B5CF6?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose-6D28D9?style=flat-square)](https://developer.android.com/jetpack/compose)
 [![Min SDK](https://img.shields.io/badge/Min%20SDK-26%20(Android%208.0)-171923?style=flat-square)](#)
+[![Build check](https://github.com/Sandeepbedia/GitWay/actions/workflows/build-check.yml/badge.svg)](https://github.com/Sandeepbedia/GitWay/actions/workflows/build-check.yml)
+[![Latest release](https://img.shields.io/github/v/release/Sandeepbedia/GitWay?style=flat-square&color=8B5CF6&label=release)](https://github.com/Sandeepbedia/GitWay/releases/latest)
 [![License](https://img.shields.io/badge/License-Source--Available-A78BFA?style=flat-square)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-22C55E?style=flat-square)](CONTRIBUTING.md)
 
@@ -71,16 +73,24 @@ no laptop involved.
 ## Screenshots
 
 <!--
-  Add your screenshots here, e.g.:
-  <p align="center">
-    <img src="docs/screenshots/1-repositories.png" width="240" />
-    <img src="docs/screenshots/2-compare.png" width="240" />
-    <img src="docs/screenshots/3-upload.png" width="240" />
-  </p>
-  Drop image files into docs/screenshots/ and reference them above.
+  Don't edit this section by hand — it's auto-generated.
+  Drop numbered images (1.png, 2.png, 3.png, ... as many as you like, any
+  order) into docs/screenshots/, then run:
+    python3 docs/generate_screenshots.py
+  and this section will rebuild itself as a 2-column table.
 -->
-
-_Screenshots coming soon._
+<!-- SCREENSHOTS:START -->
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/1.png" width="100%" /></td>
+    <td width="50%"><img src="docs/screenshots/2.png" width="100%" /></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/3.png" width="100%" /></td>
+    <td width="50%"><img src="docs/screenshots/4.png" width="100%" /></td>
+  </tr>
+</table>
+<!-- SCREENSHOTS:END -->
 
 ## Tech stack
 
@@ -158,9 +168,16 @@ Git_Way/
 │       ├── res/                          # Standard Android resources
 │       └── AndroidManifest.xml
 │
+├── .github/
+│   └── workflows/
+│       ├── release.yml                   # Tag push -> build APK -> publish GitHub Release
+│       └── build-check.yml               # Compile check on every push/PR
+│
 ├── docs/
 │   ├── banner.png                        # This README's banner
-│   └── screenshots/                      # Drop your app screenshots here
+│   ├── generate_screenshots.py           # Rebuilds the Screenshots section above
+│   ├── RELEASING.md                      # How to cut a new release
+│   └── screenshots/                      # Drop 1.png, 2.png, 3.png, ... here
 │
 ├── gradle/                               # Version catalog + wrapper
 ├── build.gradle.kts
@@ -193,8 +210,8 @@ Git_Way/
 ## Getting started
 
 ```bash
-git clone https://github.com/<your-fork>/Git_Way.git
-cd Git_Way
+git clone https://github.com/Sandeepbedia/GitWay.git
+cd GitWay
 cp keystore.properties.example keystore.properties
 ```
 
@@ -203,6 +220,15 @@ configuration on a device or emulator (API 26+). No backend, API keys, or `.env`
 setup needed — Git Way talks to `api.github.com` directly using a GitHub
 [Personal Access Token](https://github.com/settings/tokens) you paste in at
 runtime.
+
+## Releases & updates
+
+Tagged pushes (`v1.0`, `v1.1`, ...) are built and published automatically by
+[`.github/workflows/release.yml`](.github/workflows/release.yml) — see
+[`docs/RELEASING.md`](docs/RELEASING.md) for the full process. The app itself
+checks the [latest release](https://github.com/Sandeepbedia/GitWay/releases/latest)
+on launch and shows an in-app **Update available** dialog when a newer version has
+been published — no manual "check for updates" needed.
 
 ## Contributing
 

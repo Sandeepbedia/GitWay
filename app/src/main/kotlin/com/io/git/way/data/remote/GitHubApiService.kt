@@ -11,6 +11,7 @@ import com.io.git.way.data.remote.dto.GitBlobRefDto
 import com.io.git.way.data.remote.dto.GitCommitDetailDto
 import com.io.git.way.data.remote.dto.GitCommitRefDto
 import com.io.git.way.data.remote.dto.GitHubRepoDto
+import com.io.git.way.data.remote.dto.GitHubReleaseDto
 import com.io.git.way.data.remote.dto.GitHubUserDto
 import com.io.git.way.data.remote.dto.GitRefDto
 import com.io.git.way.data.remote.dto.GitTreeRefDto
@@ -130,4 +131,14 @@ interface GitHubApiService {
         @Path("repo") repo: String,
         @Path("sha") sha: String
     ): GitBlobContentDto
+
+    /** Latest published (non-draft, non-prerelease) release — powers the in-app update
+     * checker. Public endpoint: works with or without an auth token. 404s if the repo
+     * has no releases yet, which the caller treats as "no update available" rather
+     * than an error. */
+    @GET("repos/{owner}/{repo}/releases/latest")
+    suspend fun getLatestRelease(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String
+    ): GitHubReleaseDto
 }
