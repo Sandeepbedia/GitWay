@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.io.git.way.data.local.AndroidProjectInspector
 import com.io.git.way.data.local.AppIdentityDetector
 import com.io.git.way.data.local.FolderScanner
 import com.io.git.way.data.local.IgnoreListManager
@@ -17,8 +18,11 @@ import com.io.git.way.domain.ComparisonEngine
 import com.io.git.way.domain.CommitMessageBuilder
 import com.io.git.way.domain.WorkflowTemplate
 import com.io.git.way.domain.WorkflowTemplates
+import com.io.git.way.domain.model.AndroidProjectInfo
 import com.io.git.way.domain.model.AppIdentity
 import com.io.git.way.domain.model.BrowserEntry
+import com.io.git.way.domain.model.BrowserSortMode
+import com.io.git.way.domain.model.BrowserTypeFilter
 import com.io.git.way.domain.model.ChangeType
 import com.io.git.way.domain.model.FileChange
 import com.io.git.way.domain.model.GitRepository
@@ -33,6 +37,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.IOException
 
 data class GitWaySessionState(
     val selectedRepo: GitRepository? = null,
@@ -104,10 +109,33 @@ data class GitWaySessionState(
     val isBrowserLoading: Boolean = false,
     val browserError: String? = null,
     val remoteTreeCache: Map<String, String> = emptyMap(),
+    /** File sizes for the currently loaded repo tree, keyed by path — populated
+     * alongside [remoteTreeCache] for the Explorer's metadata subtitle (PRD §7). Not
+     * every entry is guaranteed a size (GitHub can omit it), so this is best-effort. */
+    val remoteFileSizes: Map<String, Long> = emptyMap(),
+    /** Bytes for paths written THIS session (create/rename/duplicate/edit) whose real blob
+     * sha isn't known yet — [remoteTreeCache] holds a "" placeholder for them until the next
+     * full reload. Consulted before falling back to a sha-based GitHub fetch so those files
+     * can immediately be opened, renamed, or duplicated again without a "try reloading" error. */
+    val pendingFileBytes: Map<String, ByteArray> = emptyMap(),
     val isCreatingEntry: Boolean = false,
     val createEntryError: String? = null,
     val isDeletingEntry: Boolean = false,
     val deleteEntryError: String? = null,
+
+    /** PRD "Repository Explorer" §19 Sort/View. */
+    val browserSortMode: BrowserSortMode = BrowserSortMode.NAME_ASC,
+    val browserTypeFilter: BrowserTypeFilter = BrowserTypeFilter.ALL,
+
+    val isRenamingEntry: Boolean = false,
+    val renameError: String? = null,
+    val isDuplicatingEntry: Boolean = false,
+    val duplicateError: String? = null,
+
+    /** §16 Android Project Intelligence — best-effort summary card at the root of the
+     * Explorer, detected from the repo's own build files. Null until detected, and stays
+     * null (no card shown) for a non-Android repository. */
+    val androidProjectInfo: AndroidProjectInfo? = null,
 
     /** Manual-opt-in "add a CI workflow" suggestion (PRD: "CI Workflow Suggestions") — the
      * banner is shown whenever the loaded repo tree has nothing under `.github/workflows/`
@@ -125,9 +153,15 @@ data class GitWaySessionState(
     val isPasting: Boolean = false,
     val pasteError: String? = null,
 
-    /** Read/edit viewer for a single file, opened by tapping it outside select mode. */
+    /** Read/edit viewer for a single file, opened by tapping it outside select mode.
+     * Exactly one of [viewingContent] / [viewingImageBytes] is set once loading finishes
+     * — text files decode to [viewingContent], recognised image formats stay as raw
+     * bytes in [viewingImageBytes] for actual on-screen preview instead of a "binary
+     * file" message. Anything else (that isn't valid UTF-8 and isn't an image) leaves
+     * both null with [viewerError] explaining there's nothing to preview. */
     val viewingFile: BrowserEntry? = null,
     val viewingContent: String? = null,
+    val viewingImageBytes: ByteArray? = null,
     val isLoadingContent: Boolean = false,
     val viewerError: String? = null,
     val isEditingFile: Boolean = false,
@@ -561,10 +595,15 @@ class GitWaySessionViewModel(
                         commitMessageDraft = ""
                     )
                 }.onFailure { throwable ->
+                    // Deliberately NOT resetting uploadPhase to IDLE here: the phase it
+                    // was in when this failed (e.g. "Updating branch") is exactly what
+                    // tells the user how far it got before dying — resetting it made the
+                    // failure screen show "Starting..." next to "16/16 files", which
+                    // reads as if nothing happened when really everything up to that
+                    // stage had already succeeded.
                     state = state.copy(
                         isUploading = false,
-                        uploadError = throwable.message ?: "Upload failed.",
-                        uploadPhase = UploadPhase.IDLE
+                        uploadError = throwable.message ?: "Upload failed."
                     )
                 }
             } catch (e: CancellationException) {
@@ -598,13 +637,18 @@ class GitWaySessionViewModel(
         val repo = state.selectedRepo ?: return
         state = state.copy(isBrowserLoading = true, browserError = null)
         viewModelScope.launch {
-            gitHubRepository.getRepositoryTree(repo)
-                .onSuccess { tree ->
+            gitHubRepository.getRepositoryTreeDetailed(repo)
+                .onSuccess { detailed ->
+                    val tree = detailed.mapValues { it.value.sha }
+                    val sizes = detailed.mapNotNull { (path, entry) -> entry.size?.let { path to it } }.toMap()
                     state = state.copy(
                         isBrowserLoading = false,
                         remoteTreeCache = tree,
+                        remoteFileSizes = sizes,
+                        androidProjectInfo = null,
                         browserEntries = buildVisibleRows(tree.keys, state.expandedFolders)
                     )
+                    detectAndroidProjectInfo(repo, tree)
                 }
                 .onFailure { throwable ->
                     state = state.copy(
@@ -612,6 +656,244 @@ class GitWaySessionViewModel(
                         browserError = throwable.message ?: "Couldn't load repository files."
                     )
                 }
+        }
+    }
+
+    /** §16 Android Project Intelligence: reuses [AppIdentityDetector] for the package,
+     * then separately inspects the same gradle file for SDK versions. Runs after
+     * [loadBrowserRoot] and updates the card in place — never blocks the tree itself
+     * from showing, and silently leaves [GitWaySessionState.androidProjectInfo] null if
+     * nothing recognisable is found (non-Android repos, unusual build setups). */
+    private fun detectAndroidProjectInfo(repo: GitRepository, tree: Map<String, String>) {
+        if (tree.isEmpty()) return
+        viewModelScope.launch {
+            val identity = runCatching {
+                AppIdentityDetector.detectRemote(tree) { sha -> gitHubRepository.getFileContent(repo, sha).getOrNull() }
+            }.getOrNull() ?: return@launch
+
+            val gradlePath = tree.keys.filter { it.endsWith("build.gradle") || it.endsWith("build.gradle.kts") }
+                .minByOrNull { it.count { c -> c == '/' } }
+            val sdkVersions = gradlePath?.let { path ->
+                val sha = tree[path] ?: return@let null
+                val bytes = gitHubRepository.getFileContent(repo, sha).getOrNull() ?: return@let null
+                val text = runCatching { bytes.toString(Charsets.UTF_8) }.getOrNull() ?: return@let null
+                AndroidProjectInspector.inspect(text)
+            }
+
+            state = state.copy(
+                androidProjectInfo = AndroidProjectInfo(
+                    packageName = identity.packageName,
+                    minSdk = sdkVersions?.minSdk,
+                    targetSdk = sdkVersions?.targetSdk,
+                    compileSdk = sdkVersions?.compileSdk
+                )
+            )
+        }
+    }
+
+    fun setBrowserSortMode(mode: BrowserSortMode) {
+        state = state.copy(
+            browserSortMode = mode,
+            browserEntries = buildVisibleRows(state.remoteTreeCache.keys, state.expandedFolders)
+        )
+    }
+
+    fun setBrowserTypeFilter(filter: BrowserTypeFilter) {
+        state = state.copy(
+            browserTypeFilter = filter,
+            browserEntries = buildVisibleRows(state.remoteTreeCache.keys, state.expandedFolders)
+        )
+    }
+
+    fun clearRenameError() {
+        state = state.copy(renameError = null)
+    }
+
+    /** Renames a file or an entire folder (every path under it) as one commit — read the
+     * old content(s) by blob sha, write them at the new path(s), delete the old path(s). */
+    /** Resolves a repo file's current bytes: prefers [GitWaySessionState.pendingFileBytes]
+     * (content this session already wrote for [path], whose real sha isn't known yet), and
+     * only falls back to a sha-based GitHub fetch for paths that came from the last full
+     * tree load. This is what lets rename/duplicate/open work immediately on something you
+     * just created, renamed, or edited, instead of demanding a reload first. */
+    private suspend fun resolveBytes(repo: GitRepository, path: String): Result<ByteArray> {
+        state.pendingFileBytes[path]?.let { return Result.success(it) }
+        val sha = state.remoteTreeCache[path]
+        if (sha.isNullOrBlank()) {
+            return Result.failure(IOException("Couldn't read \"$path\" — try reloading."))
+        }
+        return gitHubRepository.getFileContent(repo, sha)
+    }
+
+    fun renameEntry(entry: BrowserEntry, newName: String) {
+        val repo = state.selectedRepo ?: return
+        val trimmed = newName.trim()
+        val currentName = entry.path.substringAfterLast("/")
+        if (trimmed.isBlank() || trimmed == currentName || state.isRenamingEntry) return
+
+        val parent = entry.path.substringBeforeLast("/", "")
+        val newPath = if (parent.isEmpty()) trimmed else "$parent/$trimmed"
+        val oldPrefix = if (entry.isFolder) "${entry.path}/" else null
+
+        val siblingNames = state.remoteTreeCache.keys
+            .filter { it.substringBeforeLast("/", "") == parent }
+            .map { it.substringAfterLast("/") }
+        if (trimmed in siblingNames) {
+            state = state.copy(renameError = "\"$trimmed\" already exists here.")
+            return
+        }
+
+        val affectedPaths = if (entry.isFolder) {
+            state.remoteTreeCache.keys.filter { it == entry.path || it.startsWith("${entry.path}/") }
+        } else {
+            listOf(entry.path)
+        }
+        if (affectedPaths.isEmpty()) return
+
+        state = state.copy(isRenamingEntry = true, renameError = null)
+        viewModelScope.launch {
+            val byteCache = mutableMapOf<String, ByteArray>()
+            val destinationOf = mutableMapOf<String, String>()
+            for (path in affectedPaths) {
+                val bytes = resolveBytes(repo, path).getOrElse {
+                    state = state.copy(isRenamingEntry = false, renameError = it.message ?: "Couldn't read \"$path\".")
+                    return@launch
+                }
+                val dest = if (oldPrefix != null) newPath + "/" + path.removePrefix(oldPrefix) else newPath
+                byteCache[dest] = bytes
+                destinationOf[path] = dest
+            }
+
+            val changes = affectedPaths.map { path ->
+                FileChange(fileName = path.substringAfterLast('/'), filePath = path, type = ChangeType.REMOVED)
+            } + destinationOf.values.map { dest ->
+                FileChange(fileName = dest.substringAfterLast('/'), filePath = dest, type = ChangeType.ADDED)
+            }
+
+            gitHubRepository.syncChanges(
+                repo = repo,
+                changes = changes,
+                commitMessage = "Git Way: rename ${entry.path} to $newPath",
+                readFileBytes = { path -> byteCache.getValue(path) },
+                onProgress = { _, _, _, _ -> }
+            ).onSuccess {
+                val updatedTree = (state.remoteTreeCache - affectedPaths.toSet()) + byteCache.keys.associateWith { "" }
+                val updatedPendingBytes = (state.pendingFileBytes - affectedPaths.toSet()) + byteCache
+                val expandedFolders = state.expandedFolders - affectedPaths.toSet() + (if (entry.isFolder) setOf(newPath) else emptySet())
+                state = state.copy(
+                    isRenamingEntry = false,
+                    remoteTreeCache = updatedTree,
+                    pendingFileBytes = updatedPendingBytes,
+                    expandedFolders = expandedFolders,
+                    browserEntries = buildVisibleRows(updatedTree.keys, expandedFolders)
+                )
+            }.onFailure { throwable ->
+                state = state.copy(isRenamingEntry = false, renameError = throwable.message ?: "Couldn't rename.")
+            }
+        }
+    }
+
+    fun clearDuplicateError() {
+        state = state.copy(duplicateError = null)
+    }
+
+    /** Duplicates a single file in the same folder with an auto-generated "(copy)" name
+     * — same one-commit pattern as [pasteClipboardHere], just source == destination folder. */
+    fun duplicateEntry(entry: BrowserEntry) {
+        val repo = state.selectedRepo ?: return
+        if (entry.isFolder || state.isDuplicatingEntry) return
+
+        val parent = entry.path.substringBeforeLast("/", "")
+        val siblingNames = state.remoteTreeCache.keys
+            .filter { it.substringBeforeLast("/", "") == parent }
+            .map { it.substringAfterLast("/") }
+            .toSet()
+        val newName = uniqueFileName(entry.name, siblingNames)
+        val newPath = if (parent.isEmpty()) newName else "$parent/$newName"
+
+        state = state.copy(isDuplicatingEntry = true, duplicateError = null)
+        viewModelScope.launch {
+            val bytes = resolveBytes(repo, entry.path).getOrElse {
+                state = state.copy(isDuplicatingEntry = false, duplicateError = it.message ?: "Couldn't read \"${entry.name}\".")
+                return@launch
+            }
+            gitHubRepository.syncChanges(
+                repo = repo,
+                changes = listOf(FileChange(fileName = newName, filePath = newPath, type = ChangeType.ADDED)),
+                commitMessage = "Git Way: duplicate ${entry.path} to $newPath",
+                readFileBytes = { bytes },
+                onProgress = { _, _, _, _ -> }
+            ).onSuccess {
+                val updatedTree = state.remoteTreeCache + (newPath to "")
+                state = state.copy(
+                    isDuplicatingEntry = false,
+                    remoteTreeCache = updatedTree,
+                    pendingFileBytes = state.pendingFileBytes + (newPath to bytes),
+                    browserEntries = buildVisibleRows(updatedTree.keys, state.expandedFolders)
+                )
+            }.onFailure { throwable ->
+                state = state.copy(isDuplicatingEntry = false, duplicateError = throwable.message ?: "Couldn't duplicate.")
+            }
+        }
+    }
+
+    /** PRD §18 multi-select toolbar "Add to .gitignore": appends every selected path to
+     * the repo's root .gitignore (creating it if it doesn't exist yet) as one commit —
+     * doesn't remove the files themselves, just stops them being tracked going forward. */
+    fun addSelectedToGitignore() {
+        val repo = state.selectedRepo ?: return
+        val paths = state.selectedBrowserPaths
+        if (paths.isEmpty() || state.isCreatingEntry) return
+
+        state = state.copy(isCreatingEntry = true, createEntryError = null)
+        viewModelScope.launch {
+            val existingSha = state.remoteTreeCache[".gitignore"]
+            val existingText = if (existingSha != null) {
+                resolveBytes(repo, ".gitignore").getOrNull()?.let {
+                    runCatching { it.toString(Charsets.UTF_8) }.getOrNull()
+                }
+            } else {
+                null
+            }.orEmpty()
+
+            val existingLines = existingText.lines().map { it.trim() }.toSet()
+            val newLines = paths.filter { it !in existingLines }
+            if (newLines.isEmpty()) {
+                state = state.copy(isCreatingEntry = false, selectedBrowserPaths = emptySet())
+                return@launch
+            }
+
+            val updatedText = buildString {
+                append(existingText)
+                if (existingText.isNotEmpty() && !existingText.endsWith("\n")) append("\n")
+                newLines.forEach { appendLine(it) }
+            }
+            val bytes = updatedText.toByteArray(Charsets.UTF_8)
+
+            gitHubRepository.syncChanges(
+                repo = repo,
+                changes = listOf(
+                    FileChange(
+                        fileName = ".gitignore",
+                        filePath = ".gitignore",
+                        type = if (existingSha != null) ChangeType.MODIFIED else ChangeType.ADDED
+                    )
+                ),
+                commitMessage = "Git Way: add ${newLines.size} path(s) to .gitignore",
+                readFileBytes = { bytes },
+                onProgress = { _, _, _, _ -> }
+            ).onSuccess {
+                val updatedTree = state.remoteTreeCache + (".gitignore" to "")
+                state = state.copy(
+                    isCreatingEntry = false,
+                    remoteTreeCache = updatedTree,
+                    pendingFileBytes = state.pendingFileBytes + (".gitignore" to bytes),
+                    selectedBrowserPaths = emptySet(),
+                    browserEntries = buildVisibleRows(updatedTree.keys, state.expandedFolders)
+                )
+            }.onFailure { throwable ->
+                state = state.copy(isCreatingEntry = false, createEntryError = throwable.message ?: "Couldn't update .gitignore.")
+            }
         }
     }
 
@@ -627,6 +909,13 @@ class GitWaySessionViewModel(
             browserPath = entry.path,
             browserEntries = buildVisibleRows(state.remoteTreeCache.keys, newExpanded)
         )
+    }
+
+    /** Sets which folder "New file"/"New folder"/"Paste" target next, without touching
+     * expansion state — used by a row's inline quick-action icons so tapping "+file" on
+     * a folder doesn't also collapse/expand it. */
+    fun setCreateTarget(path: String) {
+        state = state.copy(browserPath = path)
     }
 
     fun clearCreateEntryError() {
@@ -663,6 +952,7 @@ class GitWaySessionViewModel(
                 state = state.copy(
                     isCreatingEntry = false,
                     remoteTreeCache = updatedTree,
+                    pendingFileBytes = state.pendingFileBytes + (fullPath to bytes),
                     expandedFolders = expanded,
                     browserEntries = buildVisibleRows(updatedTree.keys, expanded)
                 )
@@ -703,6 +993,7 @@ class GitWaySessionViewModel(
                 state = state.copy(
                     isCreatingEntry = false,
                     remoteTreeCache = updatedTree,
+                    pendingFileBytes = state.pendingFileBytes + (placeholderPath to ByteArray(0)),
                     expandedFolders = expanded,
                     browserEntries = buildVisibleRows(updatedTree.keys, expanded)
                 )
@@ -753,6 +1044,7 @@ class GitWaySessionViewModel(
                     isAddingWorkflows = false,
                     workflowSuggestionDismissed = true,
                     remoteTreeCache = updatedTree,
+                    pendingFileBytes = state.pendingFileBytes + bytesByPath,
                     expandedFolders = expandedWithGithub,
                     browserEntries = buildVisibleRows(updatedTree.keys, expandedWithGithub)
                 )
@@ -806,6 +1098,7 @@ class GitWaySessionViewModel(
                 state = state.copy(
                     isDeletingEntry = false,
                     remoteTreeCache = updatedTree,
+                    pendingFileBytes = state.pendingFileBytes - pathSet,
                     expandedFolders = updatedExpanded,
                     selectedBrowserPaths = state.selectedBrowserPaths - pathSet,
                     browserEntries = buildVisibleRows(updatedTree.keys, updatedExpanded)
@@ -869,12 +1162,7 @@ class GitWaySessionViewModel(
 
                 val byteCache = mutableMapOf<String, ByteArray>()
                 for ((entry, destPath) in destinations) {
-                    val sha = state.remoteTreeCache[entry.path]
-                    if (sha.isNullOrBlank()) {
-                        state = state.copy(isPasting = false, pasteError = "Couldn't read \"${entry.name}\" — try reloading.")
-                        return@launch
-                    }
-                    val bytes = gitHubRepository.getFileContent(repo, sha).getOrElse {
+                    val bytes = resolveBytes(repo, entry.path).getOrElse {
                         state = state.copy(isPasting = false, pasteError = it.message ?: "Couldn't read \"${entry.name}\".")
                         return@launch
                     }
@@ -902,6 +1190,7 @@ class GitWaySessionViewModel(
                         isPasting = false,
                         clipboard = emptyList(),
                         remoteTreeCache = updatedTree,
+                        pendingFileBytes = state.pendingFileBytes + byteCache,
                         expandedFolders = expanded,
                         browserEntries = buildVisibleRows(updatedTree.keys, expanded)
                     )
@@ -933,28 +1222,28 @@ class GitWaySessionViewModel(
     fun openFile(entry: BrowserEntry) {
         val repo = state.selectedRepo ?: return
         if (entry.isFolder) return
-        val sha = state.remoteTreeCache[entry.path]
         state = state.copy(
             viewingFile = entry,
             viewingContent = null,
+            viewingImageBytes = null,
             isLoadingContent = true,
             viewerError = null,
             isEditingFile = false,
             saveFileError = null
         )
-        if (sha.isNullOrBlank()) {
-            state = state.copy(isLoadingContent = false, viewerError = "Couldn't locate this file's content.")
-            return
-        }
         viewModelScope.launch {
-            gitHubRepository.getFileContent(repo, sha)
+            resolveBytes(repo, entry.path)
                 .onSuccess { bytes ->
-                    val text = runCatching { bytes.toString(Charsets.UTF_8) }.getOrNull()
-                    state = state.copy(
-                        isLoadingContent = false,
-                        viewingContent = text,
-                        viewerError = if (text == null) "This looks like a binary file — preview isn't available." else null
-                    )
+                    if (FileTypeIcons.isImage(entry.name)) {
+                        state = state.copy(isLoadingContent = false, viewingImageBytes = bytes, viewerError = null)
+                    } else {
+                        val text = runCatching { bytes.toString(Charsets.UTF_8) }.getOrNull()
+                        state = state.copy(
+                            isLoadingContent = false,
+                            viewingContent = text,
+                            viewerError = if (text == null) "This looks like a binary file — preview isn't available." else null
+                        )
+                    }
                 }
                 .onFailure { throwable ->
                     state = state.copy(isLoadingContent = false, viewerError = throwable.message ?: "Couldn't load this file.")
@@ -966,6 +1255,7 @@ class GitWaySessionViewModel(
         state = state.copy(
             viewingFile = null,
             viewingContent = null,
+            viewingImageBytes = null,
             isLoadingContent = false,
             viewerError = null,
             isEditingFile = false,
@@ -1003,7 +1293,8 @@ class GitWaySessionViewModel(
                 state = state.copy(
                     isSavingFile = false,
                     isEditingFile = false,
-                    viewingContent = newContent
+                    viewingContent = newContent,
+                    pendingFileBytes = state.pendingFileBytes + (entry.path to bytes)
                 )
             }.onFailure { throwable ->
                 state = state.copy(isSavingFile = false, saveFileError = throwable.message ?: "Couldn't save changes.")
@@ -1011,7 +1302,10 @@ class GitWaySessionViewModel(
         }
     }
 
-    /** Computes the immediate children of [currentPath] from a flat set of full repo paths. */
+    /** Computes the immediate children of [currentPath] from a flat set of full repo paths,
+     * ordered by [GitWaySessionState.browserSortMode] and narrowed by
+     * [GitWaySessionState.browserTypeFilter] (folders are always shown regardless of the
+     * active filter, so the tree stays navigable to reach a filtered file deeper down). */
     private fun childrenOf(paths: Set<String>, currentPath: String): List<BrowserEntry> {
         val prefix = if (currentPath.isEmpty()) "" else "$currentPath/"
         val seen = linkedSetOf<String>()
@@ -1023,28 +1317,86 @@ class GitWaySessionViewModel(
             val firstSegment = remainder.substringBefore("/")
             val isFolder = remainder.contains("/")
             if (!isFolder && firstSegment == ".gitkeep") continue // hide folder placeholder files
+            if (!isFolder && !matchesTypeFilter(firstSegment, state.browserTypeFilter)) continue
             val fullPath = prefix + firstSegment
             if (seen.add(fullPath)) {
                 entries += BrowserEntry(name = firstSegment, path = fullPath, isFolder = isFolder)
             }
         }
-        return entries.sortedWith(compareBy({ !it.isFolder }, { it.name.lowercase() }))
+        val comparator = when (state.browserSortMode) {
+            BrowserSortMode.NAME_ASC -> compareBy<BrowserEntry> { it.name.lowercase() }
+            BrowserSortMode.NAME_DESC -> compareByDescending<BrowserEntry> { it.name.lowercase() }
+            BrowserSortMode.TYPE -> compareBy<BrowserEntry>({ it.name.substringAfterLast('.', "") }, { it.name.lowercase() })
+        }
+        return entries.sortedWith(compareBy<BrowserEntry> { !it.isFolder }.then(comparator))
+    }
+
+    private fun matchesTypeFilter(fileName: String, filter: BrowserTypeFilter): Boolean {
+        if (filter == BrowserTypeFilter.ALL) return true
+        val ext = fileName.substringAfterLast('.', "").lowercase()
+        return when (filter) {
+            BrowserTypeFilter.KOTLIN -> ext in setOf("kt", "kts")
+            BrowserTypeFilter.XML -> ext == "xml"
+            BrowserTypeFilter.GRADLE -> fileName.endsWith("build.gradle") || fileName.endsWith("build.gradle.kts") ||
+                fileName == "settings.gradle.kts" || fileName == "settings.gradle" || ext == "properties"
+            BrowserTypeFilter.IMAGES -> FileTypeIcons.isImage(fileName)
+            BrowserTypeFilter.OTHER -> ext !in setOf(
+                "kt", "kts", "xml", "properties", "png", "jpg", "jpeg", "webp", "gif", "svg", "bmp"
+            ) && !fileName.endsWith("build.gradle") && !fileName.endsWith("build.gradle.kts")
+            BrowserTypeFilter.ALL -> true
+        }
     }
 
     /** Flattens the tree into indentation-ready rows (VS Code Explorer style): every
      * folder always appears, its children are spliced in right after it only while its
      * path is in [expanded]. Rebuilt on every tree/expansion change — cheap enough for
-     * the file counts a mobile repo browser deals with. */
+     * the file counts a mobile repo browser deals with.
+     *
+     * Single-child folder chains (a folder with exactly one subfolder and nothing else,
+     * repeated — e.g. "kotlin/com/io/git/way") compact into ONE row showing the joined
+     * path, same as Android Studio's package view. [TreeRow.entry.path] stays the real,
+     * deepest folder in the chain, so expand/rename/create-target/delete all keep working
+     * against an actual path unchanged. A folder that has more than one child, or a file
+     * alongside its one subfolder — like "main" (kotlin/ + res/ + AndroidManifest.xml) —
+     * is never part of a chain and always gets its own expandable row. */
     private fun buildVisibleRows(paths: Set<String>, expanded: Set<String>): List<TreeRow> {
         val rows = mutableListOf<TreeRow>()
-        fun walk(currentPath: String, depth: Int) {
-            childrenOf(paths, currentPath).forEach { entry ->
-                val isExpanded = entry.isFolder && entry.path in expanded
-                rows += TreeRow(entry = entry, depth = depth, isExpanded = isExpanded)
-                if (isExpanded) walk(entry.path, depth + 1)
+        fun walk(currentPath: String, depth: Int, ancestorsContinue: List<Boolean>) {
+            val children = childrenOf(paths, currentPath)
+            children.forEachIndexed { index, entry ->
+                val meContinues = index != children.lastIndex
+                val myAncestorLines = ancestorsContinue + meContinues
+
+                if (!entry.isFolder) {
+                    rows += TreeRow(entry = entry, depth = depth, ancestorLines = myAncestorLines)
+                    return@forEachIndexed
+                }
+
+                val chainNames = mutableListOf(entry.name)
+                var tailPath = entry.path
+                while (true) {
+                    val kids = childrenOf(paths, tailPath)
+                    if (kids.size == 1 && kids[0].isFolder) {
+                        tailPath = kids[0].path
+                        chainNames += kids[0].name
+                    } else {
+                        break
+                    }
+                }
+
+                val isExpanded = tailPath in expanded
+                val childCount = childrenOf(paths, tailPath).size
+                rows += TreeRow(
+                    entry = BrowserEntry(name = chainNames.joinToString("/"), path = tailPath, isFolder = true),
+                    depth = depth,
+                    isExpanded = isExpanded,
+                    directChildCount = childCount,
+                    ancestorLines = myAncestorLines
+                )
+                if (isExpanded) walk(tailPath, depth + 1, myAncestorLines)
             }
         }
-        walk("", 0)
+        walk("", 0, emptyList())
         return rows
     }
 }

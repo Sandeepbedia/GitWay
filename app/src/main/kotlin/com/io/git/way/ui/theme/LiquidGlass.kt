@@ -138,6 +138,7 @@ fun LiquidGlassBackground(
 @Composable
 fun GlassScaffold(
     title: String,
+    subtitle: String? = null,
     navigationIcon: @Composable () -> Unit = {},
     actions: @Composable RowScope.() -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
@@ -153,7 +154,14 @@ fun GlassScaffold(
             contentWindowInsets = WindowInsets.navigationBars.only(WindowInsetsSides.Bottom),
             topBar = {
                 TopAppBar(
-                    title = { Text(title, fontWeight = FontWeight.SemiBold, color = titleColor) },
+                    title = {
+                        Column {
+                            Text(title, fontWeight = FontWeight.SemiBold, color = titleColor)
+                            if (subtitle != null) {
+                                Text(subtitle, style = MaterialTheme.typography.labelSmall, color = titleColor.copy(alpha = 0.7f))
+                            }
+                        }
+                    },
                     navigationIcon = navigationIcon,
                     actions = actions,
                     colors = TopAppBarDefaults.topAppBarColors(

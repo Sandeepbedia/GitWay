@@ -1,14 +1,24 @@
 package com.io.git.way.ui.common
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,6 +33,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
@@ -78,17 +89,55 @@ private sealed class MdBlock {
     data class Heading(val level: Int, val text: String) : MdBlock()
     data class Paragraph(val text: String) : MdBlock()
     data class CodeBlock(val code: String) : MdBlock()
-    data class ListItem(val text: String, val ordered: Boolean, val number: Int) : MdBlock()
+    data class ListItem(
+        val text: String,
+        val ordered: Boolean,
+        val number: Int,
+        val indent: Int = 0,
+        /** null = plain bullet, otherwise a GFM task-list checkbox ("- [ ]" / "- [x]"). */
+        val checked: Boolean? = null
+    ) : MdBlock()
     data class Quote(val text: String) : MdBlock()
     data class ImageBlock(val alt: String, val url: String) : MdBlock()
+    data class Table(val header: List<String>, val alignments: List<TableAlign>, val rows: List<List<String>>) : MdBlock()
     data object Rule : MdBlock()
 }
+
+private enum class TableAlign { LEFT, CENTER, RIGHT }
 
 private object MarkdownParser {
     private val imageOnlyLine = Regex("""^!\[([^]]*)]\(([^)]+)\)\s*$""")
     private val headingLine = Regex("""^#{1,6}\s+.*""")
     private val ruleLine = Regex("""^(-{3,}|\*{3,}|_{3,})$""")
     private val orderedItem = Regex("""^\d+\.\s+.*""")
+    private val taskItem = Regex("""^[-*+]\s+\[([ xX])]\s+(.*)$""")
+    /** A GFM table separator row: `|---|:---:|---:|` (with optional leading/trailing `|`). */
+    private val tableSeparator = Regex("""^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?$""")
+    /** Strips block-level HTML tags GFM READMEs commonly use for layout
+     * (`<div align="center">`, `<p>`, `<br>`, `<details>/<summary>`, comments) — Git Way
+     * doesn't render real HTML, so these are dropped rather than shown as raw markup;
+     * their *text content* (e.g. inside `<summary>click me</summary>`) is kept. */
+    private val htmlTag = Regex("""</?[a-zA-Z][^>]*>""")
+    private val htmlComment = Regex("""<!--.*?-->""", RegexOption.DOT_MATCHES_ALL)
+
+    private fun stripHtml(line: String): String = line.replace(htmlComment, "").replace(htmlTag, "").trim()
+
+    private fun splitTableRow(line: String): List<String> {
+        var trimmed = line.trim().removePrefix("|").removeSuffix("|")
+        val cells = mutableListOf<String>()
+        val current = StringBuilder()
+        var i = 0
+        while (i < trimmed.length) {
+            val c = trimmed[i]
+            if (c == '\\' && i + 1 < trimmed.length && trimmed[i + 1] == '|') {
+                current.append('|'); i += 2; continue
+            }
+            if (c == '|') { cells += current.toString().trim(); current.clear() } else current.append(c)
+            i++
+        }
+        cells += current.toString().trim()
+        return cells
+    }
 
     fun parse(markdown: String): List<MdBlock> {
         val lines = markdown.replace("\r\n", "\n").split("\n")
@@ -96,10 +145,12 @@ private object MarkdownParser {
         var i = 0
         var orderedCounter = 0
 
+        fun bulletIndent(l: String): Int = (l.takeWhile { it == ' ' }.length) / 2
         fun isListLine(l: String) = l.trimStart().let { it.startsWith("- ") || it.startsWith("* ") || it.startsWith("+ ") }
 
         while (i < lines.size) {
-            val line = lines[i]
+            val rawLine = lines[i]
+            val line = if (rawLine.contains('<')) stripHtml(rawLine) else rawLine
             val trimmed = line.trim()
             when {
                 line.isBlank() -> { orderedCounter = 0; i++ }
@@ -137,14 +188,58 @@ private object MarkdownParser {
                     i++; orderedCounter = 0
                 }
 
+                // GFM table: a "| a | b |" row immediately followed by a "|---|---|" rule.
+                trimmed.startsWith("|") && i + 1 < lines.size && tableSeparator.matches(lines[i + 1].trim()) -> {
+                    val header = splitTableRow(trimmed)
+                    val alignCells = splitTableRow(lines[i + 1].trim())
+                    val alignments = header.indices.map { col ->
+                        val spec = alignCells.getOrNull(col)?.trim().orEmpty()
+                        when {
+                            spec.startsWith(":") && spec.endsWith(":") -> TableAlign.CENTER
+                            spec.endsWith(":") -> TableAlign.RIGHT
+                            else -> TableAlign.LEFT
+                        }
+                    }
+                    i += 2
+                    val rows = mutableListOf<List<String>>()
+                    while (i < lines.size && lines[i].trim().startsWith("|")) {
+                        rows += splitTableRow(lines[i].trim())
+                        i++
+                    }
+                    blocks += MdBlock.Table(header, alignments, rows)
+                    orderedCounter = 0
+                }
+
+                taskItem.matches(trimmed) -> {
+                    val m = taskItem.find(trimmed)!!
+                    blocks += MdBlock.ListItem(
+                        text = m.groupValues[2].trim(),
+                        ordered = false,
+                        number = 0,
+                        indent = bulletIndent(line),
+                        checked = m.groupValues[1].equals("x", ignoreCase = true)
+                    )
+                    i++
+                }
+
                 isListLine(line) -> {
-                    blocks += MdBlock.ListItem(line.trimStart().drop(2).trim(), ordered = false, number = 0)
+                    blocks += MdBlock.ListItem(
+                        text = line.trimStart().drop(2).trim(),
+                        ordered = false,
+                        number = 0,
+                        indent = bulletIndent(line)
+                    )
                     i++
                 }
 
                 orderedItem.matches(trimmed) -> {
                     orderedCounter++
-                    blocks += MdBlock.ListItem(trimmed.substringAfter(". ").trim(), ordered = true, number = orderedCounter)
+                    blocks += MdBlock.ListItem(
+                        text = trimmed.substringAfter(". ").trim(),
+                        ordered = true,
+                        number = orderedCounter,
+                        indent = bulletIndent(line)
+                    )
                     i++
                 }
 
@@ -155,11 +250,13 @@ private object MarkdownParser {
                         !lines[i].startsWith("```") &&
                         !headingLine.matches(lines[i].trim()) &&
                         !lines[i].trim().startsWith(">") &&
-                        !isListLine(lines[i])
+                        !isListLine(lines[i]) &&
+                        !taskItem.matches(lines[i].trim())
                     ) {
-                        paraLines += lines[i]; i++
+                        paraLines += (if (lines[i].contains('<')) stripHtml(lines[i]) else lines[i]); i++
                     }
-                    blocks += MdBlock.Paragraph(paraLines.joinToString(" ") { it.trim() }.trim())
+                    val paragraphText = paraLines.joinToString(" ") { it.trim() }.trim()
+                    if (paragraphText.isNotEmpty()) blocks += MdBlock.Paragraph(paragraphText)
                     orderedCounter = 0
                 }
             }
@@ -181,6 +278,13 @@ private fun inlineAnnotated(text: String, resolver: MarkdownLinkResolver, linkCo
                     i = end + 2
                 }
             }
+            text.startsWith("~~", i) -> {
+                val end = text.indexOf("~~", i + 2)
+                if (end == -1) { append(text[i]); i++ } else {
+                    withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) { append(text.substring(i + 2, end)) }
+                    i = end + 2
+                }
+            }
             text.startsWith("`", i) -> {
                 val end = text.indexOf("`", i + 1)
                 if (end == -1) { append(text[i]); i++ } else {
@@ -199,6 +303,34 @@ private fun inlineAnnotated(text: String, resolver: MarkdownLinkResolver, linkCo
                     withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append(text.substring(i + 1, end)) }
                     i = end + 1
                 }
+            }
+            // Inline image/badge — `![alt](img)`, optionally wrapped in a link:
+            // `[![alt](img)](href)`. Compose's plain AnnotatedString can't embed a real
+            // <img> inline, so this renders as clickable alt-text instead of leaking the
+            // raw markdown syntax onto the screen (badges are almost always short labels
+            // like "build passing", so the text alone stays meaningful).
+            text.startsWith("[![", i) -> {
+                val altClose = text.indexOf(']', i + 3)
+                val imgUrlClose = if (altClose != -1 && text.getOrNull(altClose + 1) == '(') text.indexOf(')', altClose) else -1
+                val linkClose = if (imgUrlClose != -1 && text.getOrNull(imgUrlClose + 1) == ']' && text.getOrNull(imgUrlClose + 2) == '(')
+                    text.indexOf(')', imgUrlClose + 2) else -1
+                if (altClose != -1 && imgUrlClose != -1 && linkClose != -1) {
+                    val alt = text.substring(i + 3, altClose).ifBlank { "badge" }
+                    val href = text.substring(imgUrlClose + 3, linkClose)
+                    withLink(LinkAnnotation.Url(resolver.resolveBlob(href))) {
+                        withStyle(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)) { append(alt) }
+                    }
+                    i = linkClose + 1
+                } else { append(text[i]); i++ }
+            }
+            text.startsWith("![", i) -> {
+                val altClose = text.indexOf(']', i + 2)
+                val urlClose = if (altClose != -1 && text.getOrNull(altClose + 1) == '(') text.indexOf(')', altClose) else -1
+                if (altClose != -1 && urlClose != -1) {
+                    val alt = text.substring(i + 2, altClose).ifBlank { "image" }
+                    withStyle(SpanStyle(fontStyle = FontStyle.Italic, color = linkColor)) { append(alt) }
+                    i = urlClose + 1
+                } else { append(text[i]); i++ }
             }
             text[i] == '[' -> {
                 val closeBracket = text.indexOf(']', i)
@@ -264,14 +396,29 @@ fun MarkdownView(markdown: String, resolver: MarkdownLinkResolver, modifier: Mod
                     )
                 }
 
-                is MdBlock.ListItem -> Row(modifier = Modifier.padding(start = 6.dp)) {
+                is MdBlock.ListItem -> Row(modifier = Modifier.padding(start = (6 + block.indent * 18).dp)) {
+                    when {
+                        block.checked != null -> Icon(
+                            if (block.checked) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank,
+                            contentDescription = null,
+                            tint = if (block.checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(end = 6.dp).size(18.dp)
+                        )
+                        else -> Text(
+                            text = if (block.ordered) "${block.number}." else if (block.indent > 0) "◦" else "•",
+                            modifier = Modifier.padding(end = 6.dp),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
                     Text(
-                        text = if (block.ordered) "${block.number}." else "•",
-                        modifier = Modifier.padding(end = 6.dp),
-                        style = MaterialTheme.typography.bodyMedium
+                        text = inlineAnnotated(block.text, resolver, linkColor),
+                        style = MaterialTheme.typography.bodyMedium,
+                        textDecoration = if (block.checked == true) TextDecoration.LineThrough else TextDecoration.None,
+                        color = if (block.checked == true) MaterialTheme.colorScheme.onSurfaceVariant else LocalContentColor.current
                     )
-                    Text(text = inlineAnnotated(block.text, resolver, linkColor), style = MaterialTheme.typography.bodyMedium)
                 }
+
+                is MdBlock.Table -> MarkdownTable(block, resolver, linkColor)
 
                 is MdBlock.Quote -> Box(
                     modifier = Modifier
@@ -294,6 +441,62 @@ fun MarkdownView(markdown: String, resolver: MarkdownLinkResolver, modifier: Mod
                 )
 
                 MdBlock.Rule -> HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+            }
+        }
+    }
+}
+
+/** GFM table, rendered close to how GitHub shows it: bordered cells, a bold/tinted
+ * header row, alternating row shading, and horizontal scroll for tables wider than the
+ * screen (very common for READMEs with many columns) instead of wrapping/squeezing text. */
+@Composable
+private fun MarkdownTable(table: MdBlock.Table, resolver: MarkdownLinkResolver, linkColor: Color) {
+    val borderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
+    val headerBg = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+    val stripeBg = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f)
+    val columnWidth = 160.dp
+
+    Column(
+        modifier = Modifier
+            .padding(vertical = 6.dp)
+            .border(1.dp, borderColor, RoundedCornerShape(6.dp))
+            .horizontalScroll(rememberScrollState())
+    ) {
+        Row(modifier = Modifier.background(headerBg)) {
+            table.header.forEachIndexed { col, cell ->
+                Text(
+                    text = inlineAnnotated(cell, resolver, linkColor),
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.bodySmall,
+                    textAlign = when (table.alignments.getOrNull(col)) {
+                        TableAlign.CENTER -> TextAlign.Center
+                        TableAlign.RIGHT -> TextAlign.End
+                        else -> TextAlign.Start
+                    },
+                    modifier = Modifier
+                        .width(columnWidth)
+                        .border(0.5.dp, borderColor)
+                        .padding(8.dp)
+                )
+            }
+        }
+        table.rows.forEachIndexed { rowIndex, row ->
+            Row(modifier = Modifier.background(if (rowIndex % 2 == 1) stripeBg else Color.Transparent)) {
+                table.header.indices.forEach { col ->
+                    Text(
+                        text = inlineAnnotated(row.getOrElse(col) { "" }, resolver, linkColor),
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = when (table.alignments.getOrNull(col)) {
+                            TableAlign.CENTER -> TextAlign.Center
+                            TableAlign.RIGHT -> TextAlign.End
+                            else -> TextAlign.Start
+                        },
+                        modifier = Modifier
+                            .width(columnWidth)
+                            .border(0.5.dp, borderColor)
+                            .padding(8.dp)
+                    )
+                }
             }
         }
     }

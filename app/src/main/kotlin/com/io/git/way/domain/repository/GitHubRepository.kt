@@ -4,6 +4,7 @@ import com.io.git.way.domain.model.AppUpdateInfo
 import com.io.git.way.domain.model.FileChange
 import com.io.git.way.domain.model.GitRepository
 import com.io.git.way.domain.model.GitUser
+import com.io.git.way.domain.model.RemoteTreeEntry
 import com.io.git.way.domain.model.UploadPhase
 
 /** Abstraction over GitHub authentication + repository access. */
@@ -21,6 +22,12 @@ interface GitHubRepository {
      * default branch has no commits yet (PRD1 §3.6 "empty/new default branch").
      */
     suspend fun getRepositoryTree(repo: GitRepository): Result<Map<String, String>>
+
+    /** Same tree as [getRepositoryTree] but also carries each blob's size — used by the
+     * Explorer's file-metadata display (PRD "Repository Explorer" §7). A thin wrapper
+     * over the same underlying call so callers that only need [getRepositoryTree]'s
+     * plain sha map don't pay for anything extra. */
+    suspend fun getRepositoryTreeDetailed(repo: GitRepository): Result<Map<String, RemoteTreeEntry>>
 
     /**
      * Re-checks [repo] directly against GitHub right before upload: still exists, token

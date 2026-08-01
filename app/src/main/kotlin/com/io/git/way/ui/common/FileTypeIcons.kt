@@ -27,12 +27,41 @@ object FileTypeIcons {
         "cs", "go", "rs", "rb", "php", "swift", "sh", "gradle"
     )
     private val dataExtensions = setOf("json", "xml", "yaml", "yml", "toml", "csv", "sql")
-    private val imageExtensions = setOf("png", "jpg", "jpeg", "webp", "svg", "bmp", "heic")
+
+    /** Every raster/vector image format Git Way recognises for icon/colour, the "Images"
+     * type filter, and the file-metadata label — one list so those three never drift out
+     * of sync with each other again. */
+    private val imageExtensions = setOf(
+        // Common raster formats
+        "png", "jpg", "jpeg", "jpe", "jfif", "webp", "bmp", "dib",
+        // Vector
+        "svg", "svgz",
+        // Apple / HEIF family
+        "heic", "heif",
+        // Next-gen web formats
+        "avif",
+        // TIFF
+        "tif", "tiff",
+        // Icons/cursors
+        "ico", "icns", "cur",
+        // Legacy/rare bitmap formats still seen in older Android/asset repos
+        "pbm", "pgm", "ppm", "pnm", "xbm", "xpm", "tga",
+        // RAW camera formats (occasionally checked into design/asset folders)
+        "raw", "cr2", "nef", "arw", "dng", "orf", "rw2"
+    )
     private val gifExtensions = setOf("gif")
-    private val videoExtensions = setOf("mp4", "mov", "mkv", "avi", "webm")
-    private val audioExtensions = setOf("mp3", "wav", "ogg", "flac", "m4a")
+    private val videoExtensions = setOf("mp4", "mov", "mkv", "avi", "webm", "3gp", "m4v")
+    private val audioExtensions = setOf("mp3", "wav", "ogg", "flac", "m4a", "aac", "opus")
     private val docExtensions = setOf("md", "txt", "rst")
     private val pdfExtensions = setOf("pdf")
+
+    /** Single source of truth for "is this file an image" — used by the icon/colour/label
+     * lookups below AND by [com.io.git.way.ui.common.GitWaySessionViewModel]'s Images type
+     * filter, so a format recognised here is never missed by the filter (or vice versa). */
+    fun isImage(fileName: String): Boolean {
+        val ext = fileName.substringAfterLast('.', "").lowercase()
+        return ext in imageExtensions || ext in gifExtensions
+    }
     private val configExtensions = setOf("properties", "cfg", "ini", "env", "lock")
 
     fun iconFor(fileName: String): ImageVector = when (fileName.substringAfterLast('.', "").lowercase()) {
@@ -68,5 +97,44 @@ object FileTypeIcons {
         if (mb < 1024) return String.format("%.1f MB", mb)
         val gb = mb / 1024.0
         return String.format("%.1f GB", gb)
+    }
+
+    /** Human "AndroidManifest.xml -> XML Document" style label (PRD §6/§7). */
+    fun typeLabel(fileName: String): String {
+        val lower = fileName.lowercase()
+        return when {
+            lower == ".gitignore" -> "Git Ignore File"
+            lower == ".gitattributes" -> "Git Attributes File"
+            lower.endsWith(".gradle.kts") -> "Kotlin Script"
+            lower.endsWith(".gradle") -> "Gradle Script"
+            lower.endsWith(".pro") -> "ProGuard Rules"
+            lower.endsWith(".kt") -> "Kotlin File"
+            lower.endsWith(".kts") -> "Kotlin Script"
+            lower.endsWith(".java") -> "Java File"
+            lower.endsWith(".xml") -> "XML Document"
+            lower.endsWith(".json") -> "JSON Document"
+            lower.endsWith(".md") || lower.endsWith(".markdown") -> "Markdown Document"
+            lower.endsWith(".yml") || lower.endsWith(".yaml") -> "YAML Document"
+            lower.endsWith(".properties") -> "Properties File"
+            lower.endsWith(".toml") -> "TOML Document"
+            lower.endsWith(".zip") || lower.endsWith(".jar") || lower.endsWith(".aar") -> "Archive"
+            lower.endsWith(".pdf") -> "PDF Document"
+            fileName.substringAfterLast('.', "") in imageExtensions -> "Image"
+            fileName.substringAfterLast('.', "") in gifExtensions -> "GIF Image"
+            fileName.substringAfterLast('.', "") in videoExtensions -> "Video"
+            fileName.substringAfterLast('.', "") in audioExtensions -> "Audio"
+            fileName.substringAfterLast('.', "").isEmpty() -> "File"
+            else -> "${fileName.substringAfterLast('.').uppercase()} File"
+        }
+    }
+
+    /** Short badge text ("XML", "KTS", "PRO") shown next to a file row. */
+    fun badgeFor(fileName: String): String {
+        val lower = fileName.lowercase()
+        return when {
+            lower.endsWith(".gradle.kts") -> "KTS"
+            lower == ".gitignore" -> "GIT"
+            else -> fileName.substringAfterLast('.', "").uppercase().take(5)
+        }
     }
 }

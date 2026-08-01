@@ -19,6 +19,7 @@ import com.io.git.way.domain.model.ChangeType
 import com.io.git.way.domain.model.FileChange
 import com.io.git.way.domain.model.GitRepository as GitRepositoryModel
 import com.io.git.way.domain.model.GitUser
+import com.io.git.way.domain.model.RemoteTreeEntry
 import com.io.git.way.domain.model.UploadPhase
 import com.io.git.way.domain.repository.GitHubRepository
 import kotlinx.coroutines.Dispatchers
@@ -153,6 +154,9 @@ class GitHubRepositoryImpl(
         }
 
     override suspend fun getRepositoryTree(repo: GitRepositoryModel): Result<Map<String, String>> =
+        getRepositoryTreeDetailed(repo).map { detailed -> detailed.mapValues { it.value.sha } }
+
+    override suspend fun getRepositoryTreeDetailed(repo: GitRepositoryModel): Result<Map<String, RemoteTreeEntry>> =
         withContext(Dispatchers.IO) {
             runCatching {
                 try {
@@ -166,7 +170,7 @@ class GitHubRepositoryImpl(
                     val treeResponse = apiService.getTree(repo.owner, repo.name, repo.defaultBranch, recursive = 1)
                     treeResponse.tree
                         .filter { it.type == "blob" }
-                        .associate { it.path to it.sha.orEmpty() }
+                        .associate { it.path to RemoteTreeEntry(sha = it.sha.orEmpty(), size = it.size) }
                 } catch (e: HttpException) {
                     // Empty/new default branch (no commits yet) -> treat as no remote files.
                     if (e.code() == 404 || e.code() == 409) emptyMap() else throw IOException(e.toFriendlyMessage(), e)
@@ -324,7 +328,11 @@ class GitHubRepositoryImpl(
             val parents: List<String>
             if (branchExists) {
                 val ref = refResult.getOrThrow()
-                val commit = githubCallWithRetry { apiService.getCommit(owner, repoName, ref.objectRef.sha) }
+                val commit = try {
+                    githubCallWithRetry { apiService.getCommit(owner, repoName, ref.objectRef.sha) }
+                } catch (e: IOException) {
+                    throw IOException("Couldn't read branch \"$branch\"'s current commit: ${e.message}", e)
+                }
                 baseTreeSha = commit.tree.sha
                 parents = listOf(ref.objectRef.sha)
             } else {
@@ -335,16 +343,24 @@ class GitHubRepositoryImpl(
             }
 
             onProgress(UploadPhase.CREATING_TREE, total, total, "")
-            val newTree = githubCallWithRetry {
-                apiService.createTree(owner, repoName, CreateTreeRequest(baseTree = baseTreeSha, tree = treeEntries))
+            val newTree = try {
+                githubCallWithRetry {
+                    apiService.createTree(owner, repoName, CreateTreeRequest(baseTree = baseTreeSha, tree = treeEntries))
+                }
+            } catch (e: IOException) {
+                throw IOException("Couldn't create the new file tree: ${e.message}", e)
             }
 
             onProgress(UploadPhase.CREATING_COMMIT, total, total, "")
-            val newCommit = githubCallWithRetry {
-                apiService.createCommit(
-                    owner, repoName,
-                    CreateCommitRequest(message = message, tree = newTree.sha, parents = parents)
-                )
+            val newCommit = try {
+                githubCallWithRetry {
+                    apiService.createCommit(
+                        owner, repoName,
+                        CreateCommitRequest(message = message, tree = newTree.sha, parents = parents)
+                    )
+                }
+            } catch (e: IOException) {
+                throw IOException("Couldn't create the new commit: ${e.message}", e)
             }
 
             Log.d(TAG, "attempt=$attempt branchExists=$branchExists baseTree=$baseTreeSha newTree=${newTree.sha} newCommit=${newCommit.sha}")
@@ -454,11 +470,30 @@ class GitHubRepositoryImpl(
             val headers = response()?.headers()
             val remaining = headers?.get("X-RateLimit-Remaining")
             val reset = headers?.get("X-RateLimit-Reset")
-            return if (remaining == "0" && reset != null) {
-                "GitHub API rate limit reached. Resets at ${formatResetTime(reset)}."
-            } else {
-                "GitHub request forbidden (403). Check the token's repo permissions."
+            if (remaining == "0" && reset != null) {
+                return "GitHub API rate limit reached. Resets at ${formatResetTime(reset)}."
             }
+
+            // GitHub rejects ANY write under .github/workflows/ from a token that lacks
+            // the separate "workflow" OAuth scope — even when the same token works fine
+            // for every other path in the repo. This is exactly what silently broke
+            // "Add CI workflow" (and made it look like dot-folders in general were
+            // broken): every other file create/edit/delete used a token with only
+            // "repo" scope and worked, so the one operation that touches
+            // .github/workflows/ was the only thing that ever failed.
+            val body403 = preReadBody ?: runCatching { response()?.errorBody()?.string() }.getOrNull()
+            if (body403 != null && body403.contains("workflow", ignoreCase = true) &&
+                (body403.contains("scope", ignoreCase = true) || body403.contains("OAuth", ignoreCase = true))
+            ) {
+                return "GitHub blocked this because your token doesn't have the \"workflow\" scope, " +
+                    "which is required to create or update files under .github/workflows/ — every " +
+                    "other file/folder works fine with your current token, only CI workflow files " +
+                    "need this extra permission. Generate a new token with the \"workflow\" scope " +
+                    "checked (classic tokens: check the top-level \"workflow\" checkbox; fine-grained " +
+                    "tokens: grant \"Workflows\" read-and-write access), then reconnect on the Token screen."
+            }
+
+            return "GitHub request forbidden (403). Check the token's repo permissions."
         }
 
         val rawBody = preReadBody ?: runCatching { response()?.errorBody()?.string() }.getOrNull()
