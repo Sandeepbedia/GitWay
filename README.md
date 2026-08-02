@@ -73,23 +73,29 @@ no laptop involved.
 ## Screenshots
 
 <!--
-  Don't edit this section by hand — it's auto-generated.
-  Drop numbered images (1.png, 2.png, 3.png, ... as many as you like, any
-  order) into docs/screenshots/, then run:
-    python3 docs/generate_screenshots.py
-  and this section will rebuild itself as a 2-column table.
+  AUTO GENERATED SECTION
+
+  Add screenshots here:
+
+  docs/screenshots/
+      1.png
+      2.png
+      3.png
+      4.png
+      ...
+      x.png
+
+  Run:
+
+      python3 docs/generate_screenshots.py
+
+  The script automatically creates a 2-column layout.
 -->
+
 <!-- SCREENSHOTS:START -->
-<table>
-  <tr>
-    <td width="50%"><img src="docs/screenshots/1.png" width="100%" /></td>
-    <td width="50%"><img src="docs/screenshots/2.png" width="100%" /></td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/screenshots/3.png" width="100%" /></td>
-    <td width="50%"><img src="docs/screenshots/4.png" width="100%" /></td>
-  </tr>
-</table>
+
+_No screenshots yet — add images to docs/screenshots/ and run the generator._
+
 <!-- SCREENSHOTS:END -->
 
 ## Tech stack
