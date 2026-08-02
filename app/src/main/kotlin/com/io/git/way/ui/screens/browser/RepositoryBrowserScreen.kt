@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -546,10 +545,20 @@ private fun TreeRowItem(
         Color.Transparent
     }
 
+    // A real, fixed height instead of IntrinsicSize.Min: IntrinsicSize.Min combined with
+    // a horizontalScroll()'d, weighted child inside a LazyColumn item (which itself gives
+    // unbounded height) is a known-fragile Compose combination — it can silently resolve
+    // to inconsistent heights per row instead of failing loudly, which is exactly what
+    // produced the jagged, inconsistently-"cut" guide lines. A fixed height sidesteps the
+    // whole problem: every row is unambiguously the same height, so fillMaxHeight() below
+    // always resolves against a real, bounded number. 54dp comfortably fits both the 34dp
+    // icon and a two-line name+metadata text stack with the row's 8dp vertical padding.
+    val rowHeight = 54.dp
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(IntrinsicSize.Min)
+            .height(rowHeight)
             .clip(rowShape)
             .background(rowBackground)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
@@ -560,11 +569,12 @@ private fun TreeRowItem(
         // name/subtitle. This is the part that grows without bound as tree depth
         // increases, so it's the part that scrolls horizontally — a deeply nested path
         // no longer squeezes the name down to nothing or pushes the menu/open buttons
-        // off-screen; swipe left/right to see the rest of it. Trailing controls below
-        // stay fixed at a normal size, always reachable.
+        // off-screen; swipe left/right (or the whole row now genuinely scrolls, not just
+        // clips) to see the rest of it. Trailing controls below stay fixed at a normal
+        // size, always reachable.
         val leadingScroll = rememberScrollState()
         Row(
-            modifier = Modifier.weight(1f, fill = true).horizontalScroll(leadingScroll),
+            modifier = Modifier.weight(1f, fill = true).fillMaxHeight().horizontalScroll(leadingScroll),
             verticalAlignment = Alignment.CenterVertically
         ) {
             TreeIndentGuides(row = row)
