@@ -72,30 +72,53 @@ no laptop involved.
 
 ## Screenshots
 
-<!--
-  AUTO GENERATED SECTION
+<table>
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/1.png" width="100%" />
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/2.png" width="100%" />
+    </td>
+  </tr>
 
-  Add screenshots here:
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/3.png" width="100%" />
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/4.png" width="100%" />
+    </td>
+  </tr>
 
-  docs/screenshots/
-      1.png
-      2.png
-      3.png
-      4.png
-      ...
-      x.png
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/5.png" width="100%" />
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/6.png" width="100%" />
+    </td>
+  </tr>
 
-  Run:
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/7.png" width="100%" />
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/8.png" width="100%" />
+    </td>
+  </tr>
 
-      python3 docs/generate_screenshots.py
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/9.png" width="100%" />
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/10.png" width="100%" />
+    </td>
+  </tr>
 
-  The script automatically creates a 2-column layout.
--->
-
-<!-- SCREENSHOTS:START -->
-
-_No screenshots yet — add images to docs/screenshots/ and run the generator._
-
+</table>
 <!-- SCREENSHOTS:END -->
 
 ## Tech stack
