@@ -593,7 +593,7 @@ private fun AboutCard() {
             Text("Git Way $versionName", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(start = 8.dp))
         }
         Text(
-            "Open source, MIT licensed.",
+            "Open source, GNU GPL v3 licensed.",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 6.dp, bottom = 10.dp)
