@@ -27,5 +27,13 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
+      - name: Verify GPL-3.0 license headers
+        run: |
+          MISSING=$(grep -rL "GNU General Public License" app/src --include="*.kt" || true)
+          if [ -n "$MISSING" ]; then
+            echo "Files missing GPL-3.0 header:"; echo "$MISSING"; exit 1
+          fi
+          echo "All $(find app/src -name '*.kt' | wc -l) Kotlin files carry the GPL-3.0 header."
+
       - name: Assemble debug
         run: ./gradlew assembleDebug --stacktrace

@@ -11,7 +11,7 @@
 [![Min SDK](https://img.shields.io/badge/Min%20SDK-26%20(Android%208.0)-171923?style=flat-square)](#)
 [![Build check](https://github.com/Sandeepbedia/GitWay/actions/workflows/build-check.yml/badge.svg)](https://github.com/Sandeepbedia/GitWay/actions/workflows/build-check.yml)
 [![Latest release](https://img.shields.io/github/v/release/Sandeepbedia/GitWay?style=flat-square&color=8B5CF6&label=release)](https://github.com/Sandeepbedia/GitWay/releases/latest)
-[![License](https://img.shields.io/badge/License-Source--Available-A78BFA?style=flat-square)](LICENSE)
+[![License](https://img.shields.io/badge/License-GPL--3.0-orange?style=flat-square)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-22C55E?style=flat-square)](CONTRIBUTING.md)
 
 </div>
@@ -240,14 +240,22 @@ before you invest time.
 
 ## License
 
-Git Way is released under a **custom source-available license** — see
-**[LICENSE](LICENSE)** for the full text. The short version:
+Git Way is free software, released under the **GNU General Public License v3.0**
+(GPL-3.0-only) — see **[LICENSE](LICENSE)** for the full text.
 
-- ✅ You can read the code, fork it, build it for yourself, and send Pull Requests.
-- ❌ You can't publish this app (or a modified/rebranded copy of it) to the Play
-  Store, F-Droid, or any other distribution channel as your own.
+- ✅ You can use, read, fork, modify, and redistribute this software (including
+  publishing builds) under the terms of the GPL v3.
+- ⚠️ If you distribute modified versions, they must be licensed under GPL v3
+  too, with the same freedoms passed on.
 
-If you want to redistribute it for some other reason, open an issue and ask.
+## Disclaimer
+
+This software is provided **"AS IS" without warranty of any kind** — see the
+disclaimer in **[LICENSE](LICENSE)**. Git Way interacts with the GitHub API
+and your repositories; you are solely responsible for any push, merge,
+force-update, or other operation you perform with it. Force-push and history
+rewrites can permanently destroy data — use at your own risk. This project is
+not affiliated with or endorsed by GitHub, Inc.
 
 ---
 

@@ -10,9 +10,10 @@
 #
 # Signing (optional but recommended):
 #   Without any secrets configured, this still builds and publishes an UNSIGNED
-#   release APK (app/build.gradle.kts already supports that — see the comment
-#   there). To get a properly signed APK instead, add these four repository
-#   secrets (Settings -> Secrets and variables -> Actions):
+#   release APK (app/build.gradle.kts already supports that — it detects the
+#   keystore folder and falls back to unsigned builds when missing). To get a
+#   properly signed APK instead, add these four repository secrets
+#   (Settings -> Secrets and variables -> Actions):
 #     KEYSTORE_BASE64     base64 of your .jks/.keystore file — generate with:
 #                         base64 -w0 your-release-key.jks   (Linux/macOS)
 #                         certutil -encode your-release-key.jks tmp.b64  (Windows)
@@ -20,6 +21,9 @@
 #     KEY_ALIAS           the key alias inside the keystore
 #     KEY_PASSWORD        the key's password
 #
+# The signing secrets are written to $AB_KEYSTORE_DIR/config.properties and the
+# keystore JKS placed in the same folder — app/build.gradle.kts reads exactly
+# this layout, so no project file is modified by the workflow.
 name: Release APK
 
 on:
@@ -49,15 +53,16 @@ jobs:
       - name: Configure release signing
         if: ${{ secrets.KEYSTORE_BASE64 != '' }}
         env:
+          AB_KEYSTORE_DIR: /tmp/universal-keystore
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          mkdir -p keystore
-          echo "$KEYSTORE_BASE64" | base64 -d > keystore/release.jks
-          cat > keystore.properties <<EOF
-          storeFile=keystore/release.jks
+          mkdir -p "$AB_KEYSTORE_DIR"
+          echo "$KEYSTORE_BASE64" | base64 -d > "$AB_KEYSTORE_DIR/release.jks"
+          cat > "$AB_KEYSTORE_DIR/config.properties" <<EOF
+          storeFile=release.jks
           storePassword=$STORE_PASSWORD
           keyAlias=$KEY_ALIAS
           keyPassword=$KEY_PASSWORD
@@ -67,6 +72,8 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build release APK
+        env:
+          AB_KEYSTORE_DIR: /tmp/universal-keystore
         run: ./gradlew assembleRelease --stacktrace
 
       - name: Locate and rename APK
