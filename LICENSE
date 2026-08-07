@@ -14,14 +14,6 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-DISCLAIMER: This software is provided "AS IS" without warranty of any
-kind. In no event shall the authors or copyright holders be liable for
-any damages arising from its use. Git Way interacts with the GitHub API
-and your repositories; you are solely responsible for any push, merge,
-force-update, or other operation you perform with it. Force-push and
-history rewrites can permanently destroy data — use at your own risk.
-This project is not affiliated with or endorsed by GitHub, Inc.
                     GNU GENERAL PUBLIC LICENSE
                        Version 3, 29 June 2007
 
