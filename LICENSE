@@ -21,7 +21,8 @@ any damages arising from its use. Git Way interacts with the GitHub API
 and your repositories; you are solely responsible for any push, merge,
 force-update, or other operation you perform with it. Force-push and
 history rewrites can permanently destroy data — use at your own risk.
-This project is not affiliated with or endorsed by GitHub, Inc.                    GNU GENERAL PUBLIC LICENSE
+This project is not affiliated with or endorsed by GitHub, Inc.
+                    GNU GENERAL PUBLIC LICENSE
                        Version 3, 29 June 2007
 
  Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
