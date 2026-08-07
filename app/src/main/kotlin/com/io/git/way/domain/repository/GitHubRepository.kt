@@ -1,6 +1,8 @@
 package com.io.git.way.domain.repository
 
 import com.io.git.way.domain.model.AppUpdateInfo
+import com.io.git.way.domain.model.ApiRateLimit
+import com.io.git.way.domain.model.CommitSummary
 import com.io.git.way.domain.model.FileChange
 import com.io.git.way.domain.model.GitRepository
 import com.io.git.way.domain.model.GitUser
@@ -21,13 +23,13 @@ interface GitHubRepository {
      * relativePath -> blob sha (PRD1 §3.2). Returns an empty map (not a failure) when the
      * default branch has no commits yet (PRD1 §3.6 "empty/new default branch").
      */
-    suspend fun getRepositoryTree(repo: GitRepository): Result<Map<String, String>>
+    suspend fun getRepositoryTree(repo: GitRepository, branch: String? = null): Result<Map<String, String>>
 
     /** Same tree as [getRepositoryTree] but also carries each blob's size — used by the
      * Explorer's file-metadata display (PRD "Repository Explorer" §7). A thin wrapper
      * over the same underlying call so callers that only need [getRepositoryTree]'s
      * plain sha map don't pay for anything extra. */
-    suspend fun getRepositoryTreeDetailed(repo: GitRepository): Result<Map<String, RemoteTreeEntry>>
+    suspend fun getRepositoryTreeDetailed(repo: GitRepository, branch: String? = null): Result<Map<String, RemoteTreeEntry>>
 
     /**
      * Re-checks [repo] directly against GitHub right before upload: still exists, token
@@ -47,11 +49,14 @@ interface GitHubRepository {
      * already substituted its own default if the user left the field blank) — this
      * function never invents or alters it, so what the user sees on the Confirmation
      * screen is exactly what lands on GitHub.
+     * [targetBranch] pushes to that branch instead of the repo's default — null (the
+     * default) preserves the original always-push-to-default behavior.
      */
     suspend fun syncChanges(
         repo: GitRepository,
         changes: List<FileChange>,
         commitMessage: String,
+        targetBranch: String? = null,
         readFileBytes: suspend (relativePath: String) -> ByteArray,
         onProgress: (phase: UploadPhase, completed: Int, total: Int, currentFile: String) -> Unit
     ): Result<String>
@@ -79,4 +84,43 @@ interface GitHubRepository {
         repo: String,
         currentVersionName: String
     ): Result<AppUpdateInfo?>
+
+    // ===== Repository Management =====
+
+    /** Every branch's name, most-recently-pushed first (GitHub's own default order). */
+    suspend fun listBranches(repo: GitRepository): Result<List<String>>
+
+    /** Creates [newBranchName] pointing at whatever [fromBranch] currently resolves to —
+     * a real "fork this branch", not an empty new ref. */
+    suspend fun createBranch(repo: GitRepository, newBranchName: String, fromBranch: String): Result<Unit>
+
+    /** Read-only commit log for [branch] (or the repo's default branch if null), most
+     * recent first. Git Way still never rewrites or amends history — this is purely
+     * "what's already there". */
+    suspend fun getCommitHistory(repo: GitRepository, branch: String? = null): Result<List<CommitSummary>>
+
+    /** Creates a brand-new GitHub repository for the authenticated user. */
+    suspend fun createRepository(name: String, description: String, isPrivate: Boolean): Result<GitRepository>
+
+    /** Renames/redescribes/re-visibilities [repo] — any null parameter leaves that field
+     * unchanged on GitHub. */
+    suspend fun updateRepository(
+        repo: GitRepository,
+        newName: String? = null,
+        newDescription: String? = null,
+        newIsPrivate: Boolean? = null
+    ): Result<GitRepository>
+
+    /** Permanently deletes [repo] from GitHub. Irreversible — the caller is responsible
+     * for making the user confirm before calling this. */
+    suspend fun deleteRepository(repo: GitRepository): Result<Unit>
+
+    /** Re-fetches the authenticated account's full profile — same endpoint
+     * [validateTokenAndFetchUser] uses, but callable any time a screen (Overview,
+     * Profile) needs it without re-validating/re-saving the token. */
+    suspend fun getCurrentUser(): Result<GitUser>
+
+    /** Current GitHub API core rate limit for this token — powers the Overview
+     * dashboard's usage meter. */
+    suspend fun getApiRateLimit(): Result<ApiRateLimit>
 }

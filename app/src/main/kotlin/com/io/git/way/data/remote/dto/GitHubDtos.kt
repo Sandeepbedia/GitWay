@@ -9,7 +9,15 @@ import kotlinx.serialization.Serializable
 data class GitHubUserDto(
     val login: String,
     @SerialName("avatar_url") val avatarUrl: String? = null,
-    val name: String? = null
+    val name: String? = null,
+    val bio: String? = null,
+    val company: String? = null,
+    val location: String? = null,
+    @SerialName("html_url") val htmlUrl: String? = null,
+    @SerialName("public_repos") val publicRepos: Int = 0,
+    val followers: Int = 0,
+    val following: Int = 0,
+    @SerialName("created_at") val createdAt: String? = null
 )
 
 @Serializable
@@ -29,6 +37,9 @@ data class GitHubRepoDto(
     @SerialName("created_at") val createdAt: String? = null,
     val archived: Boolean = false,
     val disabled: Boolean = false,
+    val fork: Boolean = false,
+    @SerialName("stargazers_count") val stargazersCount: Int = 0,
+    @SerialName("forks_count") val forksCount: Int = 0,
     val permissions: GitHubRepoPermissionsDto? = null
 )
 
@@ -215,3 +226,62 @@ data class GitHubReleaseAssetDto(
     val name: String,
     @SerialName("browser_download_url") val browserDownloadUrl: String
 )
+
+// ===== Branches (Repository Management) =====
+
+@Serializable
+data class GitHubBranchDto(
+    val name: String,
+    val commit: GitTreeRefDto,
+    val protected: Boolean = false
+)
+
+// ===== Commit history (Repository Management) =====
+
+@Serializable
+data class GitHubCommitAuthorDto(
+    val name: String? = null,
+    val date: String? = null
+)
+
+@Serializable
+data class GitHubCommitMessageDto(
+    val message: String,
+    val author: GitHubCommitAuthorDto? = null
+)
+
+@Serializable
+data class GitHubCommitListItemDto(
+    val sha: String,
+    val commit: GitHubCommitMessageDto,
+    val author: GitHubUserDto? = null,
+    @SerialName("html_url") val htmlUrl: String? = null
+)
+
+// ===== Repository create/update (Repository Management) =====
+
+@Serializable
+data class CreateRepoRequest(
+    val name: String,
+    val description: String? = null,
+    @SerialName("private") val isPrivate: Boolean = false,
+    @SerialName("auto_init") val autoInit: Boolean = true
+)
+
+@Serializable
+data class UpdateRepoRequest(
+    val name: String? = null,
+    val description: String? = null,
+    @SerialName("private") val isPrivate: Boolean? = null
+)
+
+// ===== API rate limit (Overview dashboard) =====
+
+@Serializable
+data class RateLimitDto(val resources: RateLimitResourcesDto)
+
+@Serializable
+data class RateLimitResourcesDto(val core: RateLimitCoreDto)
+
+@Serializable
+data class RateLimitCoreDto(val limit: Int, val remaining: Int, val reset: Long)

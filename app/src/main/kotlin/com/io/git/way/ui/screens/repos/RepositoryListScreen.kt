@@ -1,7 +1,5 @@
 package com.io.git.way.ui.screens.repos
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -44,13 +42,19 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SortByAlpha
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Divider
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -115,6 +119,7 @@ fun RepositoryListScreen(
     var privacyFilter by remember { mutableStateOf(PrivacyFilter.ALL) }
     var showFilterSheet by remember { mutableStateOf(false) }
     var searchExpanded by remember { mutableStateOf(false) }
+    var showCreateRepoDialog by remember { mutableStateOf(false) }
 
     val visibleRepos = state.filtered
         .let { list ->
@@ -169,9 +174,7 @@ fun RepositoryListScreen(
             ) {
                 RepositoryHeader(
                     onFilterClick = { showFilterSheet = true },
-                    onNewRepoClick = {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/new")))
-                    }
+                    onNewRepoClick = { showCreateRepoDialog = true }
                 )
 
                 if (searchExpanded) {
@@ -215,7 +218,7 @@ fun RepositoryListScreen(
                     )
 
                     visibleRepos.isEmpty() -> RepositoryEmptyState(
-                        onCreate = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/new"))) }
+                        onCreate = { showCreateRepoDialog = true }
                     )
 
                     else -> LazyColumn(
@@ -260,6 +263,18 @@ fun RepositoryListScreen(
             onThemeModeChange = onThemeModeChange,
             onDisconnect = onDisconnect,
             onDismiss = { showFilterSheet = false }
+        )
+    }
+
+    if (showCreateRepoDialog) {
+        CreateRepositoryDialog(
+            isCreating = state.isCreatingRepo,
+            errorMessage = state.createRepoError,
+            onDismiss = { showCreateRepoDialog = false; viewModel.clearCreateRepoError() },
+            onConfirm = { name, description, isPrivate ->
+                viewModel.createRepository(name, description, isPrivate) { repo -> onRepositorySelected(repo) }
+            },
+            onCreated = { showCreateRepoDialog = false }
         )
     }
 }
@@ -553,4 +568,82 @@ private fun themeModeLabel(mode: AppThemeMode): String = when (mode) {
     AppThemeMode.LIGHT -> "Theme: Light"
     AppThemeMode.DARK -> "Theme: Dark"
     AppThemeMode.AMOLED -> "Theme: AMOLED"
+}
+
+/** In-app "New repository" — replaces the old external "open github.com/new in a
+ * browser" shortcut with a real create flow through the GitHub API. `auto_init = true`
+ * on the backend call means the new repo always has a real first commit (a README), so
+ * it's immediately usable — no "empty repository" edge case to navigate into. */
+@Composable
+private fun CreateRepositoryDialog(
+    isCreating: Boolean,
+    errorMessage: String?,
+    onDismiss: () -> Unit,
+    onConfirm: (name: String, description: String, isPrivate: Boolean) -> Unit,
+    onCreated: () -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var isPrivate by remember { mutableStateOf(true) }
+    var submitted by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isCreating, errorMessage) {
+        if (submitted && !isCreating && errorMessage == null) onCreated()
+    }
+
+    AlertDialog(
+        onDismissRequest = { if (!isCreating) onDismiss() },
+        title = { Text("New repository") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Repository name") },
+                    singleLine = true,
+                    enabled = !isCreating,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Description (optional)") },
+                    enabled = !isCreating,
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(if (isPrivate) "Private" else "Public", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            if (isPrivate) "Only you (and collaborators) can see this repo" else "Anyone can see this repo",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(checked = isPrivate, onCheckedChange = { isPrivate = it }, enabled = !isCreating)
+                }
+                if (errorMessage != null) {
+                    Text(
+                        errorMessage,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 10.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { submitted = true; onConfirm(name, description, isPrivate) },
+                enabled = name.isNotBlank() && !isCreating
+            ) {
+                if (isCreating) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp) else Text("Create")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !isCreating) { Text("Cancel") } }
+    )
 }

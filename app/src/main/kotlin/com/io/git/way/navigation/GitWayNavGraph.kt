@@ -86,14 +86,27 @@ fun GitWayNavGraph(
         }
         composable(Routes.Overview.route) {
             OverviewScreen(
+                sessionViewModel = sessionViewModel,
                 onNavigateRepositories = { navigateToTab(navController, Routes.RepositoryList.route) },
-                onNavigateProfile = { navigateToTab(navController, Routes.Profile.route) }
+                onNavigateProfile = { navigateToTab(navController, Routes.Profile.route) },
+                onOpenRepository = { repo ->
+                    sessionViewModel.selectRepository(repo)
+                    navController.navigate(Routes.RepositoryBrowser.route)
+                }
             )
         }
         composable(Routes.Profile.route) {
             ProfileScreen(
+                sessionViewModel = sessionViewModel,
                 onNavigateOverview = { navigateToTab(navController, Routes.Overview.route) },
-                onNavigateRepositories = { navigateToTab(navController, Routes.RepositoryList.route) }
+                onNavigateRepositories = { navigateToTab(navController, Routes.RepositoryList.route) },
+                onDisconnect = {
+                    navController.navigate(Routes.Token.route) {
+                        popUpTo(Routes.Profile.route) { inclusive = true }
+                    }
+                },
+                themeMode = themeMode,
+                onThemeModeChange = onThemeModeChange
             )
         }
         composable(Routes.RepositoryBrowser.route) {

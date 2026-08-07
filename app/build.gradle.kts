@@ -7,18 +7,17 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-// Release signing is read from keystore.properties (git-ignored, never commit
-// secrets into build.gradle.kts). If the file isn't present — e.g. on a fresh
-// checkout or CI without secrets configured — the release build type simply
-// skips assigning a signingConfig and still builds (unsigned) so that R8/shrink
-// work can be verified without needing the real keystore.
-val keystorePropertiesFile = rootProject.file("keystore.properties")
-val keystoreProperties = Properties().apply {
-    if (keystorePropertiesFile.exists()) {
-        keystorePropertiesFile.inputStream().use { load(it) }
-    }
+// Shared release keystore — NOT stored in this project. The JKS and passwords
+// live in the shared keystore folder (e.g. /storage/emulated/0/AndroidCSProjects/keystore).
+// If that folder isn't reachable the release build still compiles (unsigned),
+// so R8/shrink work is never blocked by a missing key.
+val sharedKeystoreDir = System.getenv("AB_KEYSTORE_DIR")
+    ?: "/storage/emulated/0/AndroidCSProjects/keystore"
+val signingProps = Properties().apply {
+    File("$sharedKeystoreDir/config.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
 }
-val hasReleaseSigning = keystorePropertiesFile.exists()
+val hasReleaseSigning =
+    File("$sharedKeystoreDir/${signingProps.getProperty("storeFile", "Universe-release.jks")}").exists()
 
 android {
     namespace = "com.io.git.way"
@@ -37,10 +36,13 @@ android {
     signingConfigs {
         if (hasReleaseSigning) {
             create("release") {
-                storeFile = file(keystoreProperties.getProperty("storeFile"))
-                storePassword = keystoreProperties.getProperty("storePassword")
-                keyAlias = keystoreProperties.getProperty("keyAlias")
-                keyPassword = keystoreProperties.getProperty("keyPassword")
+                storeFile = File(sharedKeystoreDir, signingProps.getProperty("storeFile"))
+                storePassword = signingProps.getProperty("storePassword")
+                keyAlias = signingProps.getProperty("keyAlias")
+                keyPassword = signingProps.getProperty("keyPassword")
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
             }
         }
     }
@@ -80,6 +82,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     compileOptions {
@@ -97,6 +100,7 @@ android {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.biometric)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.activity.compose)

@@ -13,7 +13,9 @@ data class RepoListUiState(
     val isLoading: Boolean = false,
     val repositories: List<GitRepository> = emptyList(),
     val searchQuery: String = "",
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val isCreatingRepo: Boolean = false,
+    val createRepoError: String? = null
 ) {
     val filtered: List<GitRepository>
         get() = if (searchQuery.isBlank()) {
@@ -53,6 +55,27 @@ class RepositoryListViewModel(
 
     fun onSearchQueryChange(query: String) {
         uiState = uiState.copy(searchQuery = query)
+    }
+
+    fun clearCreateRepoError() {
+        uiState = uiState.copy(createRepoError = null)
+    }
+
+    /** Creates a brand-new GitHub repository and prepends it to the list — [onCreated]
+     * fires only on success, so the caller can navigate straight into it. */
+    fun createRepository(name: String, description: String, isPrivate: Boolean, onCreated: (GitRepository) -> Unit) {
+        if (name.isBlank() || uiState.isCreatingRepo) return
+        uiState = uiState.copy(isCreatingRepo = true, createRepoError = null)
+        viewModelScope.launch {
+            gitHubRepository.createRepository(name.trim(), description.trim(), isPrivate)
+                .onSuccess { repo ->
+                    uiState = uiState.copy(isCreatingRepo = false, repositories = listOf(repo) + uiState.repositories)
+                    onCreated(repo)
+                }
+                .onFailure { throwable ->
+                    uiState = uiState.copy(isCreatingRepo = false, createRepoError = throwable.message ?: "Couldn't create repository.")
+                }
+        }
     }
 
     fun disconnect() {

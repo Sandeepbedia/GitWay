@@ -5,22 +5,27 @@ import android.graphics.Color as AndroidColor
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.core.view.WindowCompat
+import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.compose.rememberNavController
 import com.io.git.way.domain.model.AppUpdateInfo
 import com.io.git.way.navigation.GitWayNavGraph
+import com.io.git.way.ui.common.BiometricLockScreen
 import com.io.git.way.ui.components.UpdateAvailableDialog
 import com.io.git.way.ui.theme.AppThemeMode
 import com.io.git.way.ui.theme.GitWayTheme
@@ -30,7 +35,11 @@ import com.io.git.way.ui.theme.GitWayTheme
 private const val UPDATE_CHECK_OWNER = "Sandeepbedia"
 private const val UPDATE_CHECK_REPO = "GitWay"
 
-class MainActivity : ComponentActivity() {
+// FragmentActivity (a ComponentActivity subclass, so nothing else about the activity
+// changes) rather than plain ComponentActivity — androidx.biometric's BiometricPrompt is
+// built on the Fragment lifecycle and requires one, for Profile > Security's fingerprint
+// app-lock.
+class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
@@ -70,6 +79,29 @@ private fun GitWayRoot() {
         val navController = rememberNavController()
         var availableUpdate by remember { mutableStateOf<AppUpdateInfo?>(null) }
 
+        val biometricLockManager = remember {
+            (context.applicationContext as GitWayApp).container.biometricLockManager
+        }
+        var isUnlocked by remember {
+            mutableStateOf(!(biometricLockManager.isLockEnabled() && biometricLockManager.isBiometricAvailable()))
+        }
+
+        // Re-lock whenever the app leaves the foreground — Security > Fingerprint Lock
+        // is meant to gate every resume, not just the very first cold-start launch.
+        val lifecycleOwner = LocalLifecycleOwner.current
+        DisposableEffect(lifecycleOwner) {
+            val observer = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_STOP &&
+                    biometricLockManager.isLockEnabled() &&
+                    biometricLockManager.isBiometricAvailable()
+                ) {
+                    isUnlocked = false
+                }
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        }
+
         // Fire-and-forget, once per process: never blocks navigation, never shown twice
         // in one session once dismissed. A failed/offline check just means no dialog —
         // it never surfaces as an error to the user.
@@ -83,23 +115,27 @@ private fun GitWayRoot() {
                 .onSuccess { update -> availableUpdate = update }
         }
 
-        Box {
-            GitWayNavGraph(
-                navController = navController,
-                themeMode = themeMode,
-                onThemeModeChange = { themeMode = it }
-            )
-
-            availableUpdate?.let { update ->
-                UpdateAvailableDialog(
-                    update = update,
-                    onUpdate = {
-                        val target = update.apkDownloadUrl ?: update.releasePageUrl
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target)))
-                        availableUpdate = null
-                    },
-                    onDismiss = { availableUpdate = null }
+        if (!isUnlocked) {
+            BiometricLockScreen(onUnlocked = { isUnlocked = true })
+        } else {
+            Box {
+                GitWayNavGraph(
+                    navController = navController,
+                    themeMode = themeMode,
+                    onThemeModeChange = { themeMode = it }
                 )
+
+                availableUpdate?.let { update ->
+                    UpdateAvailableDialog(
+                        update = update,
+                        onUpdate = {
+                            val target = update.apkDownloadUrl ?: update.releasePageUrl
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target)))
+                            availableUpdate = null
+                        },
+                        onDismiss = { availableUpdate = null }
+                    )
+                }
             }
         }
     }

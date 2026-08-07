@@ -72,52 +72,23 @@ no laptop involved.
 
 ## Screenshots
 
+<!--
+  Don't edit this section by hand — it's auto-generated.
+  Drop numbered images (1.png, 2.png, 3.png, ... as many as you like, any
+  order) into docs/screenshots/, then run:
+    python3 docs/generate_screenshots.py
+  and this section will rebuild itself as a 2-column table.
+-->
+<!-- SCREENSHOTS:START -->
 <table>
   <tr>
-    <td width="50%">
-      <img src="docs/screenshots/1.png" width="100%" />
-    </td>
-    <td width="50%">
-      <img src="docs/screenshots/2.png" width="100%" />
-    </td>
+    <td width="50%"><img src="docs/screenshots/1.png" width="100%" /></td>
+    <td width="50%"><img src="docs/screenshots/2.png" width="100%" /></td>
   </tr>
-
   <tr>
-    <td width="50%">
-      <img src="docs/screenshots/3.png" width="100%" />
-    </td>
-    <td width="50%">
-      <img src="docs/screenshots/4.png" width="100%" />
-    </td>
+    <td width="50%"><img src="docs/screenshots/3.png" width="100%" /></td>
+    <td width="50%"><img src="docs/screenshots/4.png" width="100%" /></td>
   </tr>
-
-  <tr>
-    <td width="50%">
-      <img src="docs/screenshots/5.png" width="100%" />
-    </td>
-    <td width="50%">
-      <img src="docs/screenshots/6.png" width="100%" />
-    </td>
-  </tr>
-
-  <tr>
-    <td width="50%">
-      <img src="docs/screenshots/7.png" width="100%" />
-    </td>
-    <td width="50%">
-      <img src="docs/screenshots/8.png" width="100%" />
-    </td>
-  </tr>
-
-  <tr>
-    <td width="50%">
-      <img src="docs/screenshots/9.png" width="100%" />
-    </td>
-    <td width="50%">
-      <img src="docs/screenshots/10.png" width="100%" />
-    </td>
-  </tr>
-
 </table>
 <!-- SCREENSHOTS:END -->
 

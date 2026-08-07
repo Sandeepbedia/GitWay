@@ -5,19 +5,26 @@ import com.io.git.way.data.remote.dto.CreateCommitRequest
 import com.io.git.way.data.remote.dto.CreateFileContentRequest
 import com.io.git.way.data.remote.dto.CreateFileContentResponseDto
 import com.io.git.way.data.remote.dto.CreateRefRequest
+import com.io.git.way.data.remote.dto.CreateRepoRequest
 import com.io.git.way.data.remote.dto.CreateTreeRequest
 import com.io.git.way.data.remote.dto.GitBlobContentDto
 import com.io.git.way.data.remote.dto.GitBlobRefDto
 import com.io.git.way.data.remote.dto.GitCommitDetailDto
 import com.io.git.way.data.remote.dto.GitCommitRefDto
+import com.io.git.way.data.remote.dto.GitHubBranchDto
+import com.io.git.way.data.remote.dto.GitHubCommitListItemDto
 import com.io.git.way.data.remote.dto.GitHubRepoDto
 import com.io.git.way.data.remote.dto.GitHubReleaseDto
 import com.io.git.way.data.remote.dto.GitHubUserDto
+import com.io.git.way.data.remote.dto.RateLimitDto
 import com.io.git.way.data.remote.dto.GitRefDto
 import com.io.git.way.data.remote.dto.GitTreeRefDto
 import com.io.git.way.data.remote.dto.GitTreeResponseDto
 import com.io.git.way.data.remote.dto.UpdateRefRequest
+import com.io.git.way.data.remote.dto.UpdateRepoRequest
+import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.POST
@@ -141,4 +148,40 @@ interface GitHubApiService {
         @Path("owner") owner: String,
         @Path("repo") repo: String
     ): GitHubReleaseDto
+
+    // ===== Repository Management: branches, commit history, create/update/delete =====
+
+    @GET("repos/{owner}/{repo}/branches")
+    suspend fun listBranches(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Query("per_page") perPage: Int = 100
+    ): List<GitHubBranchDto>
+
+    @GET("repos/{owner}/{repo}/commits")
+    suspend fun listCommits(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Query("sha") branch: String,
+        @Query("per_page") perPage: Int = 30
+    ): List<GitHubCommitListItemDto>
+
+    @POST("user/repos")
+    suspend fun createRepository(@Body body: CreateRepoRequest): GitHubRepoDto
+
+    @PATCH("repos/{owner}/{repo}")
+    suspend fun updateRepository(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Body body: UpdateRepoRequest
+    ): GitHubRepoDto
+
+    @DELETE("repos/{owner}/{repo}")
+    suspend fun deleteRepository(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String
+    ): Response<Unit>
+
+    @GET("rate_limit")
+    suspend fun getRateLimit(): RateLimitDto
 }

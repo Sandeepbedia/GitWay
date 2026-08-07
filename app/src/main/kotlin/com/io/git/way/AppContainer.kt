@@ -1,6 +1,7 @@
 package com.io.git.way
 
 import android.content.Context
+import com.io.git.way.data.local.BiometricLockManager
 import com.io.git.way.data.local.TokenManager
 import com.io.git.way.data.remote.RetrofitProvider
 import com.io.git.way.data.repository.GitHubRepositoryImpl
@@ -22,4 +23,6 @@ class AppContainer(context: Context) {
     val gitHubRepository: GitHubRepository by lazy {
         GitHubRepositoryImpl(tokenManager, apiService)
     }
+
+    val biometricLockManager: BiometricLockManager by lazy { BiometricLockManager(context) }
 }

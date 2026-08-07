@@ -51,6 +51,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
@@ -63,6 +64,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileCopy
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOff
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.NoteAdd
@@ -70,6 +72,7 @@ import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -80,6 +83,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -88,6 +92,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -108,6 +113,8 @@ import androidx.compose.ui.unit.dp
 import com.io.git.way.domain.model.BrowserEntry
 import com.io.git.way.domain.model.BrowserSortMode
 import com.io.git.way.domain.model.BrowserTypeFilter
+import com.io.git.way.domain.model.CommitSummary
+import com.io.git.way.domain.model.GitRepository
 import com.io.git.way.domain.model.TreeRow
 import com.io.git.way.domain.WorkflowTemplate
 import com.io.git.way.domain.WorkflowTemplates
@@ -117,6 +124,7 @@ import com.io.git.way.ui.common.MarkdownLinkResolver
 import com.io.git.way.ui.common.MarkdownView
 import com.io.git.way.ui.common.SyntaxHighlightTransformation
 import com.io.git.way.ui.common.SyntaxHighlighter
+import com.io.git.way.ui.common.formatRelativeTime
 import com.io.git.way.ui.theme.GlassBlobBlue
 import com.io.git.way.ui.theme.GlassCard
 import com.io.git.way.ui.theme.GlassScaffold
@@ -157,10 +165,17 @@ fun RepositoryBrowserScreen(
     var pendingRename by remember { mutableStateOf<BrowserEntry?>(null) }
     var showWorkflowPicker by remember { mutableStateOf(false) }
     var browserQuery by remember { mutableStateOf("") }
+    var showBranchPicker by remember { mutableStateOf(false) }
+    var showCreateBranchDialog by remember { mutableStateOf(false) }
+    var showCommitHistory by remember { mutableStateOf(false) }
+    var showRepoSettings by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.selectedRepo) {
         if (state.selectedRepo != null && state.remoteTreeCache.isEmpty() && !state.isBrowserLoading) {
             sessionViewModel.loadBrowserRoot()
+        }
+        if (state.selectedRepo != null && state.availableBranches.isEmpty() && !state.isLoadingBranches) {
+            sessionViewModel.loadBranches()
         }
     }
 
@@ -178,7 +193,7 @@ fun RepositoryBrowserScreen(
     fun githubUrl(path: String, isFolder: Boolean): String? {
         val r = repo ?: return null
         val kind = if (isFolder) "tree" else "blob"
-        return "https://github.com/${r.owner}/${r.name}/$kind/${r.defaultBranch}/$path"
+        return "https://github.com/${r.owner}/${r.name}/$kind/${state.selectedBranch ?: r.defaultBranch}/$path"
     }
 
     GlassScaffold(
@@ -201,6 +216,15 @@ fun RepositoryBrowserScreen(
                     Icon(Icons.Filled.ContentCopy, contentDescription = "Copy selected")
                 }
             } else {
+                IconButton(onClick = { showBranchPicker = true }) {
+                    Icon(Icons.Filled.AccountTree, contentDescription = "Branch: ${state.selectedBranch ?: repo?.defaultBranch ?: "default"}")
+                }
+                IconButton(onClick = { showCommitHistory = true; sessionViewModel.loadCommitHistory() }) {
+                    Icon(Icons.Filled.History, contentDescription = "Commit history")
+                }
+                IconButton(onClick = { showRepoSettings = true }) {
+                    Icon(Icons.Filled.Settings, contentDescription = "Repository settings")
+                }
                 IconButton(onClick = { showSortFilterSheet = true }) {
                     Icon(Icons.Filled.Sort, contentDescription = "Sort & filter")
                 }
@@ -418,6 +442,50 @@ fun RepositoryBrowserScreen(
             onSortModeChange = sessionViewModel::setBrowserSortMode,
             onTypeFilterChange = sessionViewModel::setBrowserTypeFilter,
             onDismiss = { showSortFilterSheet = false }
+        )
+    }
+    if (showBranchPicker && repo != null) {
+        BranchPickerDialog(
+            branches = state.availableBranches,
+            defaultBranch = repo.defaultBranch,
+            selectedBranch = state.selectedBranch,
+            isLoading = state.isLoadingBranches,
+            errorMessage = state.branchError,
+            onSelect = { branch -> sessionViewModel.selectBranch(branch); showBranchPicker = false },
+            onCreateNew = { showBranchPicker = false; showCreateBranchDialog = true },
+            onDismiss = { showBranchPicker = false }
+        )
+    }
+    if (showCreateBranchDialog) {
+        CreateBranchDialog(
+            sourceBranch = state.selectedBranch ?: repo?.defaultBranch ?: "default",
+            isCreating = state.isCreatingBranch,
+            errorMessage = state.createBranchError,
+            onDismiss = { showCreateBranchDialog = false; sessionViewModel.clearCreateBranchError() },
+            onConfirm = { name -> sessionViewModel.createBranch(name) },
+            onCreated = { showCreateBranchDialog = false }
+        )
+    }
+    if (showCommitHistory) {
+        CommitHistoryDialog(
+            commits = state.commitHistory,
+            isLoading = state.isLoadingCommitHistory,
+            errorMessage = state.commitHistoryError,
+            onOpenCommit = { url -> context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) },
+            onDismiss = { showCommitHistory = false }
+        )
+    }
+    if (showRepoSettings && repo != null) {
+        RepositorySettingsDialog(
+            repo = repo,
+            isSaving = state.isUpdatingRepoSettings,
+            saveError = state.repoSettingsError,
+            isDeleting = state.isDeletingRepo,
+            deleteError = state.deleteRepoError,
+            onSave = { newName, newDescription, newIsPrivate -> sessionViewModel.updateRepositorySettings(newName, newDescription, newIsPrivate) },
+            onSaved = { showRepoSettings = false },
+            onDelete = { sessionViewModel.deleteRepository(onDeleted = { showRepoSettings = false; onBack() }) },
+            onDismiss = { showRepoSettings = false; sessionViewModel.clearRepoSettingsError() }
         )
     }
     if (showWorkflowPicker) {
@@ -883,6 +951,272 @@ private fun SortFilterDialog(
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }
+    )
+}
+
+/** Lists every branch GitHub knows about for this repo, radio-select style — whichever
+ * one is picked becomes the target for every read/write in this repo session (the tree
+ * view, the commit history, and every push) until changed again or the repo is reopened. */
+@Composable
+private fun BranchPickerDialog(
+    branches: List<String>,
+    defaultBranch: String,
+    selectedBranch: String?,
+    isLoading: Boolean,
+    errorMessage: String?,
+    onSelect: (String?) -> Unit,
+    onCreateNew: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val effectiveSelected = selectedBranch ?: defaultBranch
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Switch branch") },
+        text = {
+            Column(modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                if (isLoading && branches.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                    }
+                } else {
+                    branches.forEach { branch ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().clickable { onSelect(if (branch == defaultBranch) null else branch) }
+                        ) {
+                            RadioButton(selected = branch == effectiveSelected, onClick = { onSelect(if (branch == defaultBranch) null else branch) })
+                            Text(branch)
+                            if (branch == defaultBranch) {
+                                Text(
+                                    "  (default)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+                if (errorMessage != null) {
+                    Text(errorMessage, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                }
+                TextButton(onClick = onCreateNew, modifier = Modifier.padding(top = 8.dp)) {
+                    Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Text("  Create new branch", modifier = Modifier.padding(start = 4.dp))
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+    )
+}
+
+/** Forks a brand-new branch off whichever one is currently active — a real ref pointing
+ * at that branch's current tip, never an empty one. */
+@Composable
+private fun CreateBranchDialog(
+    sourceBranch: String,
+    isCreating: Boolean,
+    errorMessage: String?,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+    onCreated: () -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var submitted by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isCreating, errorMessage) {
+        if (submitted && !isCreating && errorMessage == null) onCreated()
+    }
+
+    AlertDialog(
+        onDismissRequest = { if (!isCreating) onDismiss() },
+        title = { Text("Create branch") },
+        text = {
+            Column {
+                Text(
+                    "Forks from \"$sourceBranch\" as it is right now.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 10.dp)
+                )
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("New branch name") },
+                    singleLine = true,
+                    enabled = !isCreating,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (errorMessage != null) {
+                    Text(errorMessage, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { submitted = true; onConfirm(name) }, enabled = name.isNotBlank() && !isCreating) {
+                if (isCreating) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp) else Text("Create")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !isCreating) { Text("Cancel") } }
+    )
+}
+
+/** Read-only commit log for whichever branch is currently active. Git Way only ever
+ * writes new commits through the tested sync pipeline elsewhere in the app — this is
+ * purely "what's already there", each row opening straight to that commit on GitHub. */
+@Composable
+private fun CommitHistoryDialog(
+    commits: List<CommitSummary>,
+    isLoading: Boolean,
+    errorMessage: String?,
+    onOpenCommit: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Commit history") },
+        text = {
+            Column(modifier = Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState())) {
+                when {
+                    isLoading -> Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                    }
+                    errorMessage != null -> Text(errorMessage, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    commits.isEmpty() -> Text("No commits yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    else -> commits.forEach { commit ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onOpenCommit(commit.htmlUrl) }
+                                .padding(vertical = 8.dp)
+                        ) {
+                            Text(commit.title, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                "${commit.authorName} · ${formatRelativeTime(commit.date)} · ${commit.shortSha}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                        HorizontalDivider()
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+    )
+}
+
+/** The repository itself, not its files: rename, redescribe, flip public/private, and —
+ * behind a confirmation step — delete it outright. Everything here writes straight to
+ * GitHub's repo-settings endpoints, separate from the file-sync pipeline used elsewhere. */
+@Composable
+private fun RepositorySettingsDialog(
+    repo: GitRepository,
+    isSaving: Boolean,
+    saveError: String?,
+    isDeleting: Boolean,
+    deleteError: String?,
+    onSave: (newName: String?, newDescription: String?, newIsPrivate: Boolean?) -> Unit,
+    onSaved: () -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var name by remember { mutableStateOf(repo.name) }
+    var isPrivate by remember { mutableStateOf(repo.isPrivate) }
+    var submitted by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var deleteConfirmText by remember { mutableStateOf("") }
+
+    LaunchedEffect(isSaving, saveError) {
+        if (submitted && !isSaving && saveError == null) onSaved()
+    }
+
+    AlertDialog(
+        onDismissRequest = { if (!isSaving && !isDeleting) onDismiss() },
+        title = { Text("Repository settings") },
+        text = {
+            Column(modifier = Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState())) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Repository name") },
+                    singleLine = true,
+                    enabled = !isSaving,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(if (isPrivate) "Private" else "Public", style = MaterialTheme.typography.bodyMedium)
+                    Switch(checked = isPrivate, onCheckedChange = { isPrivate = it }, enabled = !isSaving)
+                }
+                if (saveError != null) {
+                    Text(saveError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 18.dp))
+
+                Text("Danger zone", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.error)
+                Text(
+                    "Deleting a repository is permanent and cannot be undone.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 10.dp)
+                )
+                if (!showDeleteConfirm) {
+                    TextButton(onClick = { showDeleteConfirm = true }, enabled = !isDeleting) {
+                        Text("Delete this repository", color = MaterialTheme.colorScheme.error)
+                    }
+                } else {
+                    Text(
+                        "Type \"${repo.name}\" to confirm:",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                    OutlinedTextField(
+                        value = deleteConfirmText,
+                        onValueChange = { deleteConfirmText = it },
+                        singleLine = true,
+                        enabled = !isDeleting,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (deleteError != null) {
+                        Text(deleteError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                    }
+                    Row(modifier = Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(
+                            onClick = onDelete,
+                            enabled = deleteConfirmText == repo.name && !isDeleting
+                        ) {
+                            if (isDeleting) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            } else {
+                                Text("Permanently delete", color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                        TextButton(onClick = { showDeleteConfirm = false; deleteConfirmText = "" }, enabled = !isDeleting) { Text("Cancel") }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    submitted = true
+                    onSave(
+                        name.trim().takeIf { it.isNotBlank() && it != repo.name },
+                        null,
+                        isPrivate.takeIf { it != repo.isPrivate }
+                    )
+                },
+                enabled = !isSaving && !isDeleting
+            ) {
+                if (isSaving) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp) else Text("Save")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !isSaving && !isDeleting) { Text("Close") } }
     )
 }
 

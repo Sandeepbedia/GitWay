@@ -19,13 +19,16 @@ import com.io.git.way.domain.CommitMessageBuilder
 import com.io.git.way.domain.WorkflowTemplate
 import com.io.git.way.domain.WorkflowTemplates
 import com.io.git.way.domain.model.AndroidProjectInfo
+import com.io.git.way.domain.model.ApiRateLimit
 import com.io.git.way.domain.model.AppIdentity
 import com.io.git.way.domain.model.BrowserEntry
 import com.io.git.way.domain.model.BrowserSortMode
 import com.io.git.way.domain.model.BrowserTypeFilter
 import com.io.git.way.domain.model.ChangeType
+import com.io.git.way.domain.model.CommitSummary
 import com.io.git.way.domain.model.FileChange
 import com.io.git.way.domain.model.GitRepository
+import com.io.git.way.domain.model.GitUser
 import com.io.git.way.domain.model.LocalFile
 import com.io.git.way.domain.model.ScanReport
 import com.io.git.way.domain.model.TreeRow
@@ -41,6 +44,15 @@ import java.io.IOException
 
 data class GitWaySessionState(
     val selectedRepo: GitRepository? = null,
+
+    /** Account-wide data for the Overview dashboard — deliberately independent of
+     * [selectedRepo] since Overview is reachable before any repo has ever been picked. */
+    val currentUser: GitUser? = null,
+    val isLoadingUser: Boolean = false,
+    val userError: String? = null,
+    val overviewRepositories: List<GitRepository> = emptyList(),
+    val isLoadingOverviewRepositories: Boolean = false,
+    val apiRateLimit: ApiRateLimit? = null,
 
     val folderUri: Uri? = null,
     val folderName: String = "",
@@ -144,6 +156,29 @@ data class GitWaySessionState(
     val isAddingWorkflows: Boolean = false,
     val addWorkflowsError: String? = null,
 
+    /** Repository Management: branches. `selectedBranch == null` means "the repo's own
+     * default branch" — every push (main upload flow AND every Repository Browser write)
+     * targets whichever this resolves to at the time. */
+    val availableBranches: List<String> = emptyList(),
+    val selectedBranch: String? = null,
+    val isLoadingBranches: Boolean = false,
+    val branchError: String? = null,
+    val isCreatingBranch: Boolean = false,
+    val createBranchError: String? = null,
+
+    /** Repository Management: read-only commit history for [selectedBranch] (or the
+     * default branch). Loaded on demand — not fetched just for opening a repo. */
+    val commitHistory: List<CommitSummary> = emptyList(),
+    val isLoadingCommitHistory: Boolean = false,
+    val commitHistoryError: String? = null,
+
+    /** Repository Management: rename / re-describe / re-visibility / delete the repo
+     * itself (as opposed to its files, which the rest of this state already covers). */
+    val isUpdatingRepoSettings: Boolean = false,
+    val repoSettingsError: String? = null,
+    val isDeletingRepo: Boolean = false,
+    val deleteRepoError: String? = null,
+
     /** Multi-select in the browser (long-press to start, tap to toggle). Only files are
      * selectable — folders aren't copyable/deletable as a single selection unit yet, use
      * the per-row delete action for a whole folder instead. */
@@ -222,7 +257,59 @@ class GitWaySessionViewModel(
         private set
 
     fun selectRepository(repo: GitRepository) {
-        state = GitWaySessionState(selectedRepo = repo)
+        // Full reset except the account-wide Overview data (user/repos/rate-limit) —
+        // that's independent of which repo is selected and shouldn't need re-fetching
+        // every time the user switches repos.
+        state = GitWaySessionState(
+            selectedRepo = repo,
+            currentUser = state.currentUser,
+            overviewRepositories = state.overviewRepositories,
+            apiRateLimit = state.apiRateLimit
+        )
+    }
+
+    /** Loads (or refreshes) everything the Overview dashboard shows: the account
+     * profile, every repo the token can see, and the current API rate-limit usage.
+     * Safe to call every time Overview appears — each piece only shows its own loading
+     * state, so a slow rate-limit call never blocks the profile card from appearing. */
+    fun loadOverviewData() {
+        if (state.currentUser == null && !state.isLoadingUser) {
+            state = state.copy(isLoadingUser = true, userError = null)
+            viewModelScope.launch {
+                gitHubRepository.getCurrentUser()
+                    .onSuccess { user -> state = state.copy(isLoadingUser = false, currentUser = user) }
+                    .onFailure { throwable -> state = state.copy(isLoadingUser = false, userError = throwable.message ?: "Couldn't load your profile.") }
+            }
+        }
+        if (state.overviewRepositories.isEmpty() && !state.isLoadingOverviewRepositories) {
+            state = state.copy(isLoadingOverviewRepositories = true)
+            viewModelScope.launch {
+                gitHubRepository.listRepositories()
+                    .onSuccess { repos -> state = state.copy(isLoadingOverviewRepositories = false, overviewRepositories = repos) }
+                    .onFailure { state = state.copy(isLoadingOverviewRepositories = false) }
+            }
+        }
+        if (state.apiRateLimit == null) {
+            viewModelScope.launch {
+                gitHubRepository.getApiRateLimit()
+                    .onSuccess { limit -> state = state.copy(apiRateLimit = limit) }
+                    .onFailure { /* purely informational — silently skip if unavailable */ }
+            }
+        }
+    }
+
+    /** Force-refreshes Overview data even if it's already loaded — used by pull-to-refresh. */
+    fun refreshOverviewData() {
+        state = state.copy(currentUser = null, overviewRepositories = emptyList(), apiRateLimit = null)
+        loadOverviewData()
+    }
+
+    /** Clears the saved token (Profile "Danger Zone > Disconnect") — the caller is
+     * responsible for navigating back to the Token screen afterwards, same pattern as
+     * [com.io.git.way.ui.screens.repos.RepositoryListViewModel.disconnect]. */
+    fun disconnect() {
+        gitHubRepository.clearToken()
+        state = GitWaySessionState()
     }
 
     fun onFolderPicked(context: Context, uri: Uri) {
@@ -579,6 +666,7 @@ class GitWaySessionViewModel(
                     repo = repo,
                     changes = changesToUpload,
                     commitMessage = resolvedMessage,
+                    targetBranch = state.selectedBranch,
                     readFileBytes = readBytes,
                     onProgress = { phase, completed, total, currentFile ->
                         state = state.copy(
@@ -637,7 +725,7 @@ class GitWaySessionViewModel(
         val repo = state.selectedRepo ?: return
         state = state.copy(isBrowserLoading = true, browserError = null)
         viewModelScope.launch {
-            gitHubRepository.getRepositoryTreeDetailed(repo)
+            gitHubRepository.getRepositoryTreeDetailed(repo, branch = state.selectedBranch)
                 .onSuccess { detailed ->
                     val tree = detailed.mapValues { it.value.sha }
                     val sizes = detailed.mapNotNull { (path, entry) -> entry.size?.let { path to it } }.toMap()
@@ -774,6 +862,7 @@ class GitWaySessionViewModel(
                 repo = repo,
                 changes = changes,
                 commitMessage = "Git Way: rename ${entry.path} to $newPath",
+                targetBranch = state.selectedBranch,
                 readFileBytes = { path -> byteCache.getValue(path) },
                 onProgress = { _, _, _, _ -> }
             ).onSuccess {
@@ -821,6 +910,7 @@ class GitWaySessionViewModel(
                 repo = repo,
                 changes = listOf(FileChange(fileName = newName, filePath = newPath, type = ChangeType.ADDED)),
                 commitMessage = "Git Way: duplicate ${entry.path} to $newPath",
+                targetBranch = state.selectedBranch,
                 readFileBytes = { bytes },
                 onProgress = { _, _, _, _ -> }
             ).onSuccess {
@@ -880,6 +970,7 @@ class GitWaySessionViewModel(
                     )
                 ),
                 commitMessage = "Git Way: add ${newLines.size} path(s) to .gitignore",
+                targetBranch = state.selectedBranch,
                 readFileBytes = { bytes },
                 onProgress = { _, _, _, _ -> }
             ).onSuccess {
@@ -944,6 +1035,7 @@ class GitWaySessionViewModel(
                 repo = repo,
                 changes = listOf(FileChange(fileName = name, filePath = fullPath, type = ChangeType.ADDED)),
                 commitMessage = "Git Way: create $fullPath",
+                targetBranch = state.selectedBranch,
                 readFileBytes = { bytes },
                 onProgress = { _, _, _, _ -> }
             ).onSuccess {
@@ -985,6 +1077,7 @@ class GitWaySessionViewModel(
                 repo = repo,
                 changes = listOf(FileChange(fileName = ".gitkeep", filePath = placeholderPath, type = ChangeType.ADDED)),
                 commitMessage = "Git Way: create folder $folderPath",
+                targetBranch = state.selectedBranch,
                 readFileBytes = { ByteArray(0) },
                 onProgress = { _, _, _, _ -> }
             ).onSuccess {
@@ -1035,6 +1128,7 @@ class GitWaySessionViewModel(
                 } else {
                     "Git Way: add ${templates.size} GitHub Actions workflows"
                 },
+                targetBranch = state.selectedBranch,
                 readFileBytes = { path -> bytesByPath.getValue(path) },
                 onProgress = { _, _, _, _ -> }
             ).onSuccess {
@@ -1051,6 +1145,113 @@ class GitWaySessionViewModel(
             }.onFailure { throwable ->
                 state = state.copy(isAddingWorkflows = false, addWorkflowsError = throwable.message ?: "Couldn't add workflow file(s).")
             }
+        }
+    }
+
+    // ===== Repository Management: branches =====
+
+    fun loadBranches() {
+        val repo = state.selectedRepo ?: return
+        state = state.copy(isLoadingBranches = true, branchError = null)
+        viewModelScope.launch {
+            gitHubRepository.listBranches(repo)
+                .onSuccess { branches -> state = state.copy(isLoadingBranches = false, availableBranches = branches) }
+                .onFailure { throwable ->
+                    state = state.copy(isLoadingBranches = false, branchError = throwable.message ?: "Couldn't load branches.")
+                }
+        }
+    }
+
+    /** Switches which branch every subsequent read/write in this repo session targets —
+     * null means "the repo's own default branch". Reloads the tree for the new branch
+     * and clears anything tied to the old one (open viewer, selection, commit history). */
+    fun selectBranch(branch: String?) {
+        if (branch == state.selectedBranch) return
+        state = state.copy(
+            selectedBranch = branch,
+            expandedFolders = emptySet(),
+            selectedBrowserPaths = emptySet(),
+            viewingFile = null,
+            viewingContent = null,
+            commitHistory = emptyList()
+        )
+        loadBrowserRoot()
+    }
+
+    fun clearCreateBranchError() {
+        state = state.copy(createBranchError = null)
+    }
+
+    /** Creates [newBranchName] as a real fork of whichever branch is currently selected
+     * (or the default), then switches to it — never an empty ref. */
+    fun createBranch(newBranchName: String) {
+        val repo = state.selectedRepo ?: return
+        if (newBranchName.isBlank() || state.isCreatingBranch) return
+        val sourceBranch = state.selectedBranch ?: repo.defaultBranch
+        state = state.copy(isCreatingBranch = true, createBranchError = null)
+        viewModelScope.launch {
+            gitHubRepository.createBranch(repo, newBranchName.trim(), sourceBranch)
+                .onSuccess {
+                    state = state.copy(
+                        isCreatingBranch = false,
+                        availableBranches = state.availableBranches + newBranchName.trim()
+                    )
+                    selectBranch(newBranchName.trim())
+                }
+                .onFailure { throwable ->
+                    state = state.copy(isCreatingBranch = false, createBranchError = throwable.message ?: "Couldn't create branch.")
+                }
+        }
+    }
+
+    // ===== Repository Management: commit history =====
+
+    fun loadCommitHistory() {
+        val repo = state.selectedRepo ?: return
+        state = state.copy(isLoadingCommitHistory = true, commitHistoryError = null)
+        viewModelScope.launch {
+            gitHubRepository.getCommitHistory(repo, branch = state.selectedBranch)
+                .onSuccess { commits -> state = state.copy(isLoadingCommitHistory = false, commitHistory = commits) }
+                .onFailure { throwable ->
+                    state = state.copy(isLoadingCommitHistory = false, commitHistoryError = throwable.message ?: "Couldn't load commit history.")
+                }
+        }
+    }
+
+    // ===== Repository Management: repo settings (rename / describe / visibility / delete) =====
+
+    fun clearRepoSettingsError() {
+        state = state.copy(repoSettingsError = null)
+    }
+
+    fun updateRepositorySettings(newName: String?, newDescription: String?, newIsPrivate: Boolean?) {
+        val repo = state.selectedRepo ?: return
+        if (state.isUpdatingRepoSettings) return
+        state = state.copy(isUpdatingRepoSettings = true, repoSettingsError = null)
+        viewModelScope.launch {
+            gitHubRepository.updateRepository(repo, newName, newDescription, newIsPrivate)
+                .onSuccess { updated -> state = state.copy(isUpdatingRepoSettings = false, selectedRepo = updated) }
+                .onFailure { throwable ->
+                    state = state.copy(isUpdatingRepoSettings = false, repoSettingsError = throwable.message ?: "Couldn't update repository.")
+                }
+        }
+    }
+
+    /** Permanently deletes the current repo from GitHub. [onDeleted] fires only on
+     * success, so the caller can navigate back to the repository list. */
+    fun deleteRepository(onDeleted: () -> Unit) {
+        val repo = state.selectedRepo ?: return
+        if (state.isDeletingRepo) return
+        state = state.copy(isDeletingRepo = true, deleteRepoError = null)
+        viewModelScope.launch {
+            gitHubRepository.deleteRepository(repo)
+                .onSuccess {
+                    state = state.copy(isDeletingRepo = false)
+                    onDeleted()
+                }
+                .onFailure { throwable ->
+                    state = state.copy(isDeletingRepo = false, deleteRepoError = throwable.message ?: "Couldn't delete repository.")
+                }
         }
     }
 
@@ -1089,6 +1290,7 @@ class GitWaySessionViewModel(
                 } else {
                     "Git Way: delete ${paths.size} files"
                 },
+                targetBranch = state.selectedBranch,
                 readFileBytes = { ByteArray(0) }, // never invoked — REMOVED changes carry no content
                 onProgress = { _, _, _, _ -> }
             ).onSuccess {
@@ -1181,6 +1383,7 @@ class GitWaySessionViewModel(
                     } else {
                         "Git Way: paste ${changes.size} files"
                     },
+                    targetBranch = state.selectedBranch,
                     readFileBytes = { path -> byteCache.getValue(path) },
                     onProgress = { _, _, _, _ -> }
                 ).onSuccess {
@@ -1287,6 +1490,7 @@ class GitWaySessionViewModel(
                 repo = repo,
                 changes = listOf(FileChange(fileName = entry.name, filePath = entry.path, type = ChangeType.MODIFIED)),
                 commitMessage = "Git Way: edit ${entry.path}",
+                targetBranch = state.selectedBranch,
                 readFileBytes = { bytes },
                 onProgress = { _, _, _, _ -> }
             ).onSuccess {

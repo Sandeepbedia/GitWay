@@ -10,12 +10,18 @@ import com.io.git.way.data.remote.dto.CreateCommitRequest
 import com.io.git.way.data.remote.dto.CreateFileContentRequest
 import com.io.git.way.data.remote.dto.CreateRefRequest
 import com.io.git.way.data.remote.dto.CreateTreeRequest
+import com.io.git.way.data.remote.dto.CreateRepoRequest
 import com.io.git.way.data.remote.dto.GitHubErrorResponseDto
+import com.io.git.way.data.remote.dto.GitHubRepoDto
+import com.io.git.way.data.remote.dto.GitHubUserDto
 import com.io.git.way.data.remote.dto.TreeEntryInput
 import com.io.git.way.data.remote.dto.UpdateRefRequest
+import com.io.git.way.data.remote.dto.UpdateRepoRequest
 import com.io.git.way.domain.VersionComparator
+import com.io.git.way.domain.model.ApiRateLimit
 import com.io.git.way.domain.model.AppUpdateInfo
 import com.io.git.way.domain.model.ChangeType
+import com.io.git.way.domain.model.CommitSummary
 import com.io.git.way.domain.model.FileChange
 import com.io.git.way.domain.model.GitRepository as GitRepositoryModel
 import com.io.git.way.domain.model.GitUser
@@ -81,34 +87,47 @@ class GitHubRepositoryImpl(
         withContext(Dispatchers.IO) {
             runCatching {
                 tokenManager.saveToken(token)
-                val user = apiService.getAuthenticatedUser()
-                GitUser(
-                    username = user.login,
-                    avatarUrl = user.avatarUrl,
-                    displayName = user.name
-                )
+                apiService.getAuthenticatedUser().toDomain()
             }.onFailure {
                 tokenManager.clearToken()
             }
         }
 
+    private fun GitHubUserDto.toDomain(): GitUser = GitUser(
+        username = login,
+        avatarUrl = avatarUrl,
+        displayName = name,
+        bio = bio,
+        company = company,
+        location = location,
+        htmlUrl = htmlUrl ?: "https://github.com/$login",
+        publicRepos = publicRepos,
+        followers = followers,
+        following = following,
+        createdAt = createdAt.orEmpty()
+    )
+
     override suspend fun listRepositories(): Result<List<GitRepositoryModel>> =
         withContext(Dispatchers.IO) {
             runCatching {
-                apiService.listRepositories().map { dto ->
-                    GitRepositoryModel(
-                        name = dto.name,
-                        fullName = dto.fullName,
-                        owner = dto.owner.login,
-                        isPrivate = dto.isPrivate,
-                        lastUpdated = dto.updatedAt.orEmpty(),
-                        defaultBranch = dto.defaultBranch ?: "main",
-                        language = dto.language,
-                        createdAt = dto.createdAt.orEmpty()
-                    )
-                }
+                apiService.listRepositories().map { it.toDomain() }
             }
         }
+
+    private fun GitHubRepoDto.toDomain(): GitRepositoryModel = GitRepositoryModel(
+        name = name,
+        fullName = fullName,
+        owner = owner.login,
+        isPrivate = isPrivate,
+        lastUpdated = updatedAt.orEmpty(),
+        defaultBranch = defaultBranch ?: "main",
+        language = language,
+        createdAt = createdAt.orEmpty(),
+        stargazersCount = stargazersCount,
+        forksCount = forksCount,
+        archived = archived,
+        isFork = fork
+    )
 
     // ===== §2 Validate Repository Before Upload =====
 
@@ -153,10 +172,10 @@ class GitHubRepositoryImpl(
             }
         }
 
-    override suspend fun getRepositoryTree(repo: GitRepositoryModel): Result<Map<String, String>> =
-        getRepositoryTreeDetailed(repo).map { detailed -> detailed.mapValues { it.value.sha } }
+    override suspend fun getRepositoryTree(repo: GitRepositoryModel, branch: String?): Result<Map<String, String>> =
+        getRepositoryTreeDetailed(repo, branch).map { detailed -> detailed.mapValues { it.value.sha } }
 
-    override suspend fun getRepositoryTreeDetailed(repo: GitRepositoryModel): Result<Map<String, RemoteTreeEntry>> =
+    override suspend fun getRepositoryTreeDetailed(repo: GitRepositoryModel, branch: String?): Result<Map<String, RemoteTreeEntry>> =
         withContext(Dispatchers.IO) {
             runCatching {
                 try {
@@ -167,7 +186,7 @@ class GitHubRepositoryImpl(
                     // real "Git Repository is empty." GitHub error leak straight to the UI
                     // as a hard failure (with no way to continue) instead of being treated
                     // as "no remote files yet".
-                    val treeResponse = apiService.getTree(repo.owner, repo.name, repo.defaultBranch, recursive = 1)
+                    val treeResponse = apiService.getTree(repo.owner, repo.name, branch ?: repo.defaultBranch, recursive = 1)
                     treeResponse.tree
                         .filter { it.type == "blob" }
                         .associate { it.path to RemoteTreeEntry(sha = it.sha.orEmpty(), size = it.size) }
@@ -182,12 +201,17 @@ class GitHubRepositoryImpl(
         repo: GitRepositoryModel,
         changes: List<FileChange>,
         commitMessage: String,
+        targetBranch: String?,
         readFileBytes: suspend (relativePath: String) -> ByteArray,
         onProgress: (phase: UploadPhase, completed: Int, total: Int, currentFile: String) -> Unit
     ): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             onProgress(UploadPhase.VALIDATING, 0, changes.size, "")
-            val branch = validateRepositoryForUpload(repo).getOrThrow()
+            val validatedDefaultBranch = validateRepositoryForUpload(repo).getOrThrow()
+            // targetBranch (e.g. from the Repository Browser's branch picker) always wins
+            // over the repo's default — validateRepositoryForUpload still ran above for
+            // its permission/archived/disabled checks, which apply regardless of branch.
+            val branch = targetBranch?.takeIf { it.isNotBlank() } ?: validatedDefaultBranch
 
             // §7 Normalize File Paths: fail fast, before any blob is created, rather than
             // letting GitHub bounce a bad path back as an opaque 422 mid-upload. The
@@ -566,4 +590,127 @@ class GitHubRepositoryImpl(
             )
         }
     }
+
+    // ===== Repository Management =====
+
+    override suspend fun listBranches(repo: GitRepositoryModel): Result<List<String>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                githubCallWithRetry { apiService.listBranches(repo.owner, repo.name) }.map { it.name }
+            }
+        }
+
+    override suspend fun createBranch(repo: GitRepositoryModel, newBranchName: String, fromBranch: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val sourceRef = try {
+                    githubCallWithRetry { apiService.getRef(repo.owner, repo.name, fromBranch) }
+                } catch (e: HttpException) {
+                    throw IOException("Couldn't read branch \"$fromBranch\": ${e.toFriendlyMessage()}", e)
+                }
+                try {
+                    githubCallWithRetry {
+                        apiService.createRef(
+                            repo.owner, repo.name,
+                            CreateRefRequest(ref = "refs/heads/$newBranchName", sha = sourceRef.objectRef.sha)
+                        )
+                    }
+                } catch (e: HttpException) {
+                    val friendly = if (e.code() == 422) {
+                        "A branch named \"$newBranchName\" already exists."
+                    } else {
+                        e.toFriendlyMessage()
+                    }
+                    throw IOException(friendly, e)
+                }
+                Unit
+            }
+        }
+
+    override suspend fun getCommitHistory(repo: GitRepositoryModel, branch: String?): Result<List<CommitSummary>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                try {
+                    githubCallWithRetry {
+                        apiService.listCommits(repo.owner, repo.name, branch ?: repo.defaultBranch)
+                    }.map { item ->
+                        CommitSummary(
+                            sha = item.sha,
+                            message = item.commit.message,
+                            authorName = item.author?.login ?: item.commit.author?.name ?: "Unknown",
+                            date = item.commit.author?.date.orEmpty(),
+                            htmlUrl = item.htmlUrl ?: "https://github.com/${repo.owner}/${repo.name}/commit/${item.sha}"
+                        )
+                    }
+                } catch (e: HttpException) {
+                    // Empty repo / branch with no commits yet -> empty history, not an error.
+                    if (e.code() == 404 || e.code() == 409) emptyList() else throw IOException(e.toFriendlyMessage(), e)
+                }
+            }
+        }
+
+    override suspend fun createRepository(name: String, description: String, isPrivate: Boolean): Result<GitRepositoryModel> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                try {
+                    githubCallWithRetry {
+                        apiService.createRepository(
+                            CreateRepoRequest(name = name, description = description.ifBlank { null }, isPrivate = isPrivate, autoInit = true)
+                        )
+                    }.toDomain()
+                } catch (e: HttpException) {
+                    val friendly = if (e.code() == 422) {
+                        "A repository named \"$name\" already exists on this account."
+                    } else {
+                        e.toFriendlyMessage()
+                    }
+                    throw IOException(friendly, e)
+                }
+            }
+        }
+
+    override suspend fun updateRepository(
+        repo: GitRepositoryModel,
+        newName: String?,
+        newDescription: String?,
+        newIsPrivate: Boolean?
+    ): Result<GitRepositoryModel> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                githubCallWithRetry {
+                    apiService.updateRepository(
+                        repo.owner, repo.name,
+                        UpdateRepoRequest(name = newName, description = newDescription, isPrivate = newIsPrivate)
+                    )
+                }.toDomain()
+            }
+        }
+
+    override suspend fun deleteRepository(repo: GitRepositoryModel): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val response = apiService.deleteRepository(repo.owner, repo.name)
+                if (!response.isSuccessful) {
+                    val friendly = when (response.code()) {
+                        403 -> "This token doesn't have delete permission — it needs the \"delete_repo\" scope."
+                        404 -> "Repository \"${repo.owner}/${repo.name}\" no longer exists."
+                        else -> "GitHub rejected the delete (HTTP ${response.code()})."
+                    }
+                    throw IOException(friendly)
+                }
+            }
+        }
+
+    override suspend fun getCurrentUser(): Result<GitUser> =
+        withContext(Dispatchers.IO) {
+            runCatching { githubCallWithRetry { apiService.getAuthenticatedUser() }.toDomain() }
+        }
+
+    override suspend fun getApiRateLimit(): Result<ApiRateLimit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val core = githubCallWithRetry { apiService.getRateLimit() }.resources.core
+                ApiRateLimit(limit = core.limit, remaining = core.remaining, resetEpochSeconds = core.reset)
+            }
+        }
 }

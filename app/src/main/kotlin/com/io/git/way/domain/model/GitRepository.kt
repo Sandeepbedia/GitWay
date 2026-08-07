@@ -9,5 +9,9 @@ data class GitRepository(
     val lastUpdated: String,
     val defaultBranch: String = "main",
     val language: String? = null,
-    val createdAt: String = ""
+    val createdAt: String = "",
+    val stargazersCount: Int = 0,
+    val forksCount: Int = 0,
+    val archived: Boolean = false,
+    val isFork: Boolean = false
 )
