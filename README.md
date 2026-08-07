@@ -250,12 +250,12 @@ Git Way is free software, released under the **GNU General Public License v3.0**
 
 ## Disclaimer
 
-This software is provided **"AS IS" without warranty of any kind** — see the
-disclaimer in **[LICENSE](LICENSE)**. Git Way interacts with the GitHub API
-and your repositories; you are solely responsible for any push, merge,
-force-update, or other operation you perform with it. Force-push and history
-rewrites can permanently destroy data — use at your own risk. This project is
-not affiliated with or endorsed by GitHub, Inc.
+This software is provided **"AS IS" without warranty of any kind**. Git Way
+interacts with the GitHub API and your repositories; you are solely responsible
+for any push, merge, force-update, or other operation you perform with it.
+Force-push and history rewrites can permanently destroy data — use at your own
+risk. This project is not affiliated with or endorsed by GitHub, Inc. See
+**[DISCLAIMER.md](DISCLAIMER.md)** for the full disclaimer.
 
 ---
 
