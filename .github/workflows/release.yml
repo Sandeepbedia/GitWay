@@ -84,6 +84,14 @@ jobs:
           cp "$APK_PATH" "$OUT_NAME"
           echo "path=$OUT_NAME" >> "$GITHUB_OUTPUT"
 
+      - name: Upload APK as build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GitWay-${{ github.ref_name }}-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:

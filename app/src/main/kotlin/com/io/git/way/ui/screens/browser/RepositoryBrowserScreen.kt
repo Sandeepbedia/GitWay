@@ -1,25 +1,8 @@
-/*
- * Git Way
- * Copyright (C) 2026 Sandeep Bedia
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
-
 package com.io.git.way.ui.screens.browser
 
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -71,7 +54,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Android
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
@@ -83,16 +68,22 @@ import androidx.compose.material.icons.filled.FileCopy
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOff
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Merge
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.NoteAdd
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.TrackChanges
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
@@ -123,11 +114,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import coil.ImageLoader
+import coil.compose.rememberAsyncImagePainter
+import coil.decode.SvgDecoder
+import coil.request.ImageRequest
 import com.io.git.way.domain.model.BrowserEntry
 import com.io.git.way.domain.model.BrowserSortMode
 import com.io.git.way.domain.model.BrowserTypeFilter
@@ -140,6 +137,7 @@ import com.io.git.way.ui.common.FileTypeIcons
 import com.io.git.way.ui.common.GitWaySessionViewModel
 import com.io.git.way.ui.common.MarkdownLinkResolver
 import com.io.git.way.ui.common.MarkdownView
+import com.io.git.way.ui.common.PendingDownloadHandler
 import com.io.git.way.ui.common.SyntaxHighlightTransformation
 import com.io.git.way.ui.common.SyntaxHighlighter
 import com.io.git.way.ui.common.formatRelativeTime
@@ -168,13 +166,18 @@ private val CRITICAL_FILE_NAMES = setOf(
 fun RepositoryBrowserScreen(
     sessionViewModel: GitWaySessionViewModel,
     onBack: () -> Unit,
-    onSyncFromDevice: () -> Unit
+    onSyncFromDevice: () -> Unit,
+    onOpenActions: () -> Unit = {},
+    onOpenPullRequests: () -> Unit = {},
+    onOpenIssues: () -> Unit = {},
+    onOpenReleases: () -> Unit = {}
 ) {
     val state = sessionViewModel.state
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
 
     var showCreateMenu by remember { mutableStateOf(false) }
+    var showMoreMenu by remember { mutableStateOf(false) }
     var showNewFileDialog by remember { mutableStateOf(false) }
     var showNewFolderDialog by remember { mutableStateOf(false) }
     var showSortFilterSheet by remember { mutableStateOf(false) }
@@ -187,6 +190,7 @@ fun RepositoryBrowserScreen(
     var showCreateBranchDialog by remember { mutableStateOf(false) }
     var showCommitHistory by remember { mutableStateOf(false) }
     var showRepoSettings by remember { mutableStateOf(false) }
+    var showDeleteRepoDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.selectedRepo) {
         if (state.selectedRepo != null && state.remoteTreeCache.isEmpty() && !state.isBrowserLoading) {
@@ -237,12 +241,6 @@ fun RepositoryBrowserScreen(
                 IconButton(onClick = { showBranchPicker = true }) {
                     Icon(Icons.Filled.AccountTree, contentDescription = "Branch: ${state.selectedBranch ?: repo?.defaultBranch ?: "default"}")
                 }
-                IconButton(onClick = { showCommitHistory = true; sessionViewModel.loadCommitHistory() }) {
-                    Icon(Icons.Filled.History, contentDescription = "Commit history")
-                }
-                IconButton(onClick = { showRepoSettings = true }) {
-                    Icon(Icons.Filled.Settings, contentDescription = "Repository settings")
-                }
                 IconButton(onClick = { showSortFilterSheet = true }) {
                     Icon(Icons.Filled.Sort, contentDescription = "Sort & filter")
                 }
@@ -264,6 +262,76 @@ fun RepositoryBrowserScreen(
                         DropdownMenuItem(text = { Text("New folder") }, onClick = { showCreateMenu = false; showNewFolderDialog = true })
                     }
                 }
+                Box {
+                    IconButton(onClick = { showMoreMenu = true }) {
+                        Icon(Icons.Filled.Settings, contentDescription = "More options")
+                    }
+                    DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
+                        DropdownMenuItem(
+                            text = { Text("GitHub Actions") },
+                            onClick = { showMoreMenu = false; onOpenActions() },
+                            leadingIcon = { Icon(Icons.Filled.PlayArrow, contentDescription = null) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Pull Requests") },
+                            onClick = { showMoreMenu = false; onOpenPullRequests() },
+                            leadingIcon = { Icon(Icons.Filled.Merge, contentDescription = null) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Issues") },
+                            onClick = { showMoreMenu = false; onOpenIssues() },
+                            leadingIcon = { Icon(Icons.Filled.BugReport, contentDescription = null) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Releases") },
+                            onClick = { showMoreMenu = false; onOpenReleases() },
+                            leadingIcon = { Icon(Icons.Filled.TrackChanges, contentDescription = null) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Commit history") },
+                            onClick = { showMoreMenu = false; showCommitHistory = true; sessionViewModel.loadCommitHistory() },
+                            leadingIcon = { Icon(Icons.Filled.History, contentDescription = null) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Download repo ZIP") },
+                            onClick = { showMoreMenu = false; sessionViewModel.downloadRepoZip() },
+                            leadingIcon = { Icon(Icons.Filled.Archive, contentDescription = null) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(if (repo?.isPrivate == true) "Make public" else "Make private") },
+                            onClick = {
+                                showMoreMenu = false
+                                if (repo != null) {
+                                    val targetPrivate = !repo.isPrivate
+                                    sessionViewModel.updateRepositorySettings(null, null, targetPrivate) {
+                                        Toast.makeText(
+                                            context,
+                                            if (targetPrivate) "Repository is now private" else "Repository is now public",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                }
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    if (repo?.isPrivate == true) Icons.Filled.LockOpen else Icons.Filled.Lock,
+                                    contentDescription = null
+                                )
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Rename repository") },
+                            onClick = { showMoreMenu = false; showRepoSettings = true },
+                            leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) }
+                        )
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = { Text("Delete repository", color = MaterialTheme.colorScheme.error) },
+                            onClick = { showMoreMenu = false; showDeleteRepoDialog = true },
+                            leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) }
+                        )
+                    }
+                }
             }
         }
     ) { padding ->
@@ -283,6 +351,7 @@ fun RepositoryBrowserScreen(
                         }
                     },
                     singleLine = true,
+                    shape = RoundedCornerShape(50),
                     modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp)
                 )
 
@@ -307,6 +376,9 @@ fun RepositoryBrowserScreen(
             }
             if (state.duplicateError != null) {
                 Text(state.duplicateError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
+            }
+            if (state.repoSettingsError != null) {
+                Text(state.repoSettingsError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
             }
 
             if (state.showWorkflowSuggestion && !selectionMode) {
@@ -376,7 +448,13 @@ fun RepositoryBrowserScreen(
                         onUpload = onSyncFromDevice
                     )
 
-                    else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        item(key = "repository-root") {
+                            RepositoryRootRow(
+                                repositoryName = repo?.name ?: "Repository",
+                                itemCount = state.browserEntries.size
+                            )
+                        }
                         items(state.browserEntries, key = { it.entry.path }) { row ->
                             TreeRowItem(
                                 row = row,
@@ -490,6 +568,7 @@ fun RepositoryBrowserScreen(
             isLoading = state.isLoadingCommitHistory,
             errorMessage = state.commitHistoryError,
             onOpenCommit = { url -> context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) },
+            onViewDiff = { commit -> sessionViewModel.loadCommitDiff(commit.sha) },
             onDismiss = { showCommitHistory = false }
         )
     }
@@ -498,12 +577,18 @@ fun RepositoryBrowserScreen(
             repo = repo,
             isSaving = state.isUpdatingRepoSettings,
             saveError = state.repoSettingsError,
-            isDeleting = state.isDeletingRepo,
-            deleteError = state.deleteRepoError,
             onSave = { newName, newDescription, newIsPrivate -> sessionViewModel.updateRepositorySettings(newName, newDescription, newIsPrivate) },
             onSaved = { showRepoSettings = false },
-            onDelete = { sessionViewModel.deleteRepository(onDeleted = { showRepoSettings = false; onBack() }) },
             onDismiss = { showRepoSettings = false; sessionViewModel.clearRepoSettingsError() }
+        )
+    }
+    if (showDeleteRepoDialog && repo != null) {
+        DeleteRepositoryDialog(
+            repo = repo,
+            isDeleting = state.isDeletingRepo,
+            deleteError = state.deleteRepoError,
+            onConfirm = { sessionViewModel.deleteRepository(onDeleted = { showDeleteRepoDialog = false; onBack() }) },
+            onDismiss = { showDeleteRepoDialog = false; sessionViewModel.clearDeleteRepoError() }
         )
     }
     if (showWorkflowPicker) {
@@ -536,6 +621,23 @@ fun RepositoryBrowserScreen(
             dismissButton = { TextButton(onClick = { pendingDeleteSelection = false }, enabled = !state.isDeletingEntry) { Text("Cancel") } }
         )
     }
+
+    if (state.viewingCommitSha != null) {
+        CommitDiffDialog(
+            files = state.commitDiff,
+            isLoading = state.isLoadingCommitDiff,
+            errorMessage = state.commitDiffError,
+            onDismiss = { sessionViewModel.clearCommitDiff() }
+        )
+    }
+
+    PendingDownloadHandler(
+        pending = state.pendingDownload,
+        downloading = state.downloadingArtifactName != null && state.pendingDownload == null,
+        downloadError = state.downloadError,
+        onClear = { sessionViewModel.clearPendingDownload() },
+        onClearError = { sessionViewModel.clearDownloadError() }
+    )
 }
 
 /** PRD §21 Loading — a handful of placeholder rows instead of a bare spinner, so the
@@ -604,6 +706,78 @@ private fun SearchResultRow(path: String, onClick: () -> Unit) {
 }
 
 @Composable
+private fun RepositoryRootRow(
+    repositoryName: String,
+    itemCount: Int
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .padding(horizontal = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Filled.KeyboardArrowDown,
+            contentDescription = "Repository root",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(Modifier.width(2.dp))
+        SvgFolderIcon(
+            open = true,
+            modifier = Modifier.size(28.dp)
+        )
+        Text(
+            repositoryName,
+            style = MaterialTheme.typography.titleMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 10.dp).weight(1f)
+        )
+        Text(
+            itemCount.toString(),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun SvgFolderIcon(
+    open: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val resource = if (open) {
+        com.io.git.way.R.raw.folder_open
+    } else {
+        com.io.git.way.R.raw.folder_closed
+    }
+
+    val imageLoader = remember(context) {
+        ImageLoader.Builder(context)
+            .components {
+                add(SvgDecoder.Factory())
+            }
+            .build()
+    }
+
+    val painter = rememberAsyncImagePainter(
+        model = resource,
+        imageLoader = imageLoader
+    )
+
+    Image(
+        painter = painter,
+        contentDescription = if (open) "Open folder" else "Closed folder",
+        contentScale = ContentScale.Fit,
+        modifier = modifier
+    )
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
 private fun TreeRowItem(
     row: TreeRow,
     selectionMode: Boolean,
@@ -624,234 +798,338 @@ private fun TreeRowItem(
     val entry = row.entry
     var showMenu by remember { mutableStateOf(false) }
     val iconTint = if (entry.isFolder) GlassBlobBlue else FileTypeIcons.colorFor(entry.name)
-    val rowShape = RoundedCornerShape(14.dp)
     val rowBackground = if (selected) {
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.13f)
     } else {
         Color.Transparent
     }
 
-    // A real, fixed height instead of IntrinsicSize.Min: IntrinsicSize.Min combined with
-    // a horizontalScroll()'d, weighted child inside a LazyColumn item (which itself gives
-    // unbounded height) is a known-fragile Compose combination — it can silently resolve
-    // to inconsistent heights per row instead of failing loudly, which is exactly what
-    // produced the jagged, inconsistently-"cut" guide lines. A fixed height sidesteps the
-    // whole problem: every row is unambiguously the same height, so fillMaxHeight() below
-    // always resolves against a real, bounded number. 54dp comfortably fits both the 34dp
-    // icon and a two-line name+metadata text stack with the row's 8dp vertical padding.
-    val rowHeight = 54.dp
+    // Fixed height keeps every guide column aligned to the same vertical rhythm.
+    val rowHeight = 50.dp
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(rowHeight)
-            .clip(rowShape)
+            .clip(RoundedCornerShape(10.dp))
             .background(rowBackground)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(vertical = 8.dp, horizontal = 6.dp),
+            .padding(horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Scrollable leading segment: indent guides + expand/select icon + icon box +
-        // name/subtitle. This is the part that grows without bound as tree depth
-        // increases, so it's the part that scrolls horizontally — a deeply nested path
-        // no longer squeezes the name down to nothing or pushes the menu/open buttons
-        // off-screen; swipe left/right (or the whole row now genuinely scrolls, not just
-        // clips) to see the rest of it. Trailing controls below stay fixed at a normal
-        // size, always reachable.
         val leadingScroll = rememberScrollState()
+
         Row(
-            modifier = Modifier.weight(1f, fill = true).fillMaxHeight().horizontalScroll(leadingScroll),
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .horizontalScroll(leadingScroll),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TreeIndentGuides(row = row)
+            TreeIndentGuides(row, if (entry.isFolder) 0.dp else 24.dp)
 
             if (entry.isFolder) {
-                val rotation by animateFloatAsState(if (row.isExpanded) 90f else 0f, label = "chevronRotation")
+                val rotation by animateFloatAsState(
+                    targetValue = if (row.isExpanded) 90f else 0f,
+                    label = "tree-chevron"
+                )
                 Icon(
                     Icons.Filled.KeyboardArrowRight,
-                    contentDescription = if (row.isExpanded) "Collapse" else "Expand",
+                    contentDescription = if (row.isExpanded) "Collapse folder" else "Expand folder",
                     modifier = Modifier
-                        .size(18.dp)
+                        .size(20.dp)
                         .graphicsLayer { rotationZ = rotation },
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(Modifier.width(4.dp))
+                Spacer(Modifier.width(2.dp))
             } else if (selectionMode) {
                 Icon(
                     if (selected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
                     contentDescription = if (selected) "Selected" else "Not selected",
-                    tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = if (selected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(Modifier.width(4.dp))
+            } else {
+                // Keep files aligned with folder names without showing a fake expand arrow.
+                Spacer(Modifier.width(22.dp))
             }
 
-            // Icon in a colour-tinted rounded-square container (PRD visual design language).
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .background(iconTint.copy(alpha = 0.16f), RoundedCornerShape(10.dp)),
-                contentAlignment = Alignment.Center
-            ) {
+            if (entry.isFolder) {
+                SvgFolderIcon(
+                    open = row.isExpanded,
+                    modifier = Modifier.size(25.dp)
+                )
+            } else {
                 Icon(
-                    if (entry.isFolder) Icons.Filled.Folder else FileTypeIcons.iconFor(entry.name),
+                    FileTypeIcons.iconFor(entry.name),
                     contentDescription = null,
                     tint = iconTint,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(21.dp)
                 )
             }
 
-            Column(modifier = Modifier.padding(start = 10.dp)) {
-                Text(entry.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1, softWrap = false)
+            Column(
+                modifier = Modifier
+                    .padding(start = 9.dp)
+                    .widthIn(min = 80.dp, max = 420.dp)
+            ) {
                 Text(
-                    if (entry.isFolder) {
-                        "${row.directChildCount} item${if (row.directChildCount == 1) "" else "s"}"
-                    } else {
-                        val type = FileTypeIcons.typeLabel(entry.name)
-                        if (fileSize != null) "$type • ${FileTypeIcons.formatSize(fileSize)}" else type
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    entry.name,
+                    style = MaterialTheme.typography.bodyMedium,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     softWrap = false
                 )
+                if (!entry.isFolder) {
+                    Text(
+                        if (fileSize != null) "${FileTypeIcons.typeLabel(entry.name)} • ${FileTypeIcons.formatSize(fileSize)}" else FileTypeIcons.typeLabel(entry.name),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false
+                    )
+                }
             }
-            // Trailing breathing room so the last character isn't flush against the
-            // fixed controls below when this segment is scrolled all the way right.
-            Spacer(Modifier.width(10.dp))
+
+            Spacer(Modifier.width(12.dp))
         }
 
-        if (!entry.isFolder) {
+        if (!entry.isFolder && !selectionMode) {
             val badge = FileTypeIcons.badgeFor(entry.name)
             if (badge.isNotEmpty()) {
                 Box(
                     modifier = Modifier
-                        .background(iconTint.copy(alpha = 0.16f), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                        .background(iconTint.copy(alpha = 0.14f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 5.dp, vertical = 2.dp)
                 ) {
-                    Text(badge, style = MaterialTheme.typography.labelSmall, color = iconTint)
+                    Text(
+                        badge,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = iconTint
+                    )
                 }
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(5.dp))
             }
         }
 
         if (!selectionMode) {
             Box {
-                IconButton(onClick = { showMenu = true }, modifier = Modifier.size(30.dp)) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = "More actions", modifier = Modifier.size(18.dp))
+                IconButton(
+                    onClick = { showMenu = true },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        Icons.Filled.MoreVert,
+                        contentDescription = "More actions",
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                    DropdownMenuItem(text = { Text("Open") }, onClick = { showMenu = false; onClick() })
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Open") },
+                        onClick = { showMenu = false; onClick() }
+                    )
                     if (entry.isFolder) {
                         DropdownMenuItem(
-                            leadingIcon = { Icon(Icons.Filled.NoteAdd, contentDescription = null) },
+                            leadingIcon = { Icon(Icons.Filled.NoteAdd, null) },
                             text = { Text("New File") },
                             onClick = { showMenu = false; onNewFile() }
                         )
                         DropdownMenuItem(
-                            leadingIcon = { Icon(Icons.Filled.CreateNewFolder, contentDescription = null) },
+                            leadingIcon = { Icon(Icons.Filled.CreateNewFolder, null) },
                             text = { Text("New Folder") },
                             onClick = { showMenu = false; onNewFolder() }
                         )
                         DropdownMenuItem(
-                            leadingIcon = { Icon(Icons.Filled.Refresh, contentDescription = null) },
+                            leadingIcon = { Icon(Icons.Filled.Refresh, null) },
                             text = { Text("Refresh") },
                             onClick = { showMenu = false; onRefresh() }
                         )
                     } else {
                         DropdownMenuItem(
-                            leadingIcon = { Icon(Icons.Filled.FileCopy, contentDescription = null) },
+                            leadingIcon = { Icon(Icons.Filled.FileCopy, null) },
                             text = { Text("Duplicate") },
                             onClick = { showMenu = false; onDuplicate() }
                         )
                     }
                     DropdownMenuItem(
-                        leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                        leadingIcon = { Icon(Icons.Filled.Edit, null) },
                         text = { Text("Rename") },
                         onClick = { showMenu = false; onRename() }
                     )
-                    DropdownMenuItem(text = { Text("Copy Path") }, onClick = { showMenu = false; onCopyPath() })
-                    DropdownMenuItem(text = { Text("Copy Name") }, onClick = { showMenu = false; onCopyName() })
                     DropdownMenuItem(
-                        leadingIcon = { Icon(Icons.Filled.OpenInNew, contentDescription = null) },
+                        text = { Text("Copy Path") },
+                        onClick = { showMenu = false; onCopyPath() }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Copy Name") },
+                        onClick = { showMenu = false; onCopyName() }
+                    )
+                    DropdownMenuItem(
+                        leadingIcon = { Icon(Icons.Filled.OpenInNew, null) },
                         text = { Text("View on GitHub") },
                         onClick = { showMenu = false; onViewOnGitHub() }
                     )
                     DropdownMenuItem(
-                        leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Filled.Delete,
+                                null,
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        },
                         text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
                         onClick = { showMenu = false; onDelete() }
                     )
                 }
             }
-            IconButton(onClick = onClick, modifier = Modifier.size(30.dp)) {
-                Box(
-                    modifier = Modifier.size(24.dp).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f), CircleShape),
-                    contentAlignment = Alignment.Center
+
+            if (!entry.isFolder) {
+                IconButton(
+                    onClick = onClick,
+                    modifier = Modifier.size(32.dp)
                 ) {
-                    Icon(Icons.Filled.KeyboardArrowRight, contentDescription = "Open", modifier = Modifier.size(14.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(23.dp)
+                            .background(
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f),
+                                CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Filled.KeyboardArrowRight,
+                            contentDescription = "Open",
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-/** Indent-guide columns for one tree row: a plain vertical line for every ancestor level
- * that still has more siblings coming, and — for this row's own column — a rounded
- * "elbow" (vertical down to the icon, then a short horizontal stub) that only keeps
- * running below if this row itself has a next sibling. Narrower and capped deeper into
- * the tree so a long chain-compacted name never gets crowded out of the row. */
+/** Continuous VS Code-style tree guides.
+ *
+ * Each depth gets one fixed 18dp column. Ancestor columns remain vertical when that
+ * ancestor has another sibling below; the current row gets an elbow into its icon/name.
+ */
 @Composable
-private fun TreeIndentGuides(row: TreeRow) {
-    val depth = row.depth
-    if (depth == 0) return
+private fun TreeIndentGuides(row: TreeRow, nameExtension: Dp = 0.dp) {
+    val guideColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.34f)
+    val indentUnit = 18.dp
+    val strokeWidth = 1.5.dp
+    val corner = 5.dp
+    val extensionPx = with(LocalDensity.current) { nameExtension.toPx() }
+    val expandedFolder = row.entry.isFolder && row.isExpanded && row.directChildCount > 0
 
-    val guideColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-    val fullIndentLevels = 5
-    val indentUnit = if (depth <= fullIndentLevels) 14.dp else 8.dp
-
-    Row {
-        for (level in 0 until depth - 1) {
-            val continues = row.ancestorLines.getOrElse(level) { false }
-            Box(modifier = Modifier.width(indentUnit).fillMaxHeight()) {
-                if (continues) {
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        drawLine(
-                            color = guideColor,
-                            start = Offset(size.width / 2f, 0f),
-                            end = Offset(size.width / 2f, size.height),
-                            strokeWidth = 1.4.dp.toPx(),
-                            cap = StrokeCap.Round
-                        )
-                    }
-                }
+    if (row.depth <= 0) {
+        // Top-level expanded folder: a short nub + drop that connects to the first
+        // child's guide column so its vertical line doesn't float with a gap.
+        if (expandedFolder) {
+            Canvas(
+                modifier = Modifier
+                    .width(indentUnit)
+                    .fillMaxHeight()
+            ) {
+                val midY = size.height / 2f
+                val radius = corner.toPx()
+                val stroke = strokeWidth.toPx()
+                val x = size.width / 2f
+                drawLine(
+                    color = guideColor,
+                    start = Offset(0f, midY),
+                    end = Offset(x + radius, midY),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round
+                )
+                drawLine(
+                    color = guideColor,
+                    start = Offset(x, midY),
+                    end = Offset(x, size.height),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round
+                )
             }
         }
+        return
+    }
 
-        val ownContinues = row.ancestorLines.getOrElse(depth - 1) { false }
-        Box(modifier = Modifier.width(indentUnit).fillMaxHeight()) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val midX = size.width / 2f
-                val midY = size.height / 2f
-                val corner = 5.dp.toPx()
-                val stroke = 1.4.dp.toPx()
+    Row(
+        modifier = Modifier.height(50.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        for (level in 0 until row.depth) {
+            val continues = row.ancestorLines.getOrElse(level) { false }
 
-                val elbow = Path().apply {
-                    moveTo(midX, 0f)
-                    lineTo(midX, midY - corner)
-                    quadraticBezierTo(midX, midY, midX + corner, midY)
-                    lineTo(size.width, midY)
-                }
-                drawPath(elbow, color = guideColor, style = Stroke(width = stroke, cap = StrokeCap.Round))
+            Box(
+                modifier = Modifier
+                    .width(indentUnit)
+                    .fillMaxHeight()
+            ) {
+                Canvas(Modifier.fillMaxSize()) {
+                    val x = size.width / 2f
+                    val midY = size.height / 2f
+                    val stroke = strokeWidth.toPx()
+                    val radius = corner.toPx()
 
-                if (ownContinues) {
-                    drawLine(
-                        color = guideColor,
-                        start = Offset(midX, midY),
-                        end = Offset(midX, size.height),
-                        strokeWidth = stroke,
-                        cap = StrokeCap.Round
-                    )
+                    if (level < row.depth - 1) {
+                        if (continues) {
+                            drawLine(
+                                color = guideColor,
+                                start = Offset(x, 0f),
+                                end = Offset(x, size.height),
+                                strokeWidth = stroke,
+                                cap = StrokeCap.Round
+                            )
+                        }
+                    } else {
+                        val elbow = Path().apply {
+                            moveTo(x, 0f)
+                            lineTo(x, midY - radius)
+                            quadraticBezierTo(x, midY, x + radius, midY)
+                            if (expandedFolder) {
+                                // Reach the first child's stub column so the drop connects.
+                                lineTo(x + indentUnit.toPx() + radius, midY)
+                            } else {
+                                lineTo(size.width + extensionPx, midY)
+                            }
+                        }
+
+                        drawPath(
+                            elbow,
+                            color = guideColor,
+                            style = Stroke(width = stroke, cap = StrokeCap.Round)
+                        )
+
+                        if (expandedFolder) {
+                            val dropX = x + indentUnit.toPx()
+                            drawLine(
+                                color = guideColor,
+                                start = Offset(dropX, midY),
+                                end = Offset(dropX, size.height),
+                                strokeWidth = stroke,
+                                cap = StrokeCap.Round
+                            )
+                        }
+
+                        if (continues) {
+                            drawLine(
+                                color = guideColor,
+                                start = Offset(x, midY),
+                                end = Offset(x, size.height),
+                                strokeWidth = stroke,
+                                cap = StrokeCap.Round
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1079,14 +1357,15 @@ private fun CreateBranchDialog(
 }
 
 /** Read-only commit log for whichever branch is currently active. Git Way only ever
- * writes new commits through the tested sync pipeline elsewhere in the app — this is
- * purely "what's already there", each row opening straight to that commit on GitHub. */
+ *  writes new commits through the tested sync pipeline elsewhere in the app — this is
+ *  purely "what's already there", each row opening straight to that commit on GitHub. */
 @Composable
 private fun CommitHistoryDialog(
     commits: List<CommitSummary>,
     isLoading: Boolean,
     errorMessage: String?,
     onOpenCommit: (String) -> Unit,
+    onViewDiff: (CommitSummary) -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -1101,19 +1380,23 @@ private fun CommitHistoryDialog(
                     errorMessage != null -> Text(errorMessage, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     commits.isEmpty() -> Text("No commits yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     else -> commits.forEach { commit ->
-                        Column(
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable { onOpenCommit(commit.htmlUrl) }
-                                .padding(vertical = 8.dp)
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(commit.title, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            Text(
-                                "${commit.authorName} · ${formatRelativeTime(commit.date)} · ${commit.shortSha}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(commit.title, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    "${commit.authorName} · ${formatRelativeTime(commit.date)} · ${commit.shortSha}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
+                            TextButton(onClick = { onViewDiff(commit) }) { Text("Diff") }
                         }
                         HorizontalDivider()
                     }
@@ -1124,34 +1407,78 @@ private fun CommitHistoryDialog(
     )
 }
 
-/** The repository itself, not its files: rename, redescribe, flip public/private, and —
- * behind a confirmation step — delete it outright. Everything here writes straight to
- * GitHub's repo-settings endpoints, separate from the file-sync pipeline used elsewhere. */
+/** Per-file unified diff of a single commit — green/red highlighted lines from the
+ *  raw patch text GitHub returns. */
+@Composable
+private fun CommitDiffDialog(
+    files: List<com.io.git.way.domain.model.CommitDiffFile>,
+    isLoading: Boolean,
+    errorMessage: String?,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Commit diff") },
+        text = {
+            Column(modifier = Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState())) {
+                when {
+                    isLoading -> Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                    }
+                    errorMessage != null -> Text(errorMessage, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    files.isEmpty() -> Text("No file changes.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    else -> files.forEach { file ->
+                        Text(
+                            "${file.filename}  (+${file.additions} −${file.deletions})",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                        )
+                        file.patch?.let { patch ->
+                            patch.split("\n").forEach { line ->
+                                val color = when {
+                                    line.startsWith("+") && !line.startsWith("+++") -> Color(0xFF16A34A)
+                                    line.startsWith("-") && !line.startsWith("---") -> MaterialTheme.colorScheme.error
+                                    line.startsWith("@@") -> MaterialTheme.colorScheme.primary
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                                Text(
+                                    line,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                    color = color
+                                )
+                            }
+                        }
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+    )
+}
+
+/** The repository itself, not its files: rename via GitHub's repo-settings endpoints. */
 @Composable
 private fun RepositorySettingsDialog(
     repo: GitRepository,
     isSaving: Boolean,
     saveError: String?,
-    isDeleting: Boolean,
-    deleteError: String?,
     onSave: (newName: String?, newDescription: String?, newIsPrivate: Boolean?) -> Unit,
     onSaved: () -> Unit,
-    onDelete: () -> Unit,
     onDismiss: () -> Unit
 ) {
     var name by remember { mutableStateOf(repo.name) }
-    var isPrivate by remember { mutableStateOf(repo.isPrivate) }
     var submitted by remember { mutableStateOf(false) }
-    var showDeleteConfirm by remember { mutableStateOf(false) }
-    var deleteConfirmText by remember { mutableStateOf("") }
 
     LaunchedEffect(isSaving, saveError) {
         if (submitted && !isSaving && saveError == null) onSaved()
     }
 
     AlertDialog(
-        onDismissRequest = { if (!isSaving && !isDeleting) onDismiss() },
-        title = { Text("Repository settings") },
+        onDismissRequest = { if (!isSaving) onDismiss() },
+        title = { Text("Rename repository") },
         text = {
             Column(modifier = Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState())) {
                 OutlinedTextField(
@@ -1162,60 +1489,8 @@ private fun RepositorySettingsDialog(
                     enabled = !isSaving,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(if (isPrivate) "Private" else "Public", style = MaterialTheme.typography.bodyMedium)
-                    Switch(checked = isPrivate, onCheckedChange = { isPrivate = it }, enabled = !isSaving)
-                }
                 if (saveError != null) {
                     Text(saveError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
-                }
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 18.dp))
-
-                Text("Danger zone", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.error)
-                Text(
-                    "Deleting a repository is permanent and cannot be undone.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 10.dp)
-                )
-                if (!showDeleteConfirm) {
-                    TextButton(onClick = { showDeleteConfirm = true }, enabled = !isDeleting) {
-                        Text("Delete this repository", color = MaterialTheme.colorScheme.error)
-                    }
-                } else {
-                    Text(
-                        "Type \"${repo.name}\" to confirm:",
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(bottom = 6.dp)
-                    )
-                    OutlinedTextField(
-                        value = deleteConfirmText,
-                        onValueChange = { deleteConfirmText = it },
-                        singleLine = true,
-                        enabled = !isDeleting,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    if (deleteError != null) {
-                        Text(deleteError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
-                    }
-                    Row(modifier = Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(
-                            onClick = onDelete,
-                            enabled = deleteConfirmText == repo.name && !isDeleting
-                        ) {
-                            if (isDeleting) {
-                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                            } else {
-                                Text("Permanently delete", color = MaterialTheme.colorScheme.error)
-                            }
-                        }
-                        TextButton(onClick = { showDeleteConfirm = false; deleteConfirmText = "" }, enabled = !isDeleting) { Text("Cancel") }
-                    }
                 }
             }
         },
@@ -1226,15 +1501,69 @@ private fun RepositorySettingsDialog(
                     onSave(
                         name.trim().takeIf { it.isNotBlank() && it != repo.name },
                         null,
-                        isPrivate.takeIf { it != repo.isPrivate }
+                        null
                     )
                 },
-                enabled = !isSaving && !isDeleting
+                enabled = !isSaving
             ) {
                 if (isSaving) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp) else Text("Save")
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss, enabled = !isSaving && !isDeleting) { Text("Close") } }
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !isSaving) { Text("Close") } }
+    )
+}
+
+/** Confirmation dialog for permanently deleting the repo, reached from the top-bar
+ * actions menu. Requires typing the repo name, same safeguard as the old settings
+ * dialog's danger zone. */
+@Composable
+private fun DeleteRepositoryDialog(
+    repo: GitRepository,
+    isDeleting: Boolean,
+    deleteError: String?,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var deleteConfirmText by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = { if (!isDeleting) onDismiss() },
+        title = { Text("Delete repository") },
+        text = {
+            Column {
+                Text(
+                    "Deleting \"${repo.name}\" is permanent and cannot be undone.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    "Type \"${repo.name}\" to confirm:",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 12.dp, bottom = 6.dp)
+                )
+                OutlinedTextField(
+                    value = deleteConfirmText,
+                    onValueChange = { deleteConfirmText = it },
+                    singleLine = true,
+                    enabled = !isDeleting,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (deleteError != null) {
+                    Text(deleteError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                enabled = deleteConfirmText == repo.name && !isDeleting
+            ) {
+                if (isDeleting) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                } else {
+                    Text("Permanently delete", color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !isDeleting) { Text("Cancel") } }
     )
 }
 

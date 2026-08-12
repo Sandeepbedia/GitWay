@@ -1,21 +1,3 @@
-/*
- * Git Way
- * Copyright (C) 2026 Sandeep Bedia
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
-
 package com.io.git.way.ui.screens.repos
 
 import androidx.compose.animation.core.animateFloatAsState
@@ -55,13 +37,19 @@ import androidx.compose.material.icons.filled.FolderOff
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SortByAlpha
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.Divider
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -138,6 +126,7 @@ fun RepositoryListScreen(
     var showFilterSheet by remember { mutableStateOf(false) }
     var searchExpanded by remember { mutableStateOf(false) }
     var showCreateRepoDialog by remember { mutableStateOf(false) }
+    var showFabMenu by remember { mutableStateOf(false) }
 
     val visibleRepos = state.filtered
         .let { list ->
@@ -161,25 +150,60 @@ fun RepositoryListScreen(
             containerColor = Color.Transparent,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             floatingActionButton = {
-                GlassFab(
-                    onClick = {
-                        searchExpanded = !searchExpanded
-                        if (!searchExpanded) viewModel.onSearchQueryChange("")
-                    },
-                    size = 64.dp,
-                    // With the floating nav now an overlay (not Scaffold's bottomBar,
-                    // which used to lift the FAB above it automatically), the FAB needs
-                    // its own clearance so it floats above the nav dock instead of
-                    // behind/under it.
-                    modifier = Modifier
-                        .navigationBarsPadding()
-                        .padding(bottom = 96.dp)
-                ) {
-                    Icon(
-                        if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
-                        contentDescription = if (searchExpanded) "Close search" else "Search repositories",
-                        modifier = Modifier.size(28.dp)
-                    )
+                Box {
+                    GlassFab(
+                        onClick = { showFabMenu = true },
+                        size = 64.dp,
+                        // With the floating nav now an overlay (not Scaffold's bottomBar,
+                        // which used to lift the FAB above it automatically), the FAB needs
+                        // its own clearance so it floats above the nav dock instead of
+                        // behind/under it.
+                        modifier = Modifier
+                            .navigationBarsPadding()
+                            .padding(bottom = 96.dp)
+                    ) {
+                        Icon(
+                            if (searchExpanded) Icons.Filled.Close else Icons.Filled.Add,
+                            contentDescription = "More options",
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showFabMenu,
+                        onDismissRequest = { showFabMenu = false },
+                        modifier = Modifier.align(Alignment.BottomStart).padding(start = 8.dp, bottom = 90.dp)
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(if (searchExpanded) "Close search" else "Search") },
+                            leadingIcon = { Icon(Icons.Filled.Search, null) },
+                            onClick = {
+                                showFabMenu = false
+                                searchExpanded = !searchExpanded
+                                if (!searchExpanded) viewModel.onSearchQueryChange("")
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("GitHub search") },
+                            leadingIcon = { Icon(Icons.Filled.TravelExplore, null) },
+                            onClick = {
+                                showFabMenu = false
+                                viewModel.setGitHubSearch(!state.isGitHubSearch)
+                                if (!state.isGitHubSearch && !searchExpanded) {
+                                    searchExpanded = true
+                                }
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("New repository") },
+                            leadingIcon = { Icon(Icons.Filled.Add, null) },
+                            onClick = { showFabMenu = false; showCreateRepoDialog = true }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Refresh") },
+                            leadingIcon = { Icon(Icons.Filled.Refresh, null) },
+                            onClick = { showFabMenu = false; viewModel.loadRepositories() }
+                        )
+                    }
                 }
             }
         ) { padding ->
@@ -199,9 +223,25 @@ fun RepositoryListScreen(
                     GlassSearchField(
                         value = state.searchQuery,
                         onValueChange = viewModel::onSearchQueryChange,
-                        placeholder = "Search repositories...",
+                        placeholder = if (state.isGitHubSearch) "Search GitHub (all repositories)..." else "Search repositories...",
                         modifier = Modifier.padding(bottom = 14.dp)
                     )
+                    if (state.isGitHubSearch) {
+                        Text(
+                            "GitHub-wide search: results are live from GitHub's Search API.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 10.dp)
+                        )
+                        if (state.searchError != null) {
+                            Text(
+                                state.searchError,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(bottom = 10.dp)
+                            )
+                        }
+                    }
                 }
 
                 Row(
@@ -249,6 +289,9 @@ fun RepositoryListScreen(
                         itemsIndexed(visibleRepos, key = { _, repo -> repo.fullName }) { _, repo ->
                             RepoCard(
                                 repo = repo,
+                                isStarred = state.starredRepos.contains(repo.fullName),
+                                isTogglingStar = state.isTogglingStar == repo.fullName,
+                                onToggleStar = { viewModel.toggleStar(repo) },
                                 onClick = { onRepositorySelected(repo) },
                                 modifier = Modifier.animateItem()
                             )
@@ -334,6 +377,9 @@ private fun RepositoryHeader(
 @Composable
 private fun RepoCard(
     repo: GitRepository,
+    isStarred: Boolean,
+    isTogglingStar: Boolean,
+    onToggleStar: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -404,7 +450,27 @@ private fun RepoCard(
                     verticalArrangement = Arrangement.SpaceBetween,
                     modifier = Modifier.fillMaxHeight().padding(vertical = 2.dp)
                 ) {
-                    Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(visual.color))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            "${repo.stargazersCount}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Icon(
+                            if (isStarred) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                            contentDescription = if (isStarred) "Starred" else "Star",
+                            tint = if (isStarred) Color(0xFFF59E0B) else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clip(CircleShape)
+                                .clickable(
+                                    enabled = !isTogglingStar,
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = onToggleStar
+                                )
+                        )
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
                             formatRelativeTime(repo.lastUpdated),

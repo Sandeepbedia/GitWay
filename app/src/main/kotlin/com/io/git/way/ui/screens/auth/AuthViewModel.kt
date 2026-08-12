@@ -1,21 +1,3 @@
-/*
- * Git Way
- * Copyright (C) 2026 Sandeep Bedia
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
-
 package com.io.git.way.ui.screens.auth
 
 import androidx.compose.runtime.getValue
@@ -31,8 +13,20 @@ import retrofit2.HttpException
 data class AuthUiState(
     val token: String = "",
     val isLoading: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    /** Classic-PAT scopes reported by GitHub after a successful connect; empty when
+     * GitHub didn't report any (fine-grained token) — see [authScopeWarning]. */
+    val grantedScopes: Set<String> = emptySet(),
+    /** Non-null once the token was validated (so the scope checklist can render). */
+    val scopeCheckVisible: Boolean = false,
+    /** Set when GitHub reported no scopes at all — fine-grained tokens hide scopes. */
+    val authScopeWarning: String? = null,
+    /** Required scopes the token is missing (only known for classic tokens). */
+    val missingScopes: List<String> = emptyList()
 )
+
+/** The scopes Git Way needs for its full feature set (see README → "Token scopes"). */
+private val REQUIRED_SCOPES = setOf("repo", "workflow", "delete_repo")
 
 /** Drives the Token screen: takes a PAT, validates it against GitHub, persists on success. */
 class AuthViewModel(
@@ -43,7 +37,14 @@ class AuthViewModel(
         private set
 
     fun onTokenChange(value: String) {
-        uiState = uiState.copy(token = value, errorMessage = null)
+        uiState = uiState.copy(
+            token = value,
+            errorMessage = null,
+            grantedScopes = emptySet(),
+            scopeCheckVisible = false,
+            authScopeWarning = null,
+            missingScopes = emptyList()
+        )
     }
 
     fun connect(onSuccess: () -> Unit) {
@@ -53,14 +54,35 @@ class AuthViewModel(
         uiState = uiState.copy(isLoading = true, errorMessage = null)
         viewModelScope.launch {
             gitHubRepository.validateTokenAndFetchUser(token)
-                .onSuccess {
-                    uiState = uiState.copy(isLoading = false)
-                    onSuccess()
+                .onSuccess { result ->
+                    val granted = result.grantedScopes
+                    val missing = if (granted.isEmpty()) emptyList() else REQUIRED_SCOPES.subtract(granted).toList()
+                    uiState = uiState.copy(
+                        isLoading = false,
+                        grantedScopes = granted,
+                        scopeCheckVisible = true,
+                        authScopeWarning = if (granted.isEmpty()) {
+                            "GitHub didn't report any scopes — a fine-grained token. " +
+                                "Some features may need extra permissions."
+                        } else {
+                            null
+                        },
+                        missingScopes = missing
+                    )
+                    // Classic token missing required scopes: warn first, let the user
+                    // decide (Continue anyway). Fine-grained (unknown) tokens proceed.
+                    if (missing.isEmpty()) onSuccess()
                 }
                 .onFailure { throwable ->
                     uiState = uiState.copy(isLoading = false, errorMessage = mapError(throwable))
                 }
         }
+    }
+
+    /** Skips the missing-scope warning and connects anyway (fine-grained/partial tokens). */
+    fun connectAnyway(onSuccess: () -> Unit) {
+        uiState = uiState.copy(isLoading = false)
+        onSuccess()
     }
 
     private fun mapError(throwable: Throwable): String = when (throwable) {
@@ -71,6 +93,6 @@ class AuthViewModel(
             else -> "GitHub returned an error (${throwable.code()})."
         }
         is IOException -> "Network error — check your connection and try again."
-        else -> throwable.message ?: "Something went wrong. Please try again."
+        else -> "${throwable::class.simpleName}: ${throwable.message ?: "Something went wrong. Please try again."}"
     }
 }

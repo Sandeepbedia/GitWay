@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="32"
+     height="32"
+     viewBox="0 0 32 32"
+     fill="none">
+
+  <defs>
+    <!-- Neon gradient -->
+    <linearGradient id="folderColor"
+                    x1="3"
+                    y1="6"
+                    x2="29"
+                    y2="26">
+      <stop offset="0%"   stop-color="#00F5FF"/>
+      <stop offset="45%"  stop-color="#55B7FF"/>
+      <stop offset="100%" stop-color="#8B5CFF"/>
+    </linearGradient>
+
+    <!-- Soft glow -->
+    <filter id="neonGlow"
+            x="-100%"
+            y="-100%"
+            width="300%"
+            height="300%">
+
+      <feGaussianBlur
+        in="SourceGraphic"
+        stdDeviation="1.2"
+        result="glow1"/>
+
+      <feGaussianBlur
+        in="SourceGraphic"
+        stdDeviation="3.5"
+        result="glow2"/>
+
+      <feMerge>
+        <feMergeNode in="glow2"/>
+        <feMergeNode in="glow1"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+
+    </filter>
+  </defs>
+
+  <!-- FOLDER -->
+  <g filter="url(#neonGlow)">
+
+    <!-- Main outline -->
+    <path
+      d="M3.5 8.5
+         C3.5 7.4 4.4 6.5 5.5 6.5
+         H12.5
+         L15.1 9.5
+         H25
+         C26.1 9.5 27 10.4 27 11.5
+         V23
+         C27 24.4 25.9 25.5 24.5 25.5
+         H6
+         C4.6 25.5 3.5 24.4 3.5 23
+         Z"
+      fill="rgba(20,80,150,0.08)"
+      stroke="url(#folderColor)"
+      stroke-width="2"
+      stroke-linejoin="round"
+    />
+
+    <!-- Bright folder opening line -->
+    <path
+      d="M4.5 12H27.2"
+      stroke="#00F5FF"
+      stroke-width="2.2"
+      stroke-linecap="round"
+    />
+
+    <!-- Inner highlight -->
+    <path
+      d="M7 22.8H22.5"
+      stroke="#55B7FF"
+      stroke-width="0.8"
+      stroke-linecap="round"
+      opacity="0.45"
+    />
+
+  </g>
+
+</svg>

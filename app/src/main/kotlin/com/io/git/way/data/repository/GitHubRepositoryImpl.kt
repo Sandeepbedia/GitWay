@@ -1,21 +1,3 @@
-/*
- * Git Way
- * Copyright (C) 2026 Sandeep Bedia
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
-
 package com.io.git.way.data.repository
 
 import android.util.Base64
@@ -26,25 +8,47 @@ import com.io.git.way.data.remote.GitHubApiService
 import com.io.git.way.data.remote.dto.CreateBlobRequest
 import com.io.git.way.data.remote.dto.CreateCommitRequest
 import com.io.git.way.data.remote.dto.CreateFileContentRequest
+import com.io.git.way.data.remote.dto.CreateForkRequest
+import com.io.git.way.data.remote.dto.CreateIssueCommentRequest
+import com.io.git.way.data.remote.dto.CreateIssueRequest
+import com.io.git.way.data.remote.dto.CreatePullRequestRequest
 import com.io.git.way.data.remote.dto.CreateRefRequest
+import com.io.git.way.data.remote.dto.CreateReleaseRequest
 import com.io.git.way.data.remote.dto.CreateTreeRequest
 import com.io.git.way.data.remote.dto.CreateRepoRequest
 import com.io.git.way.data.remote.dto.GitHubErrorResponseDto
+import com.io.git.way.data.remote.dto.GitHubPullRequestDto
 import com.io.git.way.data.remote.dto.GitHubRepoDto
 import com.io.git.way.data.remote.dto.GitHubUserDto
+import com.io.git.way.data.remote.dto.GitHubWorkflowDispatchRequest
+import com.io.git.way.data.remote.dto.MergePullRequestRequest
 import com.io.git.way.data.remote.dto.TreeEntryInput
+import com.io.git.way.data.remote.dto.UpdateIssueRequest
+import com.io.git.way.data.remote.dto.UpdatePullRequestRequest
 import com.io.git.way.data.remote.dto.UpdateRefRequest
 import com.io.git.way.data.remote.dto.UpdateRepoRequest
 import com.io.git.way.domain.VersionComparator
 import com.io.git.way.domain.model.ApiRateLimit
 import com.io.git.way.domain.model.AppUpdateInfo
+import com.io.git.way.domain.model.ArtifactInfo
 import com.io.git.way.domain.model.ChangeType
+import com.io.git.way.domain.model.CodeSearchResult
+import com.io.git.way.domain.model.CommitDiffFile
 import com.io.git.way.domain.model.CommitSummary
 import com.io.git.way.domain.model.FileChange
+import com.io.git.way.domain.model.GitHubWorkflow
+import com.io.git.way.domain.model.GitRelease
 import com.io.git.way.domain.model.GitRepository as GitRepositoryModel
 import com.io.git.way.domain.model.GitUser
+import com.io.git.way.domain.model.Issue
+import com.io.git.way.domain.model.IssueComment
+import com.io.git.way.domain.model.PullRequest
+import com.io.git.way.domain.model.PullRequestFile
+import com.io.git.way.domain.model.ReleaseAsset
 import com.io.git.way.domain.model.RemoteTreeEntry
+import com.io.git.way.domain.model.TokenValidationResult
 import com.io.git.way.domain.model.UploadPhase
+import com.io.git.way.domain.model.WorkflowRun
 import com.io.git.way.domain.repository.GitHubRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -54,6 +58,8 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.HttpException
 import java.io.IOException
 import java.net.SocketTimeoutException
@@ -101,12 +107,29 @@ class GitHubRepositoryImpl(
             java.net.URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
         }
 
-    override suspend fun validateTokenAndFetchUser(token: String): Result<GitUser> =
+    override suspend fun validateTokenAndFetchUser(token: String): Result<TokenValidationResult> =
         withContext(Dispatchers.IO) {
             runCatching {
                 tokenManager.saveToken(token)
-                apiService.getAuthenticatedUser().toDomain()
+                val stored = tokenManager.getToken()
+                Log.d("TokenValidation", "pasted len=${token.length} prefix=${token.take(6)} | stored len=${stored?.length} prefix=${stored?.take(6)}")
+                val response = apiService.getAuthenticatedUser()
+                Log.d("TokenValidation", "code=${response.code()}")
+                if (!response.isSuccessful) throw HttpException(response)
+                TokenValidationResult(
+                    user = response.body()!!.toDomain(),
+                    // Classic PATs report their scopes in this header; fine-grained
+                    // tokens (and scoped-down classic tokens) send an empty header, in
+                    // which case the UI shows a "couldn't verify" warning instead.
+                    grantedScopes = response.headers()["X-OAuth-Scopes"]
+                        ?.split(",")
+                        ?.map { it.trim() }
+                        ?.filter { it.isNotBlank() }
+                        ?.toSet()
+                        ?: emptySet()
+                )
             }.onFailure {
+                Log.d("TokenValidation", "failure=${it::class.simpleName}: ${it.message}")
                 tokenManager.clearToken()
             }
         }
@@ -721,7 +744,7 @@ class GitHubRepositoryImpl(
 
     override suspend fun getCurrentUser(): Result<GitUser> =
         withContext(Dispatchers.IO) {
-            runCatching { githubCallWithRetry { apiService.getAuthenticatedUser() }.toDomain() }
+            runCatching { githubCallWithRetry { apiService.getAuthenticatedUser() }.body()!!.toDomain() }
         }
 
     override suspend fun getApiRateLimit(): Result<ApiRateLimit> =
@@ -729,6 +752,469 @@ class GitHubRepositoryImpl(
             runCatching {
                 val core = githubCallWithRetry { apiService.getRateLimit() }.resources.core
                 ApiRateLimit(limit = core.limit, remaining = core.remaining, resetEpochSeconds = core.reset)
+            }
+        }
+
+    // ===== GitHub Actions =====
+
+    override suspend fun listWorkflows(repo: GitRepositoryModel): Result<List<GitHubWorkflow>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                githubCallWithRetry { apiService.listWorkflows(repo.owner, repo.name) }.workflows.map { w ->
+                    GitHubWorkflow(
+                        id = w.id,
+                        name = w.name,
+                        path = w.path,
+                        state = w.state,
+                        badgeUrl = w.badgeUrl,
+                        htmlUrl = w.htmlUrl,
+                        updatedAt = w.updatedAt
+                    )
+                }
+            }
+        }
+
+    override suspend fun listWorkflowRuns(
+        repo: GitRepositoryModel,
+        workflowId: Long?,
+        branch: String?,
+        status: String?
+    ): Result<List<WorkflowRun>> = withContext(Dispatchers.IO) {
+        runCatching {
+            githubCallWithRetry {
+                apiService.listWorkflowRuns(repo.owner, repo.name, workflowId, branch, status = status)
+            }.runs.map { run ->
+                WorkflowRun(
+                    id = run.id,
+                    name = run.name ?: "Workflow",
+                    displayTitle = run.displayTitle ?: run.name ?: "Run #${run.runNumber}",
+                    branch = run.branch ?: "",
+                    headSha = run.headSha ?: "",
+                    runNumber = run.runNumber,
+                    status = run.status,
+                    conclusion = run.conclusion,
+                    event = run.event,
+                    htmlUrl = run.htmlUrl,
+                    createdAt = run.createdAt.orEmpty(),
+                    updatedAt = run.updatedAt,
+                    workflowId = run.workflowId
+                )
+            }
+        }
+    }
+
+    override suspend fun triggerWorkflow(repo: GitRepositoryModel, workflowId: Long, ref: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val response = githubCallWithRetry {
+                    apiService.dispatchWorkflow(repo.owner, repo.name, workflowId, GitHubWorkflowDispatchRequest(ref = ref))
+                }
+                if (!response.isSuccessful) {
+                    val friendly = if (response.code() == 404) {
+                        "Workflow doesn't accept manual runs (no workflow_dispatch trigger)."
+                    } else {
+                        "GitHub rejected the workflow run (HTTP ${response.code()})."
+                    }
+                    throw IOException(friendly)
+                }
+            }
+        }
+
+    override suspend fun cancelWorkflowRun(repo: GitRepositoryModel, runId: Long): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                // Deliberately NOT wrapped in githubCallWithRetry: GitHub answers 409
+                // for "run already completed" — which is a success case here, not an error.
+                val response = try {
+                    apiService.cancelWorkflowRun(repo.owner, repo.name, runId)
+                } catch (e: HttpException) {
+                    if (e.code() == 409) return@withContext Result.success(Unit)
+                    throw IOException(e.toFriendlyMessage(), e)
+                }
+                if (!response.isSuccessful) {
+                    throw IOException("GitHub couldn't cancel the run (HTTP ${response.code()}).")
+                }
+            }
+        }
+
+    override suspend fun rerunFailedJobs(repo: GitRepositoryModel, runId: Long): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val response = githubCallWithRetry {
+                    apiService.rerunFailedJobs(repo.owner, repo.name, runId)
+                }
+                if (!response.isSuccessful) {
+                    throw IOException("GitHub couldn't re-run failed jobs (HTTP ${response.code()}).")
+                }
+            }
+        }
+
+    override suspend fun listArtifacts(repo: GitRepositoryModel): Result<List<ArtifactInfo>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                githubCallWithRetry { apiService.listArtifacts(repo.owner, repo.name) }.artifacts.map { a ->
+                    ArtifactInfo(
+                        id = a.id,
+                        name = a.name,
+                        size = a.size,
+                        expired = a.expired,
+                        createdAt = a.createdAt,
+                        archiveDownloadUrl = a.archiveDownloadUrl
+                    )
+                }
+            }
+        }
+
+    override suspend fun downloadArtifactZip(repo: GitRepositoryModel, artifactId: Long): Result<ByteArray> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                githubCallWithRetry { apiService.downloadArtifactZip(repo.owner, repo.name, artifactId) }.bytes()
+            }
+        }
+
+    override suspend fun downloadRunLogs(repo: GitRepositoryModel, runId: Long): Result<ByteArray> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                githubCallWithRetry { apiService.downloadRunLogs(repo.owner, repo.name, runId) }.bytes()
+            }
+        }
+
+    // ===== Pull requests =====
+
+    override suspend fun listPullRequests(repo: GitRepositoryModel, state: String): Result<List<PullRequest>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                githubCallWithRetry { apiService.listPullRequests(repo.owner, repo.name, state) }.map { it.toDomain() }
+            }
+        }
+
+    private fun GitHubPullRequestDto.toDomain(): PullRequest = PullRequest(
+        number = number,
+        title = title,
+        state = state,
+        body = body,
+        htmlUrl = htmlUrl,
+        createdAt = createdAt.orEmpty(),
+        updatedAt = updatedAt,
+        mergedAt = mergedAt,
+        headRef = head?.ref ?: "",
+        baseRef = base?.ref ?: "",
+        headLabel = head?.label,
+        author = user?.login ?: "Unknown",
+        mergeable = mergeable,
+        changedFiles = changedFiles,
+        additions = additions,
+        deletions = deletions,
+        commentsCount = 0
+    )
+
+    override suspend fun createPullRequest(
+        repo: GitRepositoryModel,
+        title: String,
+        head: String,
+        base: String,
+        body: String?
+    ): Result<PullRequest> = withContext(Dispatchers.IO) {
+        runCatching {
+            try {
+                githubCallWithRetry {
+                    apiService.createPullRequest(
+                        repo.owner, repo.name,
+                        CreatePullRequestRequest(title = title, head = head, base = base, body = body)
+                    )
+                }.toDomain()
+            } catch (e: HttpException) {
+                val friendly = if (e.code() == 422) {
+                    "GitHub couldn't create the PR — head branch \"$head\" and base branch \"$base\" may already have an open PR, or they're the same branch."
+                } else {
+                    e.toFriendlyMessage()
+                }
+                throw IOException(friendly, e)
+            }
+        }
+    }
+
+    override suspend fun updatePullRequestState(repo: GitRepositoryModel, number: Int, state: String): Result<PullRequest> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                githubCallWithRetry {
+                    apiService.updatePullRequest(repo.owner, repo.name, number, UpdatePullRequestRequest(state = state))
+                }.toDomain()
+            }
+        }
+
+    override suspend fun mergePullRequest(repo: GitRepositoryModel, number: Int): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                githubCallWithRetry {
+                    apiService.mergePullRequest(repo.owner, repo.name, number, MergePullRequestRequest())
+                }
+                Unit
+            }
+        }
+
+    override suspend fun listPullRequestFiles(repo: GitRepositoryModel, number: Int): Result<List<PullRequestFile>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                githubCallWithRetry {
+                    apiService.listPullRequestFiles(repo.owner, repo.name, number)
+                }.map { f ->
+                    PullRequestFile(
+                        filename = f.filename,
+                        status = f.status,
+                        additions = f.additions,
+                        deletions = f.deletions,
+                        patch = f.patch
+                    )
+                }
+            }
+        }
+
+    // ===== Issues =====
+
+    override suspend fun listIssues(repo: GitRepositoryModel, state: String): Result<List<Issue>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                githubCallWithRetry { apiService.listIssues(repo.owner, repo.name, state) }.map { i ->
+                    Issue(
+                        number = i.number,
+                        title = i.title,
+                        state = i.state,
+                        body = i.body,
+                        htmlUrl = i.htmlUrl,
+                        createdAt = i.createdAt.orEmpty(),
+                        updatedAt = i.updatedAt,
+                        author = i.user?.login ?: "Unknown",
+                        commentsCount = i.commentsCount,
+                        isPullRequest = i.pullRequest != null
+                    )
+                }.filterNot { it.isPullRequest }
+            }
+        }
+
+    override suspend fun createIssue(repo: GitRepositoryModel, title: String, body: String?): Result<Issue> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                githubCallWithRetry {
+                    apiService.createIssue(repo.owner, repo.name, CreateIssueRequest(title = title, body = body))
+                }.let { Issue(number = it.number, title = it.title, state = it.state, body = it.body, htmlUrl = it.htmlUrl, createdAt = it.createdAt.orEmpty(), updatedAt = it.updatedAt, author = it.user?.login ?: "Unknown", commentsCount = it.commentsCount, isPullRequest = false) }
+            }
+        }
+
+    override suspend fun updateIssueState(repo: GitRepositoryModel, number: Int, state: String): Result<Issue> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                githubCallWithRetry {
+                    apiService.updateIssue(repo.owner, repo.name, number, UpdateIssueRequest(state = state))
+                }.let { Issue(number = it.number, title = it.title, state = it.state, body = it.body, htmlUrl = it.htmlUrl, createdAt = it.createdAt.orEmpty(), updatedAt = it.updatedAt, author = it.user?.login ?: "Unknown", commentsCount = it.commentsCount, isPullRequest = false) }
+            }
+        }
+
+    override suspend fun listIssueComments(repo: GitRepositoryModel, number: Int): Result<List<IssueComment>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                githubCallWithRetry { apiService.listIssueComments(repo.owner, repo.name, number) }.map { c ->
+                    IssueComment(
+                        id = c.id,
+                        body = c.body ?: "",
+                        htmlUrl = c.htmlUrl,
+                        createdAt = c.createdAt.orEmpty(),
+                        author = c.user?.login ?: "Unknown"
+                    )
+                }
+            }
+        }
+
+    override suspend fun createIssueComment(repo: GitRepositoryModel, number: Int, body: String): Result<IssueComment> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                githubCallWithRetry {
+                    apiService.createIssueComment(repo.owner, repo.name, number, CreateIssueCommentRequest(body))
+                }.let { IssueComment(id = it.id, body = it.body ?: "", htmlUrl = it.htmlUrl, createdAt = it.createdAt.orEmpty(), author = it.user?.login ?: "Unknown") }
+            }
+        }
+
+    // ===== Star / unstar / fork =====
+
+    override suspend fun listStarredRepositories(): Result<Set<String>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                githubCallWithRetry { apiService.listStarredRepositories() }.map { it.fullName }.toSet()
+            }
+        }
+
+    override suspend fun starRepository(repo: GitRepositoryModel): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val response = githubCallWithRetry { apiService.starRepository(repo.owner, repo.name) }
+                if (!response.isSuccessful) throw IOException("GitHub couldn't star the repo (HTTP ${response.code()}).")
+            }
+        }
+
+    override suspend fun unstarRepository(repo: GitRepositoryModel): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val response = githubCallWithRetry { apiService.unstarRepository(repo.owner, repo.name) }
+                if (!response.isSuccessful) throw IOException("GitHub couldn't unstar the repo (HTTP ${response.code()}).")
+            }
+        }
+
+    override suspend fun forkRepository(repo: GitRepositoryModel): Result<GitRepositoryModel> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                githubCallWithRetry { apiService.forkRepository(repo.owner, repo.name, CreateForkRequest()) }.toDomain()
+            }
+        }
+
+    // ===== Releases =====
+
+    override suspend fun listReleases(repo: GitRepositoryModel): Result<List<GitRelease>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                githubCallWithRetry { apiService.listReleases(repo.owner, repo.name) }.map { r ->
+                    GitRelease(
+                        id = r.id,
+                        tagName = r.tagName,
+                        name = r.name,
+                        body = r.body,
+                        draft = r.draft,
+                        prerelease = r.prerelease,
+                        createdAt = r.createdAt.orEmpty(),
+                        publishedAt = r.publishedAt,
+                        htmlUrl = r.htmlUrl,
+                        assets = r.assets.map { a ->
+                            ReleaseAsset(id = 0, name = a.name, size = 0, browserDownloadUrl = a.browserDownloadUrl, contentType = null)
+                        }
+                    )
+                }
+            }
+        }
+
+    override suspend fun createRelease(
+        repo: GitRepositoryModel,
+        tagName: String,
+        name: String?,
+        body: String?,
+        draft: Boolean,
+        prerelease: Boolean,
+        targetCommitish: String?
+    ): Result<GitRelease> = withContext(Dispatchers.IO) {
+        runCatching {
+            try {
+                githubCallWithRetry {
+                    apiService.createRelease(
+                        repo.owner, repo.name,
+                        CreateReleaseRequest(
+                            tagName = tagName,
+                            targetCommitish = targetCommitish,
+                            name = name,
+                            body = body,
+                            draft = draft,
+                            prerelease = prerelease
+                        )
+                    )
+                }.let { GitRelease(id = it.id, tagName = it.tagName, name = it.name, body = it.body, draft = it.draft, prerelease = it.prerelease, createdAt = it.createdAt.orEmpty(), publishedAt = it.publishedAt, htmlUrl = it.htmlUrl, assets = emptyList()) }
+            } catch (e: HttpException) {
+                val friendly = if (e.code() == 422) {
+                    "GitHub couldn't create the release — the tag \"$tagName\" may already exist."
+                } else {
+                    e.toFriendlyMessage()
+                }
+                throw IOException(friendly, e)
+            }
+        }
+    }
+
+    override suspend fun deleteRelease(repo: GitRepositoryModel, releaseId: Long): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val response = githubCallWithRetry { apiService.deleteRelease(repo.owner, repo.name, releaseId) }
+                if (!response.isSuccessful) throw IOException("GitHub couldn't delete the release (HTTP ${response.code()}).")
+            }
+        }
+
+    override suspend fun listReleaseAssets(repo: GitRepositoryModel, releaseId: Long): Result<List<ReleaseAsset>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                githubCallWithRetry { apiService.listReleaseAssets(repo.owner, repo.name, releaseId) }.map { a ->
+                    ReleaseAsset(id = a.id, name = a.name, size = a.size, browserDownloadUrl = a.browserDownloadUrl, contentType = a.contentType, createdAt = a.createdAt)
+                }
+            }
+        }
+
+    override suspend fun uploadReleaseAsset(
+        repo: GitRepositoryModel,
+        releaseId: Long,
+        fileName: String,
+        bytes: ByteArray
+    ): Result<ReleaseAsset> = withContext(Dispatchers.IO) {
+        runCatching {
+            val namePart = okhttp3.MultipartBody.Part.createFormData("name", fileName)
+            val body = bytes.toRequestBody("application/octet-stream".toMediaType())
+            val filePart = okhttp3.MultipartBody.Part.createFormData("asset", fileName, body)
+            githubCallWithRetry {
+                apiService.uploadReleaseAsset(repo.owner, repo.name, releaseId, namePart, filePart)
+            }.let { ReleaseAsset(id = it.id, name = it.name, size = it.size, browserDownloadUrl = it.browserDownloadUrl, contentType = it.contentType, createdAt = it.createdAt) }
+        }
+    }
+
+    // ===== Search + commit diff + archive =====
+
+    override suspend fun searchRepositories(query: String): Result<List<GitRepositoryModel>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                githubCallWithRetry { apiService.searchRepositories(query) }.items.map { it.toDomain() }
+            }
+        }
+
+    override suspend fun searchCode(query: String, owner: String, repo: String): Result<List<CodeSearchResult>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val fullQuery = if (owner.isNotBlank() && repo.isNotBlank()) {
+                    "$query repo:$owner/$repo"
+                } else {
+                    query
+                }
+                githubCallWithRetry { apiService.searchCode(fullQuery) }.items.map { c ->
+                    CodeSearchResult(
+                        name = c.name,
+                        path = c.path,
+                        htmlUrl = c.htmlUrl,
+                        repositoryFullName = c.repository?.fullName ?: ""
+                    )
+                }
+            }
+        }
+
+    override suspend fun getCommitDiff(repo: GitRepositoryModel, sha: String): Result<List<CommitDiffFile>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                githubCallWithRetry { apiService.getCommitDetail(repo.owner, repo.name, sha) }.files.map { f ->
+                    CommitDiffFile(
+                        filename = f.filename,
+                        status = f.status,
+                        additions = f.additions,
+                        deletions = f.deletions,
+                        changes = f.changes,
+                        patch = f.patch
+                    )
+                }
+            }
+        }
+
+    override suspend fun downloadRepoZip(repo: GitRepositoryModel, ref: String?): Result<ByteArray> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                githubCallWithRetry {
+                    apiService.downloadRepoZip(repo.owner, repo.name, ref ?: repo.defaultBranch)
+                }.bytes()
+            }
+        }
+
+    override suspend fun downloadReleaseAsset(repo: GitRepositoryModel, assetId: Long): Result<ByteArray> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                githubCallWithRetry { apiService.downloadReleaseAsset(repo.owner, repo.name, assetId) }.bytes()
             }
         }
 }

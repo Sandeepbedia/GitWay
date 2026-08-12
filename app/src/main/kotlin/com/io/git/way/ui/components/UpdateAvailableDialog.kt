@@ -1,21 +1,3 @@
-/*
- * Git Way
- * Copyright (C) 2026 Sandeep Bedia
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
-
 package com.io.git.way.ui.components
 
 import androidx.compose.foundation.background
@@ -35,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -63,6 +46,8 @@ import com.io.git.way.ui.theme.RepoTextSecondary
 @Composable
 fun UpdateAvailableDialog(
     update: AppUpdateInfo,
+    isDownloading: Boolean = false,
+    downloadError: String? = null,
     onUpdate: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -118,20 +103,43 @@ fun UpdateAvailableDialog(
 
             Spacer(modifier = Modifier.height(22.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                GlassSecondaryButton(
-                    text = "Later",
-                    onClick = onDismiss,
-                    modifier = Modifier.weight(1f)
-                )
-                GlassPrimaryButton(
-                    text = "Update",
-                    onClick = onUpdate,
-                    modifier = Modifier.weight(1f)
-                )
+            if (isDownloading) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                    Text(
+                        "Downloading update…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = RepoTextSecondary,
+                        modifier = Modifier.padding(start = 12.dp)
+                    )
+                }
+                if (downloadError != null) {
+                    Text(
+                        downloadError,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    GlassSecondaryButton(
+                        text = "Later",
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f)
+                    )
+                    GlassPrimaryButton(
+                        text = "Update",
+                        onClick = onUpdate,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
         }
     }

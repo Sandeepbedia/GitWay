@@ -1,45 +1,49 @@
-/*
- * Git Way
- * Copyright (C) 2026 Sandeep Bedia
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
-
 package com.io.git.way.data.remote
 
 import com.io.git.way.data.remote.dto.CreateBlobRequest
 import com.io.git.way.data.remote.dto.CreateCommitRequest
 import com.io.git.way.data.remote.dto.CreateFileContentRequest
 import com.io.git.way.data.remote.dto.CreateFileContentResponseDto
+import com.io.git.way.data.remote.dto.CreateForkRequest
+import com.io.git.way.data.remote.dto.CreateIssueCommentRequest
+import com.io.git.way.data.remote.dto.CreateIssueRequest
+import com.io.git.way.data.remote.dto.CreatePullRequestRequest
 import com.io.git.way.data.remote.dto.CreateRefRequest
+import com.io.git.way.data.remote.dto.CreateReleaseRequest
 import com.io.git.way.data.remote.dto.CreateRepoRequest
 import com.io.git.way.data.remote.dto.CreateTreeRequest
 import com.io.git.way.data.remote.dto.GitBlobContentDto
 import com.io.git.way.data.remote.dto.GitBlobRefDto
 import com.io.git.way.data.remote.dto.GitCommitDetailDto
 import com.io.git.way.data.remote.dto.GitCommitRefDto
+import com.io.git.way.data.remote.dto.GitHubArtifactListDto
 import com.io.git.way.data.remote.dto.GitHubBranchDto
+import com.io.git.way.data.remote.dto.GitHubCommitDetailDto
 import com.io.git.way.data.remote.dto.GitHubCommitListItemDto
-import com.io.git.way.data.remote.dto.GitHubRepoDto
+import com.io.git.way.data.remote.dto.GitHubIssueCommentDto
+import com.io.git.way.data.remote.dto.GitHubIssueDto
+import com.io.git.way.data.remote.dto.GitHubPullRequestDto
+import com.io.git.way.data.remote.dto.GitHubPullRequestFileDto
+import com.io.git.way.data.remote.dto.GitHubReleaseAssetListDto
 import com.io.git.way.data.remote.dto.GitHubReleaseDto
+import com.io.git.way.data.remote.dto.GitHubReleaseListDto
+import com.io.git.way.data.remote.dto.GitHubRepoDto
+import com.io.git.way.data.remote.dto.GitHubSearchCodeDto
+import com.io.git.way.data.remote.dto.GitHubSearchRepoDto
 import com.io.git.way.data.remote.dto.GitHubUserDto
+import com.io.git.way.data.remote.dto.GitHubWorkflowDispatchRequest
+import com.io.git.way.data.remote.dto.GitHubWorkflowListDto
+import com.io.git.way.data.remote.dto.GitHubWorkflowRunListDto
+import com.io.git.way.data.remote.dto.MergePullRequestRequest
 import com.io.git.way.data.remote.dto.RateLimitDto
 import com.io.git.way.data.remote.dto.GitRefDto
 import com.io.git.way.data.remote.dto.GitTreeRefDto
 import com.io.git.way.data.remote.dto.GitTreeResponseDto
+import com.io.git.way.data.remote.dto.UpdateIssueRequest
+import com.io.git.way.data.remote.dto.UpdatePullRequestRequest
 import com.io.git.way.data.remote.dto.UpdateRefRequest
 import com.io.git.way.data.remote.dto.UpdateRepoRequest
+import okhttp3.MultipartBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -54,7 +58,7 @@ import retrofit2.http.Query
 interface GitHubApiService {
 
     @GET("user")
-    suspend fun getAuthenticatedUser(): GitHubUserDto
+    suspend fun getAuthenticatedUser(): Response<GitHubUserDto>
 
     @GET("user/repos")
     suspend fun listRepositories(
@@ -202,4 +206,264 @@ interface GitHubApiService {
 
     @GET("rate_limit")
     suspend fun getRateLimit(): RateLimitDto
+
+    // ===== GitHub Actions (workflow scope) =====
+
+    @GET("repos/{owner}/{repo}/actions/workflows")
+    suspend fun listWorkflows(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Query("per_page") perPage: Int = 100
+    ): GitHubWorkflowListDto
+
+    @GET("repos/{owner}/{repo}/actions/runs")
+    suspend fun listWorkflowRuns(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Query("workflow_id") workflowId: Long? = null,
+        @Query("branch") branch: String? = null,
+        @Query("event") event: String? = null,
+        @Query("status") status: String? = null,
+        @Query("per_page") perPage: Int = 30
+    ): GitHubWorkflowRunListDto
+
+    @POST("repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches")
+    suspend fun dispatchWorkflow(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Path("workflow_id") workflowId: Long,
+        @Body body: GitHubWorkflowDispatchRequest
+    ): retrofit2.Response<Unit>
+
+    @POST("repos/{owner}/{repo}/actions/runs/{run_id}/cancel")
+    suspend fun cancelWorkflowRun(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Path("run_id") runId: Long
+    ): retrofit2.Response<Unit>
+
+    @POST("repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed")
+    suspend fun rerunFailedJobs(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Path("run_id") runId: Long
+    ): retrofit2.Response<Unit>
+
+    @GET("repos/{owner}/{repo}/actions/artifacts")
+    suspend fun listArtifacts(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Query("per_page") perPage: Int = 100
+    ): GitHubArtifactListDto
+
+    @GET("repos/{owner}/{repo}/actions/artifacts/{artifact_id}/zip")
+    suspend fun downloadArtifactZip(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Path("artifact_id") artifactId: Long
+    ): okhttp3.ResponseBody
+
+    @GET("repos/{owner}/{repo}/actions/runs/{run_id}/logs")
+    suspend fun downloadRunLogs(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Path("run_id") runId: Long
+    ): okhttp3.ResponseBody
+
+    // ===== Pull requests =====
+
+    @GET("repos/{owner}/{repo}/pulls")
+    suspend fun listPullRequests(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Query("state") state: String = "open",
+        @Query("sort") sort: String = "updated",
+        @Query("per_page") perPage: Int = 50
+    ): List<GitHubPullRequestDto>
+
+    @POST("repos/{owner}/{repo}/pulls")
+    suspend fun createPullRequest(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Body body: CreatePullRequestRequest
+    ): GitHubPullRequestDto
+
+    @GET("repos/{owner}/{repo}/pulls/{pull_number}")
+    suspend fun getPullRequest(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Path("pull_number") pullNumber: Int
+    ): GitHubPullRequestDto
+
+    @PATCH("repos/{owner}/{repo}/pulls/{pull_number}")
+    suspend fun updatePullRequest(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Path("pull_number") pullNumber: Int,
+        @Body body: UpdatePullRequestRequest
+    ): GitHubPullRequestDto
+
+    @PUT("repos/{owner}/{repo}/pulls/{pull_number}/merge")
+    suspend fun mergePullRequest(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Path("pull_number") pullNumber: Int,
+        @Body body: MergePullRequestRequest
+    ): GitHubPullRequestDto
+
+    @GET("repos/{owner}/{repo}/pulls/{pull_number}/files")
+    suspend fun listPullRequestFiles(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Path("pull_number") pullNumber: Int,
+        @Query("per_page") perPage: Int = 100
+    ): List<GitHubPullRequestFileDto>
+
+    // ===== Issues =====
+
+    @GET("repos/{owner}/{repo}/issues")
+    suspend fun listIssues(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Query("state") state: String = "open",
+        @Query("sort") sort: String = "updated",
+        @Query("per_page") perPage: Int = 50
+    ): List<GitHubIssueDto>
+
+    @POST("repos/{owner}/{repo}/issues")
+    suspend fun createIssue(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Body body: CreateIssueRequest
+    ): GitHubIssueDto
+
+    @PATCH("repos/{owner}/{repo}/issues/{issue_number}")
+    suspend fun updateIssue(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Path("issue_number") issueNumber: Int,
+        @Body body: UpdateIssueRequest
+    ): GitHubIssueDto
+
+    @GET("repos/{owner}/{repo}/issues/{issue_number}/comments")
+    suspend fun listIssueComments(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Path("issue_number") issueNumber: Int,
+        @Query("per_page") perPage: Int = 100
+    ): List<GitHubIssueCommentDto>
+
+    @POST("repos/{owner}/{repo}/issues/{issue_number}/comments")
+    suspend fun createIssueComment(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Path("issue_number") issueNumber: Int,
+        @Body body: CreateIssueCommentRequest
+    ): GitHubIssueCommentDto
+
+    // ===== Star / unstar / fork =====
+
+    @GET("user/starred")
+    suspend fun listStarredRepositories(
+        @Query("per_page") perPage: Int = 100
+    ): List<GitHubRepoDto>
+
+    @PUT("user/starred/{owner}/{repo}")
+    suspend fun starRepository(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String
+    ): retrofit2.Response<Unit>
+
+    @DELETE("user/starred/{owner}/{repo}")
+    suspend fun unstarRepository(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String
+    ): retrofit2.Response<Unit>
+
+    @POST("repos/{owner}/{repo}/forks")
+    suspend fun forkRepository(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Body body: CreateForkRequest
+    ): GitHubRepoDto
+
+    // ===== Releases (full management) =====
+
+    @GET("repos/{owner}/{repo}/releases")
+    suspend fun listReleases(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Query("per_page") perPage: Int = 50
+    ): List<GitHubReleaseListDto>
+
+    @POST("repos/{owner}/{repo}/releases")
+    suspend fun createRelease(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Body body: CreateReleaseRequest
+    ): GitHubReleaseListDto
+
+    @DELETE("repos/{owner}/{repo}/releases/{release_id}")
+    suspend fun deleteRelease(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Path("release_id") releaseId: Long
+    ): retrofit2.Response<Unit>
+
+    @GET("repos/{owner}/{repo}/releases/{release_id}/assets")
+    suspend fun listReleaseAssets(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Path("release_id") releaseId: Long
+    ): List<GitHubReleaseAssetListDto>
+
+    @POST("repos/{owner}/{repo}/releases/{release_id}/assets")
+    @retrofit2.http.Multipart
+    suspend fun uploadReleaseAsset(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Path("release_id") releaseId: Long,
+        @retrofit2.http.Part("name") name: okhttp3.MultipartBody.Part,
+        @retrofit2.http.Part asset: okhttp3.MultipartBody.Part
+    ): GitHubReleaseAssetListDto
+
+    @GET("repos/{owner}/{repo}/releases/assets/{asset_id}")
+    suspend fun downloadReleaseAsset(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Path("asset_id") assetId: Long,
+        @retrofit2.http.Header("Accept") accept: String = "application/octet-stream"
+    ): okhttp3.ResponseBody
+
+    // ===== Search =====
+
+    @GET("search/repositories")
+    suspend fun searchRepositories(
+        @Query("q") query: String,
+        @Query("sort") sort: String = "stars",
+        @Query("order") order: String = "desc",
+        @Query("per_page") perPage: Int = 30
+    ): GitHubSearchRepoDto
+
+    @GET("search/code")
+    suspend fun searchCode(
+        @Query("q") query: String,
+        @Query("per_page") perPage: Int = 30
+    ): GitHubSearchCodeDto
+
+    // ===== Commit detail (diff) + repo archive =====
+
+    @GET("repos/{owner}/{repo}/commits/{sha}")
+    suspend fun getCommitDetail(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Path("sha") sha: String
+    ): GitHubCommitDetailDto
+
+    @GET("repos/{owner}/{repo}/zipball/{ref}")
+    suspend fun downloadRepoZip(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Path("ref") ref: String
+    ): okhttp3.ResponseBody
 }

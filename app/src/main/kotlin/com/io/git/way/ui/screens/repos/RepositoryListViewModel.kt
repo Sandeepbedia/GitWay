@@ -1,21 +1,3 @@
-/*
- * Git Way
- * Copyright (C) 2026 Sandeep Bedia
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
-
 package com.io.git.way.ui.screens.repos
 
 import androidx.compose.runtime.getValue
@@ -33,10 +15,23 @@ data class RepoListUiState(
     val searchQuery: String = "",
     val errorMessage: String? = null,
     val isCreatingRepo: Boolean = false,
-    val createRepoError: String? = null
+    val createRepoError: String? = null,
+
+    /** GitHub-wide search mode (toggled from the FAB menu): results come from the
+     * Search API instead of the local name filter. */
+    val isGitHubSearch: Boolean = false,
+    val searchResults: List<GitRepository> = emptyList(),
+    val isSearching: Boolean = false,
+    val searchError: String? = null,
+
+    /** fullName set of repos starred by the token user (for the per-card star toggle). */
+    val starredRepos: Set<String> = emptySet(),
+    val isTogglingStar: String? = null
 ) {
     val filtered: List<GitRepository>
-        get() = if (searchQuery.isBlank()) {
+        get() = if (isGitHubSearch) {
+            searchResults
+        } else if (searchQuery.isBlank()) {
             repositories
         } else {
             repositories.filter { it.name.contains(searchQuery, ignoreCase = true) }
@@ -61,6 +56,7 @@ class RepositoryListViewModel(
             gitHubRepository.listRepositories()
                 .onSuccess { repos ->
                     uiState = uiState.copy(isLoading = false, repositories = repos)
+                    loadStarredIfNeeded()
                 }
                 .onFailure { throwable ->
                     uiState = uiState.copy(
@@ -71,8 +67,62 @@ class RepositoryListViewModel(
         }
     }
 
+    private fun loadStarredIfNeeded() {
+        if (uiState.starredRepos.isNotEmpty()) return
+        viewModelScope.launch {
+            gitHubRepository.listStarredRepositories()
+                .onSuccess { starred -> uiState = uiState.copy(starredRepos = starred) }
+                .onFailure { /* non-critical — toggle just flips optimistically */ }
+        }
+    }
+
     fun onSearchQueryChange(query: String) {
         uiState = uiState.copy(searchQuery = query)
+        if (uiState.isGitHubSearch && query.isNotBlank()) {
+            searchGitHub(query)
+        } else if (uiState.isGitHubSearch) {
+            uiState = uiState.copy(searchResults = emptyList(), searchError = null)
+        }
+    }
+
+    fun setGitHubSearch(enabled: Boolean) {
+        uiState = uiState.copy(isGitHubSearch = enabled, searchResults = emptyList(), searchError = null)
+        if (enabled && uiState.searchQuery.isNotBlank()) searchGitHub(uiState.searchQuery)
+    }
+
+    private fun searchGitHub(query: String) {
+        uiState = uiState.copy(isSearching = true, searchError = null)
+        viewModelScope.launch {
+            gitHubRepository.searchRepositories(query.trim())
+                .onSuccess { results -> uiState = uiState.copy(isSearching = false, searchResults = results) }
+                .onFailure { e -> uiState = uiState.copy(isSearching = false, searchError = e.message ?: "Search failed.") }
+        }
+    }
+
+    /** Optimistic star toggle; reverts on failure. */
+    fun toggleStar(repo: GitRepository) {
+        if (uiState.isTogglingStar != null) return
+        val isStarred = uiState.starredRepos.contains(repo.fullName)
+        val newSet = if (isStarred) uiState.starredRepos - repo.fullName else uiState.starredRepos + repo.fullName
+        val updated = repo.copy(stargazersCount = (repo.stargazersCount + if (isStarred) -1 else 1).coerceAtLeast(0))
+        uiState = uiState.copy(isTogglingStar = repo.fullName, starredRepos = newSet)
+        viewModelScope.launch {
+            val result = if (isStarred) gitHubRepository.unstarRepository(repo) else gitHubRepository.starRepository(repo)
+            result
+                .onSuccess {
+                    uiState = uiState.copy(
+                        isTogglingStar = null,
+                        repositories = uiState.repositories.map { if (it.fullName == updated.fullName) updated else it },
+                        searchResults = uiState.searchResults.map { if (it.fullName == updated.fullName) updated else it }
+                    )
+                }
+                .onFailure {
+                    uiState = uiState.copy(
+                        isTogglingStar = null,
+                        starredRepos = if (isStarred) uiState.starredRepos + repo.fullName else uiState.starredRepos - repo.fullName
+                    )
+                }
+        }
     }
 
     fun clearCreateRepoError() {

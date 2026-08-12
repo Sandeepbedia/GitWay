@@ -1,21 +1,3 @@
-/*
- * Git Way
- * Copyright (C) 2026 Sandeep Bedia
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
-
 package com.io.git.way.data.remote.dto
 
 import kotlinx.serialization.EncodeDefault
@@ -303,3 +285,274 @@ data class RateLimitResourcesDto(val core: RateLimitCoreDto)
 
 @Serializable
 data class RateLimitCoreDto(val limit: Int, val remaining: Int, val reset: Long)
+
+// ===== GitHub Actions (workflow scope) =====
+
+@Serializable
+data class GitHubWorkflowDto(
+    val id: Long = 0,
+    val name: String = "",
+    val path: String = "",
+    val state: String = "active",
+    @SerialName("badge_url") val badgeUrl: String? = null,
+    @SerialName("html_url") val htmlUrl: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null
+)
+
+@Serializable
+data class GitHubWorkflowListDto(
+    @SerialName("total_count") val totalCount: Int = 0,
+    val workflows: List<GitHubWorkflowDto> = emptyList()
+)
+
+@Serializable
+data class GitHubWorkflowRunDto(
+    val id: Long = 0,
+    val name: String? = null,
+    @SerialName("display_title") val displayTitle: String? = null,
+    @SerialName("head_branch") val branch: String? = null,
+    @SerialName("head_sha") val headSha: String? = null,
+    @SerialName("run_number") val runNumber: Int = 0,
+    val status: String = "queued",
+    val conclusion: String? = null,
+    val event: String = "push",
+    @SerialName("html_url") val htmlUrl: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
+    @SerialName("workflow_id") val workflowId: Long = 0,
+    @SerialName("jobs_url") val jobsUrl: String? = null,
+    @SerialName("artifacts_url") val artifactsUrl: String? = null
+)
+
+@Serializable
+data class GitHubWorkflowRunListDto(
+    @SerialName("total_count") val totalCount: Int = 0,
+    @SerialName("workflow_runs") val runs: List<GitHubWorkflowRunDto> = emptyList()
+)
+
+@Serializable
+data class GitHubWorkflowDispatchRequest(
+    val ref: String,
+    val inputs: Map<String, String> = emptyMap()
+)
+
+@Serializable
+data class GitHubArtifactDto(
+    val id: Long = 0,
+    val name: String = "",
+    val size: Long = 0,
+    val expired: Boolean = false,
+    @SerialName("expired_at") val expiredAt: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("archive_download_url") val archiveDownloadUrl: String? = null
+)
+
+@Serializable
+data class GitHubArtifactListDto(
+    @SerialName("total_count") val totalCount: Int = 0,
+    val artifacts: List<GitHubArtifactDto> = emptyList()
+)
+
+// ===== Pull requests =====
+
+@Serializable
+data class GitHubPullRequestDto(
+    val number: Int = 0,
+    val title: String = "",
+    val state: String = "open",
+    val body: String? = null,
+    @SerialName("html_url") val htmlUrl: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
+    @SerialName("merged_at") val mergedAt: String? = null,
+    @SerialName("head") val head: GitHubPullRefDto? = null,
+    @SerialName("base") val base: GitHubPullRefDto? = null,
+    @SerialName("user") val user: GitHubUserDto? = null,
+    @SerialName("mergeable") val mergeable: Boolean? = null,
+    @SerialName("commits") val commitsCount: Int = 0,
+    @SerialName("changed_files") val changedFiles: Int = 0,
+    @SerialName("additions") val additions: Int = 0,
+    @SerialName("deletions") val deletions: Int = 0
+)
+
+@Serializable
+data class GitHubPullRefDto(
+    val label: String? = null,
+    val ref: String = "",
+    val sha: String? = null,
+    val repo: GitHubPullRepoDto? = null
+)
+
+@Serializable
+data class GitHubPullRepoDto(
+    val name: String? = null,
+    @SerialName("full_name") val fullName: String? = null
+)
+
+@Serializable
+data class CreatePullRequestRequest(
+    val title: String,
+    val head: String,
+    val base: String,
+    val body: String? = null
+)
+
+@Serializable
+data class UpdatePullRequestRequest(
+    val state: String? = null,
+    val title: String? = null,
+    val body: String? = null
+)
+
+@Serializable
+data class MergePullRequestRequest(
+    @SerialName("commit_title") val commitTitle: String? = null,
+    @SerialName("merge_method") val mergeMethod: String? = null
+)
+
+@Serializable
+data class GitHubPullRequestFileDto(
+    val filename: String = "",
+    val status: String = "modified",
+    val additions: Int = 0,
+    val deletions: Int = 0,
+    val patch: String? = null,
+    @SerialName("raw_url") val rawUrl: String? = null
+)
+
+// ===== Issues =====
+
+@Serializable
+data class GitHubIssueDto(
+    val number: Int = 0,
+    val title: String = "",
+    val state: String = "open",
+    val body: String? = null,
+    @SerialName("html_url") val htmlUrl: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
+    @SerialName("closed_at") val closedAt: String? = null,
+    @SerialName("user") val user: GitHubUserDto? = null,
+    @SerialName("comments") val commentsCount: Int = 0,
+    @SerialName("pull_request") val pullRequest: GitHubIssuePullMarkerDto? = null
+)
+
+@Serializable
+data class GitHubIssuePullMarkerDto(
+    @SerialName("html_url") val htmlUrl: String? = null
+)
+
+@Serializable
+data class CreateIssueRequest(
+    val title: String,
+    val body: String? = null
+)
+
+@Serializable
+data class UpdateIssueRequest(
+    val state: String? = null,
+    val title: String? = null,
+    val body: String? = null
+)
+
+@Serializable
+data class GitHubIssueCommentDto(
+    val id: Long = 0,
+    val body: String? = null,
+    @SerialName("html_url") val htmlUrl: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("user") val user: GitHubUserDto? = null
+)
+
+@Serializable
+data class CreateIssueCommentRequest(
+    val body: String
+)
+
+// ===== Star / fork =====
+
+@Serializable
+data class CreateForkRequest(
+    val organization: String? = null,
+    @SerialName("default_branch_only") val defaultBranchOnly: Boolean = false
+)
+
+// ===== Releases (full management) =====
+
+@Serializable
+data class GitHubReleaseListDto(
+    val id: Long = 0,
+    @SerialName("tag_name") val tagName: String = "",
+    @SerialName("target_commitish") val targetCommitish: String? = null,
+    val name: String? = null,
+    val body: String? = null,
+    val draft: Boolean = false,
+    val prerelease: Boolean = false,
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("published_at") val publishedAt: String? = null,
+    @SerialName("html_url") val htmlUrl: String? = null,
+    @SerialName("upload_url") val uploadUrl: String? = null,
+    val assets: List<GitHubReleaseAssetDto> = emptyList()
+)
+
+@Serializable
+data class CreateReleaseRequest(
+    @SerialName("tag_name") val tagName: String,
+    @SerialName("target_commitish") val targetCommitish: String? = null,
+    val name: String? = null,
+    val body: String? = null,
+    val draft: Boolean = false,
+    val prerelease: Boolean = false
+)
+
+@Serializable
+data class GitHubReleaseAssetListDto(
+    val id: Long = 0,
+    val name: String = "",
+    val size: Long = 0,
+    @SerialName("browser_download_url") val browserDownloadUrl: String? = null,
+    @SerialName("content_type") val contentType: String? = null,
+    @SerialName("created_at") val createdAt: String? = null
+)
+
+// ===== Search + commit detail (diff) =====
+
+@Serializable
+data class GitHubSearchRepoDto(
+    @SerialName("total_count") val totalCount: Int = 0,
+    val items: List<GitHubRepoDto> = emptyList()
+)
+
+@Serializable
+data class GitHubSearchCodeDto(
+    @SerialName("total_count") val totalCount: Int = 0,
+    val items: List<GitHubSearchCodeItemDto> = emptyList()
+)
+
+@Serializable
+data class GitHubSearchCodeItemDto(
+    val name: String = "",
+    val path: String = "",
+    @SerialName("html_url") val htmlUrl: String? = null,
+    val repository: GitHubRepoDto? = null
+)
+
+@Serializable
+data class GitHubCommitFileDto(
+    val filename: String = "",
+    val status: String = "modified",
+    val additions: Int = 0,
+    val deletions: Int = 0,
+    val changes: Int = 0,
+    val patch: String? = null,
+    @SerialName("raw_url") val rawUrl: String? = null
+)
+
+@Serializable
+data class GitHubCommitDetailDto(
+    val sha: String = "",
+    val commit: GitHubCommitMessageDto? = null,
+    @SerialName("html_url") val htmlUrl: String? = null,
+    val files: List<GitHubCommitFileDto> = emptyList()
+)

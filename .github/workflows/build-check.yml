@@ -37,3 +37,11 @@ jobs:
 
       - name: Assemble debug
         run: ./gradlew assembleDebug --stacktrace
+
+      - name: Upload debug APK as build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitway-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14

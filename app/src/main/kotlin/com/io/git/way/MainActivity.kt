@@ -1,21 +1,3 @@
-/*
- * Git Way
- * Copyright (C) 2026 Sandeep Bedia
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
-
 package com.io.git.way
 
 import android.content.Intent
@@ -33,6 +15,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -43,10 +26,12 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.compose.rememberNavController
 import com.io.git.way.domain.model.AppUpdateInfo
 import com.io.git.way.navigation.GitWayNavGraph
+import com.io.git.way.ui.common.ApkInstaller
 import com.io.git.way.ui.common.BiometricLockScreen
 import com.io.git.way.ui.components.UpdateAvailableDialog
 import com.io.git.way.ui.theme.AppThemeMode
 import com.io.git.way.ui.theme.GitWayTheme
+import kotlinx.coroutines.launch
 
 /** Repo this build checks for updates against — see docs/RELEASING.md and
  * .github/workflows/release.yml, which is what actually publishes them. */
@@ -96,6 +81,9 @@ private fun GitWayRoot() {
         val context = LocalContext.current
         val navController = rememberNavController()
         var availableUpdate by remember { mutableStateOf<AppUpdateInfo?>(null) }
+        var isDownloadingUpdate by remember { mutableStateOf(false) }
+        var updateError by remember { mutableStateOf<String?>(null) }
+        val scope = rememberCoroutineScope()
 
         val biometricLockManager = remember {
             (context.applicationContext as GitWayApp).container.biometricLockManager
@@ -146,10 +134,28 @@ private fun GitWayRoot() {
                 availableUpdate?.let { update ->
                     UpdateAvailableDialog(
                         update = update,
+                        isDownloading = isDownloadingUpdate,
+                        downloadError = updateError,
                         onUpdate = {
-                            val target = update.apkDownloadUrl ?: update.releasePageUrl
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target)))
-                            availableUpdate = null
+                            val target = update.apkDownloadUrl
+                            if (target != null) {
+                                // Direct in-app download + install via the package installer.
+                                isDownloadingUpdate = true
+                                updateError = null
+                                scope.launch {
+                                    runCatching { ApkInstaller.downloadBytes(target) }
+                                        .onSuccess { bytes ->
+                                            val file = ApkInstaller.writeToCache(context, "gitway-update.apk", bytes)
+                                            ApkInstaller.installApk(context, file)?.let { updateError = it }
+                                            if (updateError == null) availableUpdate = null
+                                        }
+                                        .onFailure { updateError = it.message ?: "Update download failed." }
+                                    isDownloadingUpdate = false
+                                }
+                            } else {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(update.releasePageUrl)))
+                                availableUpdate = null
+                            }
                         },
                         onDismiss = { availableUpdate = null }
                     )

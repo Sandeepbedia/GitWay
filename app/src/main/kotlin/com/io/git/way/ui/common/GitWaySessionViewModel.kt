@@ -1,21 +1,3 @@
-/*
- * Git Way
- * Copyright (C) 2026 Sandeep Bedia
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
-
 package com.io.git.way.ui.common
 
 import android.content.Context
@@ -39,18 +21,29 @@ import com.io.git.way.domain.WorkflowTemplates
 import com.io.git.way.domain.model.AndroidProjectInfo
 import com.io.git.way.domain.model.ApiRateLimit
 import com.io.git.way.domain.model.AppIdentity
+import com.io.git.way.domain.model.ArtifactInfo
 import com.io.git.way.domain.model.BrowserEntry
 import com.io.git.way.domain.model.BrowserSortMode
 import com.io.git.way.domain.model.BrowserTypeFilter
 import com.io.git.way.domain.model.ChangeType
+import com.io.git.way.domain.model.CodeSearchResult
+import com.io.git.way.domain.model.CommitDiffFile
 import com.io.git.way.domain.model.CommitSummary
 import com.io.git.way.domain.model.FileChange
+import com.io.git.way.domain.model.GitHubWorkflow
+import com.io.git.way.domain.model.GitRelease
 import com.io.git.way.domain.model.GitRepository
 import com.io.git.way.domain.model.GitUser
+import com.io.git.way.domain.model.Issue
+import com.io.git.way.domain.model.IssueComment
 import com.io.git.way.domain.model.LocalFile
+import com.io.git.way.domain.model.PullRequest
+import com.io.git.way.domain.model.PullRequestFile
+import com.io.git.way.domain.model.ReleaseAsset
 import com.io.git.way.domain.model.ScanReport
 import com.io.git.way.domain.model.TreeRow
 import com.io.git.way.domain.model.UploadPhase
+import com.io.git.way.domain.model.WorkflowRun
 import com.io.git.way.domain.repository.GitHubRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -219,7 +212,88 @@ data class GitWaySessionState(
     val viewerError: String? = null,
     val isEditingFile: Boolean = false,
     val isSavingFile: Boolean = false,
-    val saveFileError: String? = null
+    val saveFileError: String? = null,
+
+    // ===== GitHub Actions (workflow scope) =====
+    val workflows: List<GitHubWorkflow> = emptyList(),
+    val isLoadingWorkflows: Boolean = false,
+    val workflowsError: String? = null,
+    val workflowRuns: List<WorkflowRun> = emptyList(),
+    val isLoadingWorkflowRuns: Boolean = false,
+    val workflowRunsError: String? = null,
+    val isDispatchingWorkflow: Boolean = false,
+    val workflowDispatchError: String? = null,
+    val isRunningWorkflowAction: Boolean = false,
+    val workflowActionError: String? = null,
+    val artifacts: List<ArtifactInfo> = emptyList(),
+    val isLoadingArtifacts: Boolean = false,
+    val artifactsError: String? = null,
+    val downloadingArtifactName: String? = null,
+    val downloadError: String? = null,
+    /** A completed download (artifact zip / APK / logs / repo zip / release asset)
+     * waiting for the screen to decide: install, save to Downloads, or share. */
+    val pendingDownload: DownloadResult? = null,
+
+    // ===== Pull requests =====
+    val pullRequests: List<PullRequest> = emptyList(),
+    val isLoadingPullRequests: Boolean = false,
+    val pullRequestsError: String? = null,
+    val isCreatingPullRequest: Boolean = false,
+    val createPullRequestError: String? = null,
+    val selectedPullRequest: PullRequest? = null,
+    val pullRequestFiles: List<PullRequestFile> = emptyList(),
+    val isLoadingPullRequestFiles: Boolean = false,
+    val pullRequestFilesError: String? = null,
+    val isMergingPullRequest: Boolean = false,
+    val pullRequestActionError: String? = null,
+
+    // ===== Issues =====
+    val issues: List<Issue> = emptyList(),
+    val isLoadingIssues: Boolean = false,
+    val issuesError: String? = null,
+    val isCreatingIssue: Boolean = false,
+    val createIssueError: String? = null,
+    val selectedIssue: Issue? = null,
+    val issueComments: List<IssueComment> = emptyList(),
+    val isLoadingIssueComments: Boolean = false,
+    val issueCommentsError: String? = null,
+    val isPostingComment: Boolean = false,
+    val issueActionError: String? = null,
+
+    // ===== Star / fork =====
+    /** fullName set of repos the token user has starred — loaded lazily by the repo
+     * list screen so the star toggle can render its true state. */
+    val starredRepos: Set<String> = emptySet(),
+    val isLoadingStarred: Boolean = false,
+    val isTogglingStar: String? = null,
+    val isForking: Boolean = false,
+    val forkError: String? = null,
+
+    // ===== Releases =====
+    val releases: List<GitRelease> = emptyList(),
+    val isLoadingReleases: Boolean = false,
+    val releasesError: String? = null,
+    val isCreatingRelease: Boolean = false,
+    val createReleaseError: String? = null,
+    val isDeletingRelease: Boolean = false,
+    val releaseActionError: String? = null,
+    val isUploadingAsset: Boolean = false,
+    val uploadAssetError: String? = null,
+    val releaseAssets: List<ReleaseAsset> = emptyList(),
+    val isLoadingReleaseAssets: Boolean = false,
+    val releaseAssetsError: String? = null,
+
+    // ===== Search + commit diff =====
+    val searchResults: List<GitRepository> = emptyList(),
+    val isSearchingRepos: Boolean = false,
+    val searchReposError: String? = null,
+    val codeSearchResults: List<CodeSearchResult> = emptyList(),
+    val isSearchingCode: Boolean = false,
+    val codeSearchError: String? = null,
+    val commitDiff: List<CommitDiffFile> = emptyList(),
+    val isLoadingCommitDiff: Boolean = false,
+    val commitDiffError: String? = null,
+    val viewingCommitSha: String? = null
 ) {
     val addedCount get() = fileChanges.count { it.type == ChangeType.ADDED }
     val modifiedCount get() = fileChanges.count { it.type == ChangeType.MODIFIED }
@@ -1242,13 +1316,20 @@ class GitWaySessionViewModel(
         state = state.copy(repoSettingsError = null)
     }
 
-    fun updateRepositorySettings(newName: String?, newDescription: String?, newIsPrivate: Boolean?) {
+    fun clearDeleteRepoError() {
+        state = state.copy(deleteRepoError = null)
+    }
+
+    fun updateRepositorySettings(newName: String?, newDescription: String?, newIsPrivate: Boolean?, onUpdated: (() -> Unit)? = null) {
         val repo = state.selectedRepo ?: return
         if (state.isUpdatingRepoSettings) return
         state = state.copy(isUpdatingRepoSettings = true, repoSettingsError = null)
         viewModelScope.launch {
             gitHubRepository.updateRepository(repo, newName, newDescription, newIsPrivate)
-                .onSuccess { updated -> state = state.copy(isUpdatingRepoSettings = false, selectedRepo = updated) }
+                .onSuccess { updated ->
+                    state = state.copy(isUpdatingRepoSettings = false, selectedRepo = updated)
+                    onUpdated?.invoke()
+                }
                 .onFailure { throwable ->
                     state = state.copy(isUpdatingRepoSettings = false, repoSettingsError = throwable.message ?: "Couldn't update repository.")
                 }
@@ -1569,56 +1650,535 @@ class GitWaySessionViewModel(
         }
     }
 
-    /** Flattens the tree into indentation-ready rows (VS Code Explorer style): every
-     * folder always appears, its children are spliced in right after it only while its
-     * path is in [expanded]. Rebuilt on every tree/expansion change — cheap enough for
-     * the file counts a mobile repo browser deals with.
+    /** Flattens the repository into a real VS Code/Acode-style tree.
      *
-     * Single-child folder chains (a folder with exactly one subfolder and nothing else,
-     * repeated — e.g. "kotlin/com/io/git/way") compact into ONE row showing the joined
-     * path, same as Android Studio's package view. [TreeRow.entry.path] stays the real,
-     * deepest folder in the chain, so expand/rename/create-target/delete all keep working
-     * against an actual path unchanged. A folder that has more than one child, or a file
-     * alongside its one subfolder — like "main" (kotlin/ + res/ + AndroidManifest.xml) —
-     * is never part of a chain and always gets its own expandable row. */
+     * Every directory keeps its own row (no package-chain compaction), so the vertical
+     * guide columns can connect continuously from parent -> child -> sibling exactly like
+     * a desktop file explorer.
+     */
     private fun buildVisibleRows(paths: Set<String>, expanded: Set<String>): List<TreeRow> {
         val rows = mutableListOf<TreeRow>()
+
         fun walk(currentPath: String, depth: Int, ancestorsContinue: List<Boolean>) {
             val children = childrenOf(paths, currentPath)
+
             children.forEachIndexed { index, entry ->
-                val meContinues = index != children.lastIndex
-                val myAncestorLines = ancestorsContinue + meContinues
+                val hasNextSibling = index < children.lastIndex
+                val guideState = ancestorsContinue + hasNextSibling
 
-                if (!entry.isFolder) {
-                    rows += TreeRow(entry = entry, depth = depth, ancestorLines = myAncestorLines)
-                    return@forEachIndexed
+                rows += if (entry.isFolder) {
+                    TreeRow(
+                        entry = entry,
+                        depth = depth,
+                        isExpanded = entry.path in expanded,
+                        directChildCount = childrenOf(paths, entry.path).size,
+                        ancestorLines = guideState
+                    )
+                } else {
+                    TreeRow(
+                        entry = entry,
+                        depth = depth,
+                        ancestorLines = guideState
+                    )
                 }
 
-                val chainNames = mutableListOf(entry.name)
-                var tailPath = entry.path
-                while (true) {
-                    val kids = childrenOf(paths, tailPath)
-                    if (kids.size == 1 && kids[0].isFolder) {
-                        tailPath = kids[0].path
-                        chainNames += kids[0].name
-                    } else {
-                        break
-                    }
+                if (entry.isFolder && entry.path in expanded) {
+                    walk(entry.path, depth + 1, guideState)
                 }
-
-                val isExpanded = tailPath in expanded
-                val childCount = childrenOf(paths, tailPath).size
-                rows += TreeRow(
-                    entry = BrowserEntry(name = chainNames.joinToString("/"), path = tailPath, isFolder = true),
-                    depth = depth,
-                    isExpanded = isExpanded,
-                    directChildCount = childCount,
-                    ancestorLines = myAncestorLines
-                )
-                if (isExpanded) walk(tailPath, depth + 1, myAncestorLines)
             }
         }
+
         walk("", 0, emptyList())
         return rows
+    }
+
+    // ============================================================
+    // GitHub Actions (workflow scope)
+    // ============================================================
+
+    fun loadWorkflows() {
+        val repo = state.selectedRepo ?: return
+        state = state.copy(isLoadingWorkflows = true, workflowsError = null)
+        viewModelScope.launch {
+            gitHubRepository.listWorkflows(repo)
+                .onSuccess { workflows -> state = state.copy(isLoadingWorkflows = false, workflows = workflows) }
+                .onFailure { e -> state = state.copy(isLoadingWorkflows = false, workflowsError = e.message ?: "Couldn't load workflows.") }
+        }
+    }
+
+    fun loadWorkflowRuns(workflowId: Long? = null, status: String? = null) {
+        val repo = state.selectedRepo ?: return
+        state = state.copy(isLoadingWorkflowRuns = true, workflowRunsError = null)
+        viewModelScope.launch {
+            gitHubRepository.listWorkflowRuns(repo, workflowId, branch = state.selectedBranch, status = status)
+                .onSuccess { runs -> state = state.copy(isLoadingWorkflowRuns = false, workflowRuns = runs) }
+                .onFailure { e -> state = state.copy(isLoadingWorkflowRuns = false, workflowRunsError = e.message ?: "Couldn't load workflow runs.") }
+        }
+    }
+
+    fun triggerWorkflow(workflow: GitHubWorkflow) {
+        val repo = state.selectedRepo ?: return
+        val ref = state.selectedBranch ?: repo.defaultBranch
+        state = state.copy(isDispatchingWorkflow = true, workflowDispatchError = null)
+        viewModelScope.launch {
+            gitHubRepository.triggerWorkflow(repo, workflow.id, ref)
+                .onSuccess {
+                    state = state.copy(isDispatchingWorkflow = false)
+                    loadWorkflowRuns()
+                }
+                .onFailure { e ->
+                    state = state.copy(
+                        isDispatchingWorkflow = false,
+                        workflowDispatchError = e.message ?: "Couldn't start the workflow."
+                    )
+                }
+        }
+    }
+
+    fun cancelWorkflowRun(run: WorkflowRun) {
+        val repo = state.selectedRepo ?: return
+        state = state.copy(isRunningWorkflowAction = true, workflowActionError = null)
+        viewModelScope.launch {
+            gitHubRepository.cancelWorkflowRun(repo, run.id)
+                .onSuccess { state = state.copy(isRunningWorkflowAction = false); loadWorkflowRuns() }
+                .onFailure { e -> state = state.copy(isRunningWorkflowAction = false, workflowActionError = e.message ?: "Couldn't cancel the run.") }
+        }
+    }
+
+    fun rerunFailedJobs(run: WorkflowRun) {
+        val repo = state.selectedRepo ?: return
+        state = state.copy(isRunningWorkflowAction = true, workflowActionError = null)
+        viewModelScope.launch {
+            gitHubRepository.rerunFailedJobs(repo, run.id)
+                .onSuccess { state = state.copy(isRunningWorkflowAction = false); loadWorkflowRuns() }
+                .onFailure { e -> state = state.copy(isRunningWorkflowAction = false, workflowActionError = e.message ?: "Couldn't re-run failed jobs.") }
+        }
+    }
+
+    fun loadArtifacts() {
+        val repo = state.selectedRepo ?: return
+        state = state.copy(isLoadingArtifacts = true, artifactsError = null)
+        viewModelScope.launch {
+            gitHubRepository.listArtifacts(repo)
+                .onSuccess { artifacts -> state = state.copy(isLoadingArtifacts = false, artifacts = artifacts) }
+                .onFailure { e -> state = state.copy(isLoadingArtifacts = false, artifactsError = e.message ?: "Couldn't load artifacts.") }
+        }
+    }
+
+    /** Downloads an artifact's zip, extracts the APK inside if there is one, and stores
+     * the result in [GitWaySessionState.pendingDownload] for the screen to act on
+     * (install / save). */
+    fun downloadArtifact(artifact: ArtifactInfo) {
+        val repo = state.selectedRepo ?: return
+        if (state.downloadingArtifactName != null) return
+        state = state.copy(downloadingArtifactName = artifact.name, downloadError = null, pendingDownload = null)
+        viewModelScope.launch {
+            val result = gitHubRepository.downloadArtifactZip(repo, artifact.id)
+            result
+                .onSuccess { zipBytes ->
+                    val apkFile = ApkInstaller.extractApkFromZip(zipBytes)
+                    val pending = if (apkFile != null) {
+                        DownloadResult(fileName = apkFile.name, bytes = apkFile.readBytes(), isApk = true)
+                    } else {
+                        DownloadResult(fileName = "${artifact.name}.zip", bytes = zipBytes, isApk = false)
+                    }
+                    state = state.copy(downloadingArtifactName = null, pendingDownload = pending)
+                }
+                .onFailure { e ->
+                    state = state.copy(
+                        downloadingArtifactName = null,
+                        downloadError = e.message ?: "Couldn't download the artifact."
+                    )
+                }
+        }
+    }
+
+    fun downloadRunLogs(run: WorkflowRun) {
+        val repo = state.selectedRepo ?: return
+        if (state.downloadingArtifactName != null) return
+        state = state.copy(downloadingArtifactName = "logs_${run.runNumber}", downloadError = null, pendingDownload = null)
+        viewModelScope.launch {
+            gitHubRepository.downloadRunLogs(repo, run.id)
+                .onSuccess { bytes ->
+                    state = state.copy(
+                        downloadingArtifactName = null,
+                        pendingDownload = DownloadResult(fileName = "run-${run.runNumber}-logs.zip", bytes = bytes, isApk = false)
+                    )
+                }
+                .onFailure { e -> state = state.copy(downloadingArtifactName = null, downloadError = e.message ?: "Couldn't download the logs.") }
+        }
+    }
+
+    fun clearDownloadError() {
+        state = state.copy(downloadError = null)
+    }
+
+    fun clearPendingDownload() {
+        state = state.copy(pendingDownload = null)
+    }
+
+    // ============================================================
+    // Pull requests
+    // ============================================================
+
+    fun loadPullRequests(stateFilter: String = "open") {
+        val repo = state.selectedRepo ?: return
+        state = state.copy(isLoadingPullRequests = true, pullRequestsError = null)
+        viewModelScope.launch {
+            gitHubRepository.listPullRequests(repo, stateFilter)
+                .onSuccess { prs -> state = state.copy(isLoadingPullRequests = false, pullRequests = prs) }
+                .onFailure { e -> state = state.copy(isLoadingPullRequests = false, pullRequestsError = e.message ?: "Couldn't load pull requests.") }
+        }
+    }
+
+    fun createPullRequest(title: String, head: String, base: String, body: String?, onCreated: (PullRequest) -> Unit) {
+        val repo = state.selectedRepo ?: return
+        state = state.copy(isCreatingPullRequest = true, createPullRequestError = null)
+        viewModelScope.launch {
+            gitHubRepository.createPullRequest(repo, title, head, base, body)
+                .onSuccess { pr ->
+                    state = state.copy(isCreatingPullRequest = false)
+                    onCreated(pr)
+                }
+                .onFailure { e ->
+                    state = state.copy(isCreatingPullRequest = false, createPullRequestError = e.message ?: "Couldn't create the pull request.")
+                }
+        }
+    }
+
+    fun clearCreatePullRequestError() {
+        state = state.copy(createPullRequestError = null)
+    }
+
+    fun setPullRequestState(pr: PullRequest, newState: String) {
+        val repo = state.selectedRepo ?: return
+        state = state.copy(pullRequestActionError = null)
+        viewModelScope.launch {
+            gitHubRepository.updatePullRequestState(repo, pr.number, newState)
+                .onSuccess { loadPullRequests(if (state.pullRequests.any { !it.isOpen }) "all" else "open") }
+                .onFailure { e -> state = state.copy(pullRequestActionError = e.message ?: "Couldn't update the PR.") }
+        }
+    }
+
+    fun mergePullRequest(pr: PullRequest) {
+        val repo = state.selectedRepo ?: return
+        state = state.copy(isMergingPullRequest = true, pullRequestActionError = null)
+        viewModelScope.launch {
+            gitHubRepository.mergePullRequest(repo, pr.number)
+                .onSuccess {
+                    state = state.copy(isMergingPullRequest = false)
+                    loadPullRequests(if (state.pullRequests.any { !it.isOpen }) "all" else "open")
+                }
+                .onFailure { e -> state = state.copy(isMergingPullRequest = false, pullRequestActionError = e.message ?: "Couldn't merge the PR.") }
+        }
+    }
+
+    fun loadPullRequestFiles(pr: PullRequest) {
+        val repo = state.selectedRepo ?: return
+        state = state.copy(
+            selectedPullRequest = pr,
+            pullRequestFiles = emptyList(),
+            isLoadingPullRequestFiles = true,
+            pullRequestFilesError = null
+        )
+        viewModelScope.launch {
+            gitHubRepository.listPullRequestFiles(repo, pr.number)
+                .onSuccess { files -> state = state.copy(isLoadingPullRequestFiles = false, pullRequestFiles = files) }
+                .onFailure { e -> state = state.copy(isLoadingPullRequestFiles = false, pullRequestFilesError = e.message ?: "Couldn't load the PR's files.") }
+        }
+    }
+
+    fun clearSelectedPullRequest() {
+        state = state.copy(selectedPullRequest = null, pullRequestFiles = emptyList())
+    }
+
+    // ============================================================
+    // Issues
+    // ============================================================
+
+    fun loadIssues(stateFilter: String = "open") {
+        val repo = state.selectedRepo ?: return
+        state = state.copy(isLoadingIssues = true, issuesError = null)
+        viewModelScope.launch {
+            gitHubRepository.listIssues(repo, stateFilter)
+                .onSuccess { issues -> state = state.copy(isLoadingIssues = false, issues = issues) }
+                .onFailure { e -> state = state.copy(isLoadingIssues = false, issuesError = e.message ?: "Couldn't load issues.") }
+        }
+    }
+
+    fun createIssue(title: String, body: String?, onCreated: () -> Unit) {
+        val repo = state.selectedRepo ?: return
+        state = state.copy(isCreatingIssue = true, createIssueError = null)
+        viewModelScope.launch {
+            gitHubRepository.createIssue(repo, title, body)
+                .onSuccess {
+                    state = state.copy(isCreatingIssue = false)
+                    onCreated()
+                }
+                .onFailure { e -> state = state.copy(isCreatingIssue = false, createIssueError = e.message ?: "Couldn't create the issue.") }
+        }
+    }
+
+    fun clearCreateIssueError() {
+        state = state.copy(createIssueError = null)
+    }
+
+    fun setIssueState(issue: Issue, newState: String) {
+        val repo = state.selectedRepo ?: return
+        state = state.copy(issueActionError = null)
+        viewModelScope.launch {
+            gitHubRepository.updateIssueState(repo, issue.number, newState)
+                .onSuccess { loadIssues(if (state.issues.any { !it.isOpen }) "all" else "open") }
+                .onFailure { e -> state = state.copy(issueActionError = e.message ?: "Couldn't update the issue.") }
+        }
+    }
+
+    fun loadIssueComments(issue: Issue) {
+        val repo = state.selectedRepo ?: return
+        state = state.copy(selectedIssue = issue, isLoadingIssueComments = true, issueCommentsError = null, issueComments = emptyList())
+        viewModelScope.launch {
+            gitHubRepository.listIssueComments(repo, issue.number)
+                .onSuccess { comments -> state = state.copy(isLoadingIssueComments = false, issueComments = comments) }
+                .onFailure { e -> state = state.copy(isLoadingIssueComments = false, issueCommentsError = e.message ?: "Couldn't load comments.") }
+        }
+    }
+
+    fun postIssueComment(issue: Issue, body: String) {
+        val repo = state.selectedRepo ?: return
+        state = state.copy(isPostingComment = true, issueActionError = null)
+        viewModelScope.launch {
+            gitHubRepository.createIssueComment(repo, issue.number, body)
+                .onSuccess {
+                    state = state.copy(isPostingComment = false)
+                    loadIssueComments(issue)
+                }
+                .onFailure { e -> state = state.copy(isPostingComment = false, issueActionError = e.message ?: "Couldn't post the comment.") }
+        }
+    }
+
+    fun clearSelectedIssue() {
+        state = state.copy(selectedIssue = null, issueComments = emptyList())
+    }
+
+    // ============================================================
+    // Star / unstar / fork
+    // ============================================================
+
+    fun loadStarredRepositories() {
+        if (state.isLoadingStarred || state.starredRepos.isNotEmpty()) return
+        state = state.copy(isLoadingStarred = true)
+        viewModelScope.launch {
+            gitHubRepository.listStarredRepositories()
+                .onSuccess { starred -> state = state.copy(isLoadingStarred = false, starredRepos = starred) }
+                .onFailure { state = state.copy(isLoadingStarred = false) }
+        }
+    }
+
+    /** Optimistically toggles star state, then confirms/reverts against GitHub. */
+    fun toggleStar(repo: GitRepository) {
+        val isStarred = state.starredRepos.contains(repo.fullName)
+        if (state.isTogglingStar != null) return
+        val updatedCount = (repo.stargazersCount + if (isStarred) -1 else 1).coerceAtLeast(0)
+        val updatedRepo = repo.copy(stargazersCount = updatedCount)
+        val newSet = if (isStarred) state.starredRepos - repo.fullName else state.starredRepos + repo.fullName
+        state = state.copy(isTogglingStar = repo.fullName, starredRepos = newSet)
+        viewModelScope.launch {
+            val result = if (isStarred) gitHubRepository.unstarRepository(repo) else gitHubRepository.starRepository(repo)
+            result
+                .onSuccess { state = state.copy(isTogglingStar = null) }
+                .onFailure {
+                    // Revert the optimistic update.
+                    state = state.copy(
+                        isTogglingStar = null,
+                        starredRepos = if (isStarred) state.starredRepos + repo.fullName else state.starredRepos - repo.fullName
+                    )
+                }
+            updateRepoInLists(updatedRepo)
+        }
+    }
+
+    fun forkRepository(onForked: (GitRepository) -> Unit) {
+        val repo = state.selectedRepo ?: return
+        state = state.copy(isForking = true, forkError = null)
+        viewModelScope.launch {
+            gitHubRepository.forkRepository(repo)
+                .onSuccess { fork ->
+                    state = state.copy(isForking = false)
+                    onForked(fork)
+                }
+                .onFailure { e -> state = state.copy(isForking = false, forkError = e.message ?: "Couldn't fork the repository.") }
+        }
+    }
+
+    fun clearForkError() {
+        state = state.copy(forkError = null)
+    }
+
+    /** Refreshes [repo] (with its new star count) inside whichever account-wide list
+     * currently holds it, so Overview/Profile stay consistent after a star toggle. */
+    private fun updateRepoInLists(updated: GitRepository) {
+        val overview = state.overviewRepositories.map { if (it.fullName == updated.fullName) updated else it }
+        state = state.copy(overviewRepositories = overview)
+    }
+
+    // ============================================================
+    // Releases
+    // ============================================================
+
+    fun loadReleases() {
+        val repo = state.selectedRepo ?: return
+        state = state.copy(isLoadingReleases = true, releasesError = null)
+        viewModelScope.launch {
+            gitHubRepository.listReleases(repo)
+                .onSuccess { releases -> state = state.copy(isLoadingReleases = false, releases = releases) }
+                .onFailure { e -> state = state.copy(isLoadingReleases = false, releasesError = e.message ?: "Couldn't load releases.") }
+        }
+    }
+
+    fun createRelease(
+        tagName: String,
+        name: String?,
+        body: String?,
+        draft: Boolean,
+        prerelease: Boolean,
+        onCreated: () -> Unit
+    ) {
+        val repo = state.selectedRepo ?: return
+        state = state.copy(isCreatingRelease = true, createReleaseError = null)
+        viewModelScope.launch {
+            gitHubRepository.createRelease(repo, tagName, name, body, draft, prerelease, targetCommitish = state.selectedBranch)
+                .onSuccess {
+                    state = state.copy(isCreatingRelease = false)
+                    onCreated()
+                }
+                .onFailure { e -> state = state.copy(isCreatingRelease = false, createReleaseError = e.message ?: "Couldn't create the release.") }
+        }
+    }
+
+    fun clearCreateReleaseError() {
+        state = state.copy(createReleaseError = null)
+    }
+
+    fun deleteRelease(release: GitRelease) {
+        val repo = state.selectedRepo ?: return
+        state = state.copy(isDeletingRelease = true, releaseActionError = null)
+        viewModelScope.launch {
+            gitHubRepository.deleteRelease(repo, release.id)
+                .onSuccess { state = state.copy(isDeletingRelease = false); loadReleases() }
+                .onFailure { e -> state = state.copy(isDeletingRelease = false, releaseActionError = e.message ?: "Couldn't delete the release.") }
+        }
+    }
+
+    fun loadReleaseAssets(release: GitRelease) {
+        val repo = state.selectedRepo ?: return
+        state = state.copy(isLoadingReleaseAssets = true, releaseAssetsError = null, releaseAssets = emptyList())
+        viewModelScope.launch {
+            gitHubRepository.listReleaseAssets(repo, release.id)
+                .onSuccess { assets -> state = state.copy(isLoadingReleaseAssets = false, releaseAssets = assets) }
+                .onFailure { e -> state = state.copy(isLoadingReleaseAssets = false, releaseAssetsError = e.message ?: "Couldn't load release assets.") }
+        }
+    }
+
+    fun uploadReleaseAsset(release: GitRelease, fileName: String, bytes: ByteArray, onUploaded: () -> Unit) {
+        val repo = state.selectedRepo ?: return
+        state = state.copy(isUploadingAsset = true, uploadAssetError = null)
+        viewModelScope.launch {
+            gitHubRepository.uploadReleaseAsset(repo, release.id, fileName, bytes)
+                .onSuccess {
+                    state = state.copy(isUploadingAsset = false)
+                    loadReleaseAssets(release)
+                    onUploaded()
+                }
+                .onFailure { e -> state = state.copy(isUploadingAsset = false, uploadAssetError = e.message ?: "Couldn't upload the asset.") }
+        }
+    }
+
+    fun clearReleaseActionErrors() {
+        state = state.copy(releaseActionError = null, uploadAssetError = null)
+    }
+
+    fun downloadReleaseAsset(asset: ReleaseAsset) {
+        val repo = state.selectedRepo ?: return
+        if (state.downloadingArtifactName != null) return
+        state = state.copy(downloadingArtifactName = asset.name, downloadError = null, pendingDownload = null)
+        viewModelScope.launch {
+            gitHubRepository.downloadReleaseAsset(repo, asset.id)
+                .onSuccess { bytes ->
+                    state = state.copy(
+                        downloadingArtifactName = null,
+                        pendingDownload = DownloadResult(fileName = asset.name, bytes = bytes, isApk = asset.name.endsWith(".apk", ignoreCase = true))
+                    )
+                }
+                .onFailure { e -> state = state.copy(downloadingArtifactName = null, downloadError = e.message ?: "Couldn't download the asset.") }
+        }
+    }
+
+    // ============================================================
+    // Search + commit diff + repo zip
+    // ============================================================
+
+    fun searchRepositories(query: String) {
+        if (query.isBlank()) {
+            state = state.copy(searchResults = emptyList())
+            return
+        }
+        state = state.copy(isSearchingRepos = true, searchReposError = null)
+        viewModelScope.launch {
+            gitHubRepository.searchRepositories(query.trim())
+                .onSuccess { results -> state = state.copy(isSearchingRepos = false, searchResults = results) }
+                .onFailure { e -> state = state.copy(isSearchingRepos = false, searchReposError = e.message ?: "Search failed.") }
+        }
+    }
+
+    fun clearSearchResults() {
+        state = state.copy(searchResults = emptyList(), searchReposError = null)
+    }
+
+    fun searchCode(query: String) {
+        val repo = state.selectedRepo ?: return
+        if (query.isBlank()) {
+            state = state.copy(codeSearchResults = emptyList())
+            return
+        }
+        state = state.copy(isSearchingCode = true, codeSearchError = null)
+        viewModelScope.launch {
+            gitHubRepository.searchCode(query.trim(), repo.owner, repo.name)
+                .onSuccess { results -> state = state.copy(isSearchingCode = false, codeSearchResults = results) }
+                .onFailure { e -> state = state.copy(isSearchingCode = false, codeSearchError = e.message ?: "Code search failed.") }
+        }
+    }
+
+    fun clearCodeSearch() {
+        state = state.copy(codeSearchResults = emptyList(), codeSearchError = null)
+    }
+
+    fun loadCommitDiff(sha: String) {
+        val repo = state.selectedRepo ?: return
+        state = state.copy(viewingCommitSha = sha, isLoadingCommitDiff = true, commitDiffError = null, commitDiff = emptyList())
+        viewModelScope.launch {
+            gitHubRepository.getCommitDiff(repo, sha)
+                .onSuccess { diff -> state = state.copy(isLoadingCommitDiff = false, commitDiff = diff) }
+                .onFailure { e -> state = state.copy(isLoadingCommitDiff = false, commitDiffError = e.message ?: "Couldn't load the commit diff.") }
+        }
+    }
+
+    fun clearCommitDiff() {
+        state = state.copy(viewingCommitSha = null, commitDiff = emptyList(), commitDiffError = null)
+    }
+
+    fun downloadRepoZip() {
+        val repo = state.selectedRepo ?: return
+        if (state.downloadingArtifactName != null) return
+        state = state.copy(downloadingArtifactName = "${repo.name}.zip", downloadError = null, pendingDownload = null)
+        viewModelScope.launch {
+            gitHubRepository.downloadRepoZip(repo, state.selectedBranch)
+                .onSuccess { bytes ->
+                    state = state.copy(
+                        downloadingArtifactName = null,
+                        pendingDownload = DownloadResult(fileName = "${repo.name}-${repo.defaultBranch}.zip", bytes = bytes, isApk = false)
+                    )
+                }
+                .onFailure { e -> state = state.copy(downloadingArtifactName = null, downloadError = e.message ?: "Couldn't download the repository.") }
+        }
     }
 }

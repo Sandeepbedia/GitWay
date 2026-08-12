@@ -1,21 +1,3 @@
-/*
- * Git Way
- * Copyright (C) 2026 Sandeep Bedia
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
-
 package com.io.git.way.domain.model
 
 /** A single file or folder row in the Repository Browser (file-manager view of a repo). */
@@ -25,11 +7,10 @@ data class BrowserEntry(
     val isFolder: Boolean
 )
 
-/** One visible row in the VS Code-style tree explorer: an entry plus how deeply nested
- * it is, so the UI can indent it. Folders only appear expanded (their children included
- * right after them) when their path is in the view model's expanded-folders set.
- * [directChildCount] is only meaningful for folders — the small "N" badge next to the
- * folder name, same as Acode/VS Code's explorer. */
+/** One visible row in the VS Code/Acode-style tree explorer.
+ * Each real directory remains a separate row so guide lines can connect parent,
+ * child and sibling rows without package-chain compaction. */
+
 data class TreeRow(
     val entry: BrowserEntry,
     val depth: Int,
