@@ -4,9 +4,9 @@ First off — thanks for considering a contribution. Bug fixes, small features, 
 fixes, and UI polish are all genuinely welcome. This guide covers everything you
 need to get a change from your machine into the app.
 
-> **Before you start:** this project uses a [source-available, no-redistribution
-> license](LICENSE). You're free to fork, build, and send Pull Requests — you're
-> just not able to publish your own copy of the compiled app anywhere. See the
+> **Before you start:** this project is licensed under [GPL-3.0](LICENSE).
+> You're free to fork, build, modify, and redistribute it — including your own
+> copy — as long as it stays open source under the same license. See the
 > LICENSE for the full terms.
 
 ## Table of contents

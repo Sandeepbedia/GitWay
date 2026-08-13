@@ -153,4 +153,38 @@ object FileTypeIcons {
             else -> fileName.substringAfterLast('.', "").uppercase().take(5)
         }
     }
+
+    /** Wired custom SVG icon (res/raw, e.g. kt.svg) for a filename, if a dedicated one
+     * exists — these are the hand-picked file-manager icons (Kotlin, Java, XML, Gradle,
+     * LICENSE, ...). Returns null when nothing was drawn specifically for that file, so
+     * callers fall back to the generic Material icon from [iconFor]. */
+    fun iconResFor(fileName: String): Int? {
+        val lower = fileName.lowercase()
+        val ext = fileName.substringAfterLast('.', "").lowercase()
+        return when {
+            lower == "gradlew" -> com.io.git.way.R.raw.gradlew
+            lower == "license" || lower == "license.md" || lower == "license.txt" ||
+                lower == "licence" || lower == "licence.md" || lower == "licence.txt" ->
+                com.io.git.way.R.raw.licence
+            lower == "pubspec.yaml" || lower == "pubspec.yml" -> com.io.git.way.R.raw.flutter
+            lower == ".env.example" || lower == "env.example" -> com.io.git.way.R.raw.env_example
+            ext == "kts" -> com.io.git.way.R.raw.kts
+            ext == "kt" -> com.io.git.way.R.raw.kt
+            ext == "java" -> com.io.git.way.R.raw.java
+            ext == "xml" -> com.io.git.way.R.raw.xml
+            ext == "json" -> com.io.git.way.R.raw.json
+            ext == "md" || ext == "markdown" -> com.io.git.way.R.raw.md
+            ext == "gradle" -> com.io.git.way.R.raw.gradle
+            ext == "properties" -> com.io.git.way.R.raw.properties
+            ext == "pro" -> com.io.git.way.R.raw.pro
+            ext == "bat" -> com.io.git.way.R.raw.bt
+            ext == "jpg" || ext == "jpeg" || ext == "jpe" || ext == "jfif" -> com.io.git.way.R.raw.jpg
+            ext == "png" -> com.io.git.way.R.raw.png
+            ext == "webp" -> com.io.git.way.R.raw.webp
+            ext == "dart" -> com.io.git.way.R.raw.flutter
+            ext == "7z" -> com.io.git.way.R.raw.sevenz
+            ext == "class" -> com.io.git.way.R.raw.javaclass
+            else -> null
+        }
+    }
 }

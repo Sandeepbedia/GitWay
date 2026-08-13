@@ -1680,7 +1680,19 @@ class GitWaySessionViewModel(
 
             children.forEachIndexed { index, entry ->
                 val hasNextSibling = index < children.lastIndex
-                val guideState = ancestorsContinue + hasNextSibling
+
+                // The repository root has no visual parent guide. Including the root's
+                // sibling state here creates an extra full-height vertical line on the
+                // far left of every descendant (visible in deep paths such as
+                // app/src/main/kotlin/... and res/drawable/...).
+                //
+                // For depth > 0, keep the normal ancestor/sibling state so each real
+                // folder level still gets one continuous guide column.
+                val guideState = if (depth == 0) {
+                    ancestorsContinue
+                } else {
+                    ancestorsContinue + hasNextSibling
+                }
 
                 rows += if (entry.isFolder) {
                     TreeRow(

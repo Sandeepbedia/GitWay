@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="32"
+     height="32"
+     viewBox="0 0 32 32">
+
+  <!-- Project file -->
+  <path
+    fill="#9C27B0"
+    d="M6 4H20L26 10V28H6Z"/>
+
+  <!-- Fold -->
+  <path
+    fill="#CE93D8"
+    d="M20 4V10H26Z"/>
+
+  <!-- Project symbol -->
+  <path
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    d="M10 15H22M10 19H19M10 23H16"/>
+
+</svg>

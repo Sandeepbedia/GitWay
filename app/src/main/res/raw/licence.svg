@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="32"
+     height="32"
+     viewBox="0 0 32 32">
+
+  <!-- Document -->
+  <path
+    fill="#455A64"
+    d="M6 3H20L26 9V29H6Z"/>
+
+  <!-- Fold -->
+  <path
+    fill="#78909C"
+    d="M20 3V9H26Z"/>
+
+  <!-- License seal -->
+  <circle
+    cx="14"
+    cy="15"
+    r="4"
+    fill="#FFC107"/>
+
+  <path
+    d="M12.5 18L11.5 22L14 20.8L16.5 22L15.5 18"
+    fill="#FFC107"/>
+
+  <!-- License text -->
+  <path
+    d="M20 14H23M20 18H23M10 25H22"
+    stroke="#FFFFFF"
+    stroke-width="1.7"
+    stroke-linecap="round"/>
+
+</svg>

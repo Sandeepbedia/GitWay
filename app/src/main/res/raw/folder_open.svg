@@ -1,144 +1,44 @@
 <svg xmlns="http://www.w3.org/2000/svg"
      width="32"
      height="32"
-     viewBox="0 0 32 32"
-     fill="none">
+     viewBox="0 0 48 48">
 
-  <defs>
-
-    <!-- Main yellow gradient -->
-    <linearGradient id="folderGradient"
-                    x1="3"
-                    y1="5"
-                    x2="29"
-                    y2="27"
-                    gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFF200"/>
-      <stop offset="0.5" stop-color="#FFD600"/>
-      <stop offset="1" stop-color="#FFB300"/>
-    </linearGradient>
-
-    <!-- Flap gradient -->
-    <linearGradient id="flapGradient"
-                    x1="5"
-                    y1="6"
-                    x2="27"
-                    y2="16"
-                    gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFE600"/>
-      <stop offset="1" stop-color="#FFB800"/>
-    </linearGradient>
-
-    <!-- Front gradient -->
-    <linearGradient id="frontGradient"
-                    x1="4"
-                    y1="13"
-                    x2="27"
-                    y2="26"
-                    gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFD900"/>
-      <stop offset="1" stop-color="#FFA800"/>
-    </linearGradient>
-
-    <!-- Subtle transparent fill -->
-    <linearGradient id="folderFill"
-                    x1="4"
-                    y1="10"
-                    x2="27"
-                    y2="26"
-                    gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFF200" stop-opacity="0.10"/>
-      <stop offset="1" stop-color="#FFB300" stop-opacity="0.10"/>
-    </linearGradient>
-
-  </defs>
-
-  <!-- OPEN FOLDER -->
-
-  <!-- Raised rear flap -->
+  <!-- Upper folder part: Yellow -->
   <path
-    d="M4.2 14
-       L7.1 7.5
-       C7.45 6.65 8.15 6.1 9.05 6.1
-       H12.8
-       C13.35 6.1 13.85 6.35 14.2 6.8
-       L16.25 9.45
-       H26.15
-       C27.25 9.45 28 10.45 27.65 11.45
-       L25.85 16.2"
-    fill="url(#folderFill)"
-    stroke="url(#flapGradient)"
-    stroke-width="1.9"
-    stroke-linejoin="round"
-    stroke-linecap="round"
-  />
+    fill="#FFFF00"
+    d="M 8.5 8
+       C 6.0324991 8 4 10.032499 4 12.5
+       L 4 36.40625
+       L 7 28
+       L 7 12.5
+       C 7 11.653501 7.6535009 11 8.5 11
+       L 16.052734 11
+       C 16.638307 11 17.202555 11.205358 17.652344 11.580078
+       L 22.539062 15.652344
+       A 1.50015 1.50015 0 0 0 23.5 16
+       L 37.5 16
+       C 38.346499 16 39 16.653501 39 17.5
+       L 39 19
+       L 42 19
+       L 42 17.5
+       C 42 15.032499 39.967501 13 37.5 13
+       L 24.042969 13
+       L 19.574219 9.2753906
+       C 18.584102 8.4521105 17.339162 8 16.052734 8
+       Z"/>
 
-  <!-- Flap inner detail -->
+  <!-- Front box: Pure Red -->
   <path
-    d="M7.6 8.3
-       L5.9 12.2
-       H24.9"
-    stroke="#FFE600"
-    stroke-width="0.65"
-    stroke-linecap="round"
-    opacity="0.8"
-  />
-
-  <!-- Main folder body -->
-  <path
-    d="M4.3 11.8
-       H25.9
-       C27.1 11.8 27.9 12.95 27.5 14.05
-       L24.5 23
-       C24.1 24.45 22.95 25.4 21.45 25.4
-       H6.1
-       C4.65 25.4 3.5 24.25 3.5 22.8
-       V13
-       C3.5 12.35 3.8 11.8 4.3 11.8
-       Z"
-    fill="url(#folderFill)"
-    stroke="url(#frontGradient)"
-    stroke-width="2"
-    stroke-linejoin="round"
-  />
-
-  <!-- Top opening -->
-  <path
-    d="M4.25 12
-       H25.8"
-    stroke="#FFD600"
-    stroke-width="2.15"
-    stroke-linecap="round"
-  />
-
-  <!-- Subtle color transition -->
-  <path
-    d="M18 12
-       H25.8"
-    stroke="#FFB300"
-    stroke-width="1.5"
-    stroke-linecap="round"
-    opacity="0.85"
-  />
-
-  <!-- Lower edge -->
-  <path
-    d="M7 24.1
-       H21.5"
-    stroke="#FFAA00"
-    stroke-width="0.8"
-    stroke-linecap="round"
-    opacity="0.7"
-  />
-
-  <!-- Inner shine -->
-  <path
-    d="M6.2 20.8
-       C10.2 21.15 14.5 21.1 18.5 20.9"
-    stroke="#FFE978"
-    stroke-width="0.7"
-    stroke-linecap="round"
-    opacity="0.35"
-  />
+    fill="#FF0000"
+    d="M 13.453125 22
+       L 42.498047 22
+       C 42.897907 22 43.107444 22.305152 42.964844 22.677734
+       L 37.951172 36.027344
+       C 37.730157 36.616381 37.176875 37 36.546875 37
+       L 7.5019531 37
+       C 7.1042373 37 6.8935735 36.697099 7.0332031 36.326172
+       L 12.048828 22.972656
+       C 12.269843 22.383619 12.823125 22 13.453125 22
+       Z"/>
 
 </svg>

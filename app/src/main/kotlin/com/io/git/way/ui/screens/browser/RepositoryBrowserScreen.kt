@@ -42,7 +42,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -89,7 +88,6 @@ import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Merge
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.NoteAdd
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.PlayArrow
@@ -483,7 +481,6 @@ fun RepositoryBrowserScreen(
                                         else -> sessionViewModel.openFile(row.entry)
                                     }
                                 },
-                                onLongClick = { if (!row.entry.isFolder) sessionViewModel.toggleBrowserSelection(row.entry) },
                                 onDelete = { pendingDelete = row.entry },
                                 onRename = { pendingRename = row.entry },
                                 onDuplicate = { sessionViewModel.duplicateEntry(row.entry) },
@@ -706,7 +703,12 @@ private fun SearchResultRow(path: String, onClick: () -> Unit) {
     val name = path.substringAfterLast('/')
     GlassCard(modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = {}), padding = 10.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(FileTypeIcons.iconFor(name), contentDescription = null, tint = FileTypeIcons.colorFor(name), modifier = Modifier.size(22.dp))
+            val iconRes = FileTypeIcons.iconResFor(name)
+            if (iconRes != null) {
+                SvgRawIcon(resId = iconRes, contentDescription = null, modifier = Modifier.size(22.dp))
+            } else {
+                Icon(FileTypeIcons.iconFor(name), contentDescription = null, tint = FileTypeIcons.colorFor(name), modifier = Modifier.size(22.dp))
+            }
             Column(modifier = Modifier.padding(start = 10.dp).weight(1f)) {
                 Text(name, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
@@ -740,8 +742,9 @@ private fun RepositoryRootRow(
             modifier = Modifier.size(20.dp)
         )
         Spacer(Modifier.width(2.dp))
-        SvgFolderIcon(
-            open = true,
+        SvgRawIcon(
+            resId = com.io.git.way.R.raw.folder_root,
+            contentDescription = "Repository root",
             modifier = Modifier.size(28.dp)
         )
         Text(
@@ -759,17 +762,14 @@ private fun RepositoryRootRow(
     }
 }
 
+/** Generic renderer for any wired res/raw SVG icon (folders, file types, ...). */
 @Composable
-private fun SvgFolderIcon(
-    open: Boolean,
+private fun SvgRawIcon(
+    resId: Int,
+    contentDescription: String?,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val resource = if (open) {
-        com.io.git.way.R.raw.folder_open
-    } else {
-        com.io.git.way.R.raw.folder_closed
-    }
 
     val imageLoader = remember(context) {
         ImageLoader.Builder(context)
@@ -780,14 +780,26 @@ private fun SvgFolderIcon(
     }
 
     val painter = rememberAsyncImagePainter(
-        model = resource,
+        model = resId,
         imageLoader = imageLoader
     )
 
     Image(
         painter = painter,
-        contentDescription = if (open) "Open folder" else "Closed folder",
+        contentDescription = contentDescription,
         contentScale = ContentScale.Fit,
+        modifier = modifier
+    )
+}
+
+@Composable
+private fun SvgFolderIcon(
+    open: Boolean,
+    modifier: Modifier = Modifier
+) {
+    SvgRawIcon(
+        resId = if (open) com.io.git.way.R.raw.folder_open else com.io.git.way.R.raw.folder_closed,
+        contentDescription = if (open) "Open folder" else "Closed folder",
         modifier = modifier
     )
 }
@@ -799,7 +811,6 @@ private fun TreeRowItem(
     selectionMode: Boolean,
     selected: Boolean,
     onClick: () -> Unit,
-    onLongClick: () -> Unit,
     onDelete: () -> Unit,
     onRename: () -> Unit,
     onDuplicate: () -> Unit,
@@ -823,211 +834,198 @@ private fun TreeRowItem(
     // Fixed height keeps every guide column aligned to the same vertical rhythm.
     val rowHeight = 50.dp
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(rowHeight)
-            .clip(RoundedCornerShape(10.dp))
-            .background(rowBackground)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(horizontal = 2.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        val leadingScroll = rememberScrollState()
-
+    // Hold-click on the row opens the actions menu — a tap always just opens the item.
+    Box {
         Row(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
-                .horizontalScroll(leadingScroll),
+                .fillMaxWidth()
+                .height(rowHeight)
+                .clip(RoundedCornerShape(10.dp))
+                .background(rowBackground)
+                .combinedClickable(onClick = onClick, onLongClick = { showMenu = true })
+                .padding(horizontal = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TreeIndentGuides(row, if (entry.isFolder) 0.dp else 24.dp)
+            val leadingScroll = rememberScrollState()
 
-            if (entry.isFolder) {
-                val rotation by animateFloatAsState(
-                    targetValue = if (row.isExpanded) 90f else 0f,
-                    label = "tree-chevron"
-                )
-                Icon(
-                    Icons.Filled.KeyboardArrowRight,
-                    contentDescription = if (row.isExpanded) "Collapse folder" else "Expand folder",
-                    modifier = Modifier
-                        .size(20.dp)
-                        .graphicsLayer { rotationZ = rotation },
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.width(2.dp))
-            } else if (selectionMode) {
-                Icon(
-                    if (selected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
-                    contentDescription = if (selected) "Selected" else "Not selected",
-                    tint = if (selected) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(Modifier.width(4.dp))
-            } else {
-                // Keep files aligned with folder names without showing a fake expand arrow.
-                Spacer(Modifier.width(22.dp))
-            }
-
-            if (entry.isFolder) {
-                SvgFolderIcon(
-                    open = row.isExpanded,
-                    modifier = Modifier.size(25.dp)
-                )
-            } else {
-                Icon(
-                    FileTypeIcons.iconFor(entry.name),
-                    contentDescription = null,
-                    tint = iconTint,
-                    modifier = Modifier.size(21.dp)
-                )
-            }
-
-            Column(
+            Row(
                 modifier = Modifier
-                    .padding(start = 9.dp)
-                    .widthIn(min = 80.dp, max = 420.dp)
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .horizontalScroll(leadingScroll),
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                TreeIndentGuides(row, if (entry.isFolder) 0.dp else 24.dp)
+
+                if (entry.isFolder) {
+                    val rotation by animateFloatAsState(
+                        targetValue = if (row.isExpanded) 90f else 0f,
+                        label = "tree-chevron"
+                    )
+                    Icon(
+                        Icons.Filled.KeyboardArrowRight,
+                        contentDescription = if (row.isExpanded) "Collapse folder" else "Expand folder",
+                        modifier = Modifier
+                            .size(20.dp)
+                            .graphicsLayer { rotationZ = rotation },
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.width(2.dp))
+                } else if (selectionMode) {
+                    Icon(
+                        if (selected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                        contentDescription = if (selected) "Selected" else "Not selected",
+                        tint = if (selected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                } else {
+                    // Keep files aligned with folder names without showing a fake expand arrow.
+                    Spacer(Modifier.width(22.dp))
+                }
+
+                if (entry.isFolder) {
+                    SvgFolderIcon(
+                        open = row.isExpanded,
+                        modifier = Modifier.size(25.dp)
+                    )
+                } else {
+                    val iconRes = FileTypeIcons.iconResFor(entry.name)
+                    if (iconRes != null) {
+                        SvgRawIcon(
+                            resId = iconRes,
+                            contentDescription = null,
+                            modifier = Modifier.size(21.dp)
+                        )
+                    } else {
+                        Icon(
+                            FileTypeIcons.iconFor(entry.name),
+                            contentDescription = null,
+                            tint = iconTint,
+                            modifier = Modifier.size(21.dp)
+                        )
+                    }
+                }
+
                 Text(
                     entry.name,
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    softWrap = false
-                )
-                if (!entry.isFolder) {
-                    Text(
-                        if (fileSize != null) "${FileTypeIcons.typeLabel(entry.name)} • ${FileTypeIcons.formatSize(fileSize)}" else FileTypeIcons.typeLabel(entry.name),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        softWrap = false
-                    )
-                }
-            }
-
-            Spacer(Modifier.width(12.dp))
-        }
-
-        if (!entry.isFolder && !selectionMode) {
-            val badge = FileTypeIcons.badgeFor(entry.name)
-            if (badge.isNotEmpty()) {
-                Box(
+                    softWrap = false,
                     modifier = Modifier
-                        .background(iconTint.copy(alpha = 0.14f), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 5.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        badge,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = iconTint
-                    )
-                }
-                Spacer(Modifier.width(5.dp))
-            }
-        }
+                        .padding(start = 9.dp)
+                        .widthIn(min = 40.dp, max = 420.dp)
+                )
 
-        if (!selectionMode) {
-            Box {
-                IconButton(
-                    onClick = { showMenu = true },
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        Icons.Filled.MoreVert,
-                        contentDescription = "More actions",
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-                DropdownMenu(
-                    expanded = showMenu,
-                    onDismissRequest = { showMenu = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Open") },
-                        onClick = { showMenu = false; onClick() }
-                    )
-                    if (entry.isFolder) {
-                        DropdownMenuItem(
-                            leadingIcon = { Icon(Icons.Filled.NoteAdd, null) },
-                            text = { Text("New File") },
-                            onClick = { showMenu = false; onNewFile() }
-                        )
-                        DropdownMenuItem(
-                            leadingIcon = { Icon(Icons.Filled.CreateNewFolder, null) },
-                            text = { Text("New Folder") },
-                            onClick = { showMenu = false; onNewFolder() }
-                        )
-                        DropdownMenuItem(
-                            leadingIcon = { Icon(Icons.Filled.Refresh, null) },
-                            text = { Text("Refresh") },
-                            onClick = { showMenu = false; onRefresh() }
-                        )
-                    } else {
-                        DropdownMenuItem(
-                            leadingIcon = { Icon(Icons.Filled.FileCopy, null) },
-                            text = { Text("Duplicate") },
-                            onClick = { showMenu = false; onDuplicate() }
-                        )
-                    }
-                    DropdownMenuItem(
-                        leadingIcon = { Icon(Icons.Filled.Edit, null) },
-                        text = { Text("Rename") },
-                        onClick = { showMenu = false; onRename() }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Copy Path") },
-                        onClick = { showMenu = false; onCopyPath() }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Copy Name") },
-                        onClick = { showMenu = false; onCopyName() }
-                    )
-                    DropdownMenuItem(
-                        leadingIcon = { Icon(Icons.Filled.OpenInNew, null) },
-                        text = { Text("View on GitHub") },
-                        onClick = { showMenu = false; onViewOnGitHub() }
-                    )
-                    DropdownMenuItem(
-                        leadingIcon = {
-                            Icon(
-                                Icons.Filled.Delete,
-                                null,
-                                tint = MaterialTheme.colorScheme.error
-                            )
-                        },
-                        text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
-                        onClick = { showMenu = false; onDelete() }
-                    )
-                }
-            }
-
-            if (!entry.isFolder) {
-                IconButton(
-                    onClick = onClick,
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(23.dp)
-                            .background(
-                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f),
-                                CircleShape
-                            ),
-                        contentAlignment = Alignment.Center
+                if (entry.isFolder && !selectionMode) {
+                    Spacer(Modifier.width(4.dp))
+                    IconButton(
+                        onClick = onNewFile,
+                        modifier = Modifier.size(28.dp)
                     ) {
                         Icon(
-                            Icons.Filled.KeyboardArrowRight,
-                            contentDescription = "Open",
-                            modifier = Modifier.size(14.dp)
+                            Icons.Filled.NoteAdd,
+                            contentDescription = "New file",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    IconButton(
+                        onClick = onNewFolder,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.CreateNewFolder,
+                            contentDescription = "New folder",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.width(12.dp))
+            }
+
+            if (!entry.isFolder && !selectionMode) {
+                val badge = FileTypeIcons.badgeFor(entry.name)
+                if (badge.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .background(iconTint.copy(alpha = 0.14f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            badge,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = iconTint
                         )
                     }
                 }
             }
+        }
+
+        DropdownMenu(
+            expanded = showMenu,
+            onDismissRequest = { showMenu = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("Open") },
+                onClick = { showMenu = false; onClick() }
+            )
+            if (entry.isFolder) {
+                DropdownMenuItem(
+                    leadingIcon = { Icon(Icons.Filled.NoteAdd, null) },
+                    text = { Text("New File") },
+                    onClick = { showMenu = false; onNewFile() }
+                )
+                DropdownMenuItem(
+                    leadingIcon = { Icon(Icons.Filled.CreateNewFolder, null) },
+                    text = { Text("New Folder") },
+                    onClick = { showMenu = false; onNewFolder() }
+                )
+                DropdownMenuItem(
+                    leadingIcon = { Icon(Icons.Filled.Refresh, null) },
+                    text = { Text("Refresh") },
+                    onClick = { showMenu = false; onRefresh() }
+                )
+            } else {
+                DropdownMenuItem(
+                    leadingIcon = { Icon(Icons.Filled.FileCopy, null) },
+                    text = { Text("Duplicate") },
+                    onClick = { showMenu = false; onDuplicate() }
+                )
+            }
+            DropdownMenuItem(
+                leadingIcon = { Icon(Icons.Filled.Edit, null) },
+                text = { Text("Rename") },
+                onClick = { showMenu = false; onRename() }
+            )
+            DropdownMenuItem(
+                text = { Text("Copy Path") },
+                onClick = { showMenu = false; onCopyPath() }
+            )
+            DropdownMenuItem(
+                text = { Text("Copy Name") },
+                onClick = { showMenu = false; onCopyName() }
+            )
+            DropdownMenuItem(
+                leadingIcon = { Icon(Icons.Filled.OpenInNew, null) },
+                text = { Text("View on GitHub") },
+                onClick = { showMenu = false; onViewOnGitHub() }
+            )
+            DropdownMenuItem(
+                leadingIcon = {
+                    Icon(
+                        Icons.Filled.Delete,
+                        null,
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                },
+                text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                onClick = { showMenu = false; onDelete() }
+            )
         }
     }
 }

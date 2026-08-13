@@ -11,7 +11,7 @@
 [![Min SDK](https://img.shields.io/badge/Min%20SDK-26%20(Android%208.0)-171923?style=flat-square)](#)
 [![Build check](https://github.com/Sandeepbedia/GitWay/actions/workflows/build-check.yml/badge.svg)](https://github.com/Sandeepbedia/GitWay/actions/workflows/build-check.yml)
 [![Latest release](https://img.shields.io/github/v/release/Sandeepbedia/GitWay?style=flat-square&color=8B5CF6&label=release)](https://github.com/Sandeepbedia/GitWay/releases/latest)
-[![License](https://img.shields.io/badge/License-Source--Available-A78BFA?style=flat-square)](LICENSE)
+[![License](https://img.shields.io/badge/License-GPL--3.0-A78BFA?style=flat-square)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-22C55E?style=flat-square)](CONTRIBUTING.md)
 
 </div>
@@ -256,14 +256,14 @@ before you invest time.
 
 ## License
 
-Git Way is released under a **custom source-available license** — see
+Git Way is released under the **GNU General Public License v3.0** — see
 **[LICENSE](LICENSE)** for the full text. The short version:
 
-- ✅ You can read the code, fork it, build it for yourself, and send Pull Requests.
-- ❌ You can't publish this app (or a modified/rebranded copy of it) to the Play
-  Store, F-Droid, or any other distribution channel as your own.
-
-If you want to redistribute it for some other reason, open an issue and ask.
+- ✅ You can read the code, fork it, build it, modify it, and redistribute it.
+- ✅ You can publish your own modified/rebranded copy — as long as it also
+  stays open source under GPL-3.0 and you keep the copyright/license notices.
+- ❌ You can't relicense it as closed-source or strip the GPL terms from a
+  redistributed copy.
 
 ---
 
