@@ -790,6 +790,14 @@ private fun RepositoryRootRow(
     repositoryName: String,
     itemCount: Int
 ) {
+    // Same styling constants as TreeIndentGuides, so the root's drop connects
+    // seamlessly into the first child's guide column instead of leaving a gap —
+    // RepositoryRootRow used to draw no guide line at all.
+    val guideColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.34f)
+    val indentUnit = 18.dp
+    val strokeWidth = 1.5.dp
+    val hasChildren = itemCount > 0
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -797,6 +805,27 @@ private fun RepositoryRootRow(
             .padding(horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (hasChildren) {
+            Box(
+                modifier = Modifier
+                    .width(indentUnit)
+                    .fillMaxHeight()
+            ) {
+                Canvas(Modifier.fillMaxSize()) {
+                    val x = size.width / 2f
+                    val midY = size.height / 2f
+                    drawLine(
+                        color = guideColor,
+                        start = Offset(x, midY),
+                        end = Offset(x, size.height),
+                        strokeWidth = strokeWidth.toPx(),
+                        cap = StrokeCap.Round
+                    )
+                }
+            }
+        } else {
+            Spacer(Modifier.width(indentUnit))
+        }
         Icon(
             Icons.Filled.KeyboardArrowDown,
             contentDescription = "Repository root",

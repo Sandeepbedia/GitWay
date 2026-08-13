@@ -73,6 +73,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -112,6 +113,18 @@ class GitHubRepositoryImpl(
     }
 
     private val errorJson = Json { ignoreUnknownKeys = true }
+
+    // The Retrofit-wide Json (see RetrofitProvider) sets explicitNulls = false so
+    // partial PATCH bodies never send e.g. "name": null. But GitHub's Git Trees API
+    // uses that exact shape — an entry with sha explicitly set to null — to mean
+    // "delete this path from the tree" (https://docs.github.com/rest/git/trees).
+    // With explicitNulls = false, a delete entry's null sha was silently OMITTED,
+    // leaving the entry with neither `sha` nor `content`, which is exactly what
+    // GitHub's "Must supply either tree.sha or tree.content" error is complaining
+    // about. This instance is only used for encoding [CreateTreeRequest] bodies —
+    // baseTree still correctly omits itself when null via @EncodeDefault(NEVER),
+    // which happens independently of explicitNulls.
+    private val treeJson = Json { ignoreUnknownKeys = true; encodeDefaults = true; explicitNulls = true }
 
     /** The Contents API path segment needs each directory/file name percent-encoded
      * (spaces, unicode, etc.) but the "/" separators themselves must survive — this
@@ -426,7 +439,12 @@ class GitHubRepositoryImpl(
             onProgress(UploadPhase.CREATING_TREE, total, total, "")
             val newTree = try {
                 githubCallWithRetry {
-                    apiService.createTree(owner, repoName, CreateTreeRequest(baseTree = baseTreeSha, tree = treeEntries))
+                    val requestJson = treeJson.encodeToString(
+                        CreateTreeRequest.serializer(),
+                        CreateTreeRequest(baseTree = baseTreeSha, tree = treeEntries)
+                    )
+                    val requestBody = requestJson.toRequestBody("application/json; charset=utf-8".toMediaType())
+                    apiService.createTree(owner, repoName, requestBody)
                 }
             } catch (e: IOException) {
                 throw IOException("Couldn't create the new file tree: ${e.message}", e)

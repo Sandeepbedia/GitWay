@@ -27,7 +27,6 @@ import com.io.git.way.data.remote.dto.CreatePullRequestRequest
 import com.io.git.way.data.remote.dto.CreateRefRequest
 import com.io.git.way.data.remote.dto.CreateReleaseRequest
 import com.io.git.way.data.remote.dto.CreateRepoRequest
-import com.io.git.way.data.remote.dto.CreateTreeRequest
 import com.io.git.way.data.remote.dto.GitBlobContentDto
 import com.io.git.way.data.remote.dto.GitBlobRefDto
 import com.io.git.way.data.remote.dto.GitCommitDetailDto
@@ -122,11 +121,15 @@ interface GitHubApiService {
         @Body body: CreateBlobRequest
     ): GitBlobRefDto
 
+    // @Body is a raw RequestBody, not CreateTreeRequest, because this call needs its
+    // own Json config (explicitNulls = true) — see GitHubRepositoryImpl.treeJson —
+    // so a delete entry's `sha: null` is actually sent, not silently omitted like
+    // the app-wide Retrofit Json (explicitNulls = false) would do to it.
     @POST("repos/{owner}/{repo}/git/trees")
     suspend fun createTree(
         @Path("owner") owner: String,
         @Path("repo") repo: String,
-        @Body body: CreateTreeRequest
+        @Body body: okhttp3.RequestBody
     ): GitTreeRefDto
 
     @POST("repos/{owner}/{repo}/git/commits")

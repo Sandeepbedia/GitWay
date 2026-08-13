@@ -1,0 +1,77 @@
+name: Build & GPL-3.0 License Check
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  license-check:
+    name: GPL-3.0 license compliance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify LICENSE is GPL-3.0
+        run: |
+          if [ ! -f LICENSE ]; then
+            echo "::error::LICENSE file is missing from the repository root."
+            exit 1
+          fi
+          if ! grep -q "GNU GENERAL PUBLIC LICENSE" LICENSE || ! grep -q "Version 3" LICENSE; then
+            echo "::error::LICENSE does not look like GPL-3.0 (expected 'GNU GENERAL PUBLIC LICENSE' / 'Version 3')."
+            exit 1
+          fi
+          echo "LICENSE OK — GPL-3.0."
+
+      - name: Verify every Kotlin source file carries the GPL-3.0 header
+        run: |
+          missing=0
+          while IFS= read -r -d '' file; do
+            if ! head -n 20 "$file" | grep -q "GNU General Public License"; then
+              echo "::error file=$file::Missing GPL-3.0 license header."
+              missing=$((missing + 1))
+            fi
+          done < <(find app/src -name "*.kt" -print0)
+
+          if [ "$missing" -gt 0 ]; then
+            echo "::error::$missing file(s) are missing the GPL-3.0 header. Every .kt file under app/src must start with the GitWay GPL-3.0 header block (see LICENSE / any existing source file for the exact wording)."
+            exit 1
+          fi
+          echo "All Kotlin source files carry the GPL-3.0 header."
+
+  build:
+    name: Build (assembleDebug)
+    runs-on: ubuntu-latest
+    needs: license-check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Compile + assemble debug APK
+        run: ./gradlew :app:assembleDebug --stacktrace
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitway-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
