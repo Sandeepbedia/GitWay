@@ -47,12 +47,9 @@ import androidx.compose.ui.window.Dialog
 import com.io.git.way.domain.model.AppUpdateInfo
 import com.io.git.way.ui.theme.GlassPrimaryButton
 import com.io.git.way.ui.theme.GlassSecondaryButton
-import com.io.git.way.ui.theme.RepoDialogSurface
 import com.io.git.way.ui.theme.RepoPurple
 import com.io.git.way.ui.theme.RepoPurpleDark
 import com.io.git.way.ui.theme.RepoPurpleLight
-import com.io.git.way.ui.theme.RepoTextPrimary
-import com.io.git.way.ui.theme.RepoTextSecondary
 
 /** Shown when [com.io.git.way.domain.repository.GitHubRepository.checkForUpdate] finds
  * a newer GitHub release than the installed app. [onUpdate] should open the APK
@@ -68,10 +65,11 @@ fun UpdateAvailableDialog(
     onDismiss: () -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss) {
+        val scheme = MaterialTheme.colorScheme
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(RepoDialogSurface, RoundedCornerShape(24.dp))
+                .background(scheme.surface, RoundedCornerShape(24.dp))
                 .padding(24.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -84,18 +82,18 @@ fun UpdateAvailableDialog(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Filled.SystemUpdate, contentDescription = null, tint = RepoTextPrimary)
+                    Icon(Icons.Filled.SystemUpdate, contentDescription = null, tint = scheme.onPrimary)
                 }
                 Column(modifier = Modifier.padding(start = 14.dp)) {
                     Text(
                         "Update available",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = RepoTextPrimary
+                        color = scheme.onSurface
                     )
                     Text(
                         update.versionTag,
                         style = MaterialTheme.typography.bodySmall,
-                        color = RepoTextSecondary
+                        color = scheme.onSurfaceVariant
                     )
                 }
             }
@@ -105,12 +103,12 @@ fun UpdateAvailableDialog(
             Text(
                 update.releaseTitle,
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = RepoTextPrimary
+                color = scheme.onSurface
             )
             Text(
                 update.releaseNotes,
                 style = MaterialTheme.typography.bodySmall,
-                color = RepoTextSecondary,
+                color = scheme.onSurfaceVariant,
                 modifier = Modifier
                     .padding(top = 8.dp)
                     .heightIn(max = 180.dp)
@@ -128,7 +126,7 @@ fun UpdateAvailableDialog(
                     Text(
                         "Downloading update…",
                         style = MaterialTheme.typography.bodySmall,
-                        color = RepoTextSecondary,
+                        color = scheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = 12.dp)
                     )
                 }

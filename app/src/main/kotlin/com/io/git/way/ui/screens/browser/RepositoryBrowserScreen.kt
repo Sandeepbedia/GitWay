@@ -18,7 +18,6 @@ package com.io.git.way.ui.screens.browser
 
 import android.content.Intent
 import android.net.Uri
-import android.widget.Toast
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -49,6 +48,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.LocalContentColor
@@ -149,6 +149,7 @@ import com.io.git.way.domain.WorkflowTemplate
 import com.io.git.way.domain.WorkflowTemplates
 import com.io.git.way.ui.common.FileTypeIcons
 import com.io.git.way.ui.common.GitWaySessionViewModel
+import com.io.git.way.ui.common.showGitWayToast
 import com.io.git.way.ui.common.MarkdownLinkResolver
 import com.io.git.way.ui.common.MarkdownView
 import com.io.git.way.ui.common.PendingDownloadHandler
@@ -200,6 +201,8 @@ fun RepositoryBrowserScreen(
     var pendingRename by remember { mutableStateOf<BrowserEntry?>(null) }
     var showWorkflowPicker by remember { mutableStateOf(false) }
     var browserQuery by remember { mutableStateOf("") }
+    var explorerZoom by remember { mutableStateOf(1f) }
+    val explorerHorizontalScroll = rememberScrollState()
     var showBranchPicker by remember { mutableStateOf(false) }
     var showCreateBranchDialog by remember { mutableStateOf(false) }
     var showCommitHistory by remember { mutableStateOf(false) }
@@ -318,11 +321,10 @@ fun RepositoryBrowserScreen(
                                 if (repo != null) {
                                     val targetPrivate = !repo.isPrivate
                                     sessionViewModel.updateRepositorySettings(null, null, targetPrivate) {
-                                        Toast.makeText(
+                                        showGitWayToast(
                                             context,
-                                            if (targetPrivate) "Repository is now private" else "Repository is now public",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
+                                            if (targetPrivate) "Repository is now private" else "Repository is now public"
+                                        )
                                     }
                                 }
                             },
@@ -462,17 +464,75 @@ fun RepositoryBrowserScreen(
                         onUpload = onSyncFromDevice
                     )
 
-                    else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                        item(key = "repository-root") {
-                            RepositoryRootRow(
-                                repositoryName = repo?.name ?: "Repository",
-                                itemCount = state.browserEntries.size
-                            )
-                        }
-                        items(state.browserEntries, key = { it.entry.path }) { row ->
-                            TreeRowItem(
-                                row = row,
-                                selectionMode = selectionMode,
+                    else -> {
+                        // The explorer canvas intentionally has a wider virtual page than
+                        // the phone viewport. Long folder/file names can therefore be
+                        // reached with horizontal scrolling instead of being ellipsized.
+                        // Two-finger pinch changes the explorer scale without changing the
+                        // repository data or navigation state.
+                        // The explorer itself is a horizontally scrollable canvas.
+                        // Its virtual width grows with the longest visible path/name, so
+                        // the COMPLETE panel (icons, indentation, names and action badges)
+                        // moves together instead of only the filename area scrolling.
+                        val longestExplorerText = state.browserEntries
+                            .maxOfOrNull { entry ->
+                                val depth = entry.entry.path.count { it == '/' }
+                                entry.entry.name.length + (depth * 4)
+                            } ?: 0
+                        val contentWidth = (
+                            760.dp + (longestExplorerText.coerceAtLeast(32) * 9).dp
+                        ).coerceAtLeast(980.dp) * explorerZoom
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .horizontalScroll(explorerHorizontalScroll)
+                                .pointerInput(Unit) {
+                                    awaitEachGesture {
+                                            var event = awaitPointerEvent()
+                                            while (event.changes.count { it.pressed } < 2) {
+                                                if (event.changes.none { it.pressed }) return@awaitEachGesture
+                                                event = awaitPointerEvent()
+                                            }
+
+                                            var previousDistance =
+                                                (event.changes[0].position - event.changes[1].position).getDistance()
+
+                                            while (event.changes.any { it.pressed }) {
+                                                val active = event.changes.filter { it.pressed }
+                                                if (active.size >= 2) {
+                                                    val distance =
+                                                        (active[0].position - active[1].position).getDistance()
+                                                    if (previousDistance > 0f && distance > 0f) {
+                                                        val zoom = distance / previousDistance
+                                                        if (kotlin.math.abs(zoom - 1f) > 0.002f) {
+                                                            explorerZoom =
+                                                                (explorerZoom * zoom).coerceIn(0.75f, 1.8f)
+                                                        }
+                                                    }
+                                                    previousDistance = distance
+                                                    active.forEach { it.consume() }
+                                                }
+                                                event = awaitPointerEvent()
+                                            }
+                                    }
+                                }
+                        ) {
+                            LazyColumn(
+                                modifier = Modifier.width(contentWidth),
+                                verticalArrangement = Arrangement.spacedBy(1.dp)
+                            ) {
+                                item(key = "repository-root") {
+                                    RepositoryRootRow(
+                                        repositoryName = repo?.name ?: "Repository",
+                                        itemCount = state.browserEntries.size
+                                    )
+                                }
+                                items(state.browserEntries, key = { it.entry.path }) { row ->
+                                    TreeRowItem(
+                                        row = row,
+                                        selectionMode = selectionMode,
+                                        zoomScale = explorerZoom,
                                 selected = row.entry.path in state.selectedBrowserPaths,
                                 onClick = {
                                     when {
@@ -495,7 +555,9 @@ fun RepositoryBrowserScreen(
                                     }
                                 },
                                 fileSize = state.remoteFileSizes[row.entry.path]
-                            )
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -809,6 +871,7 @@ private fun SvgFolderIcon(
 private fun TreeRowItem(
     row: TreeRow,
     selectionMode: Boolean,
+    zoomScale: Float = 1f,
     selected: Boolean,
     onClick: () -> Unit,
     onDelete: () -> Unit,
@@ -832,7 +895,8 @@ private fun TreeRowItem(
     }
 
     // Fixed height keeps every guide column aligned to the same vertical rhythm.
-    val rowHeight = 50.dp
+    val uiScale = zoomScale.coerceIn(0.75f, 1.8f)
+    val rowHeight = 50.dp * uiScale
 
     // Hold-click on the row opens the actions menu — a tap always just opens the item.
     Box {
@@ -846,13 +910,9 @@ private fun TreeRowItem(
                 .padding(horizontal = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val leadingScroll = rememberScrollState()
-
             Row(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .horizontalScroll(leadingScroll),
+                    .fillMaxHeight(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 TreeIndentGuides(row, if (entry.isFolder) 0.dp else 24.dp)
@@ -877,7 +937,7 @@ private fun TreeRowItem(
                         contentDescription = if (selected) "Selected" else "Not selected",
                         tint = if (selected) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(18.dp * uiScale)
                     )
                     Spacer(Modifier.width(4.dp))
                 } else {
@@ -888,7 +948,7 @@ private fun TreeRowItem(
                 if (entry.isFolder) {
                     SvgFolderIcon(
                         open = row.isExpanded,
-                        modifier = Modifier.size(25.dp)
+                        modifier = Modifier.size(25.dp * uiScale)
                     )
                 } else {
                     val iconRes = FileTypeIcons.iconResFor(entry.name)
@@ -896,27 +956,27 @@ private fun TreeRowItem(
                         SvgRawIcon(
                             resId = iconRes,
                             contentDescription = null,
-                            modifier = Modifier.size(21.dp)
+                            modifier = Modifier.size(21.dp * uiScale)
                         )
                     } else {
                         Icon(
                             FileTypeIcons.iconFor(entry.name),
                             contentDescription = null,
                             tint = iconTint,
-                            modifier = Modifier.size(21.dp)
+                            modifier = Modifier.size(21.dp * uiScale)
                         )
                     }
                 }
 
                 Text(
                     entry.name,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp * uiScale, lineHeight = 20.sp * uiScale),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     softWrap = false,
                     modifier = Modifier
-                        .padding(start = 9.dp)
-                        .widthIn(min = 40.dp, max = 420.dp)
+                        .padding(start = 9.dp * uiScale)
+                        .widthIn(min = 40.dp * uiScale)
                 )
 
                 if (entry.isFolder && !selectionMode) {

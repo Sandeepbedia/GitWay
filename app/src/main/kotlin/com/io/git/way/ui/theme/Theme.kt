@@ -36,7 +36,7 @@ import androidx.core.view.WindowCompat
 
 private val LightColorScheme = lightColorScheme(
     primary = RepoPurple,
-    secondary = RepoPurpleLight,
+    secondary = RepoSecondary,
     tertiary = RepoSuccess,
     background = RepoBgPrimaryLight,
     surface = RepoCardSurfaceLight,
@@ -53,7 +53,7 @@ private val LightColorScheme = lightColorScheme(
 // see Color.kt "Repository Screen — Premium Color System v2".
 private val DarkColorScheme = darkColorScheme(
     primary = RepoPurple,
-    secondary = RepoPurpleLight,
+    secondary = RepoSecondary,
     tertiary = RepoSuccess,
     background = RepoBgPrimary,
     surface = RepoCardSurface,

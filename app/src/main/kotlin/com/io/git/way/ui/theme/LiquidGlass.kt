@@ -569,7 +569,8 @@ fun GlassSkeletonCard(modifier: Modifier = Modifier) {
         ),
         label = "shimmerAlpha"
     )
-    val base = if (dark) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.4f)
+    val scheme = MaterialTheme.colorScheme
+    val base = if (dark) scheme.surfaceVariant.copy(alpha = 0.58f) else scheme.surfaceVariant.copy(alpha = 0.9f)
     val shape = RoundedCornerShape(28.dp)
 
     Row(
@@ -586,11 +587,11 @@ fun GlassSkeletonCard(modifier: Modifier = Modifier) {
             Modifier
                 .size(48.dp)
                 .clip(CircleShape)
-                .background(Color.White.copy(alpha = shimmer * 0.3f))
+                .background(scheme.onSurface.copy(alpha = shimmer * 0.10f))
         )
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.size(120.dp, 14.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = shimmer * 0.3f)))
-            Box(Modifier.size(80.dp, 10.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = shimmer * 0.2f)))
+            Box(Modifier.size(120.dp, 14.dp).clip(RoundedCornerShape(6.dp)).background(scheme.onSurface.copy(alpha = shimmer * 0.10f)))
+            Box(Modifier.size(80.dp, 10.dp).clip(RoundedCornerShape(6.dp)).background(scheme.onSurface.copy(alpha = shimmer * 0.07f)))
         }
     }
 }
