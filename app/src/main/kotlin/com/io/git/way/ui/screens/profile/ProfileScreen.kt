@@ -98,6 +98,7 @@ import com.io.git.way.domain.model.GitUser
 import com.io.git.way.ui.common.GitWaySessionViewModel
 import com.io.git.way.ui.common.authenticateWithBiometrics
 import com.io.git.way.ui.theme.AppThemeMode
+import com.io.git.way.ui.theme.DiffModifiedYellow
 import com.io.git.way.ui.theme.BottomNavTab
 import com.io.git.way.ui.theme.GlassBlobBlue
 import com.io.git.way.ui.theme.GlassBlobPink
@@ -357,7 +358,7 @@ private fun StatCell(label: String, value: String) {
  * data straight from each repo's reported primary language, no external stats service. */
 @Composable
 private fun LanguageBreakdownCard(repositories: List<GitRepository>) {
-    val palette = listOf(GlassBlobBlue, GlassBlobPurple, GlassBlobTeal, GlassBlobPink, Color(0xFFD29922))
+    val palette = listOf(GlassBlobBlue, GlassBlobPurple, GlassBlobTeal, GlassBlobPink, DiffModifiedYellow)
     val counts = repositories.mapNotNull { it.language }.groupingBy { it }.eachCount()
         .entries.sortedByDescending { it.value }.take(5)
     val total = counts.sumOf { it.value }.coerceAtLeast(1)

@@ -56,6 +56,7 @@ import com.io.git.way.domain.model.Issue
 import com.io.git.way.ui.common.GitWaySessionViewModel
 import com.io.git.way.ui.common.formatRelativeTime
 import com.io.git.way.ui.theme.GlassCard
+import com.io.git.way.ui.theme.RepoSuccess
 import com.io.git.way.ui.theme.GlassChip
 import com.io.git.way.ui.theme.GlassIconButton
 import com.io.git.way.ui.theme.GlassScaffold
@@ -170,7 +171,7 @@ private fun IssueCard(issue: Issue, onClick: () -> Unit) {
             Icon(
                 Icons.Filled.BugReport,
                 contentDescription = null,
-                tint = if (issue.isOpen) Color(0xFF22C55E) else MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = if (issue.isOpen) RepoSuccess else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(22.dp)
             )
             Column(modifier = Modifier.weight(1f).padding(start = 10.dp)) {
@@ -258,7 +259,7 @@ private fun IssueDetailDialog(
                 Text(
                     if (issue.isOpen) "Open · ${formatRelativeTime(issue.createdAt)}" else "Closed",
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (issue.isOpen) Color(0xFF22C55E) else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (issue.isOpen) RepoSuccess else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 6.dp)
                 )
                 Text(

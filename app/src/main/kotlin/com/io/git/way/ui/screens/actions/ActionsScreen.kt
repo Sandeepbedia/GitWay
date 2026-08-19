@@ -61,6 +61,7 @@ import com.io.git.way.ui.common.GitWaySessionViewModel
 import com.io.git.way.ui.common.PendingDownloadHandler
 import com.io.git.way.ui.common.formatRelativeTime
 import com.io.git.way.ui.theme.GlassCard
+import com.io.git.way.ui.theme.RepoSuccess
 import com.io.git.way.ui.theme.GlassChip
 import com.io.git.way.ui.theme.GlassScaffold
 import com.io.git.way.ui.theme.GlassSecondaryButton
@@ -290,7 +291,7 @@ private fun RunCard(
 @Composable
 private fun RunStatusIcon(run: WorkflowRun) {
     val (icon, color) = when {
-        run.isCompleted && run.isSuccess -> Icons.Filled.CheckCircle to Color(0xFF22C55E)
+        run.isCompleted && run.isSuccess -> Icons.Filled.CheckCircle to RepoSuccess
         run.isCompleted && run.isFailure -> Icons.Filled.Error to MaterialTheme.colorScheme.error
         run.isCompleted -> Icons.Filled.Schedule to MaterialTheme.colorScheme.onSurfaceVariant
         else -> Icons.Filled.Schedule to MaterialTheme.colorScheme.primary

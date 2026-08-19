@@ -98,6 +98,7 @@ import com.io.git.way.domain.model.GitRepository
 import com.io.git.way.ui.common.GitWayViewModelFactory
 import com.io.git.way.ui.common.formatRelativeTime
 import com.io.git.way.ui.theme.AppThemeMode
+import com.io.git.way.ui.theme.RepoWarning
 import com.io.git.way.ui.theme.BottomNavTab
 import com.io.git.way.ui.theme.GlassChip
 import com.io.git.way.ui.theme.GlassClickableCard
@@ -475,7 +476,7 @@ private fun RepoCard(
                         Icon(
                             if (isStarred) Icons.Filled.Star else Icons.Outlined.StarBorder,
                             contentDescription = if (isStarred) "Starred" else "Star",
-                            tint = if (isStarred) Color(0xFFF59E0B) else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (isStarred) RepoWarning else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier
                                 .size(20.dp)
                                 .clip(CircleShape)

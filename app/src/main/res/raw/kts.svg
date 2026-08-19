@@ -1,5 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-<defs><linearGradient id="kts" x1="4" y1="28" x2="28" y2="4"><stop stop-color="#7F52FF"/><stop offset="1" stop-color="#E44857"/></linearGradient></defs>
-<path fill="url(#kts)" d="M4 4H28L17 15L28 28H4V4Z"/>
-<path fill="url(#kts)" d="M4 4H17L4 17V4Z"/>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="32"
+     height="32"
+     viewBox="0 0 32 32">
+
+  <!-- Kotlin script file -->
+  <path
+    fill="#7F52FF"
+    d="M6 3H20L26 9V29H6Z"/>
+
+  <!-- Fold -->
+  <path
+    fill="#A875FF"
+    d="M20 3V9H26Z"/>
+
+  <!-- Kotlin K -->
+  <path
+    fill="#FFFFFF"
+    d="M10 11H13V16L18 11H22L16.5 16.5L22 22H18L13 17V22H10Z"/>
+
+  <!-- Script accent -->
+  <path
+    d="M10 25H22"
+    stroke="#E44857"
+    stroke-width="2"
+    stroke-linecap="round"/>
+
 </svg>

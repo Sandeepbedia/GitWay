@@ -55,6 +55,8 @@ import com.io.git.way.domain.model.PullRequest
 import com.io.git.way.ui.common.GitWaySessionViewModel
 import com.io.git.way.ui.common.formatRelativeTime
 import com.io.git.way.ui.theme.GlassCard
+import com.io.git.way.ui.theme.RepoPurpleLight
+import com.io.git.way.ui.theme.RepoSuccess
 import com.io.git.way.ui.theme.GlassChip
 import com.io.git.way.ui.theme.GlassScaffold
 import com.io.git.way.ui.theme.GlassSecondaryButton
@@ -148,8 +150,8 @@ fun PullRequestsScreen(
 @Composable
 private fun PullRequestCard(pr: PullRequest, onClick: () -> Unit) {
     val color = when {
-        pr.isMerged -> Color(0xFF8B5CF6)
-        pr.isOpen -> Color(0xFF22C55E)
+        pr.isMerged -> RepoPurpleLight
+        pr.isOpen -> RepoSuccess
         else -> MaterialTheme.colorScheme.error
     }
     GlassCard(modifier = Modifier.fillMaxWidth()) {

@@ -110,6 +110,9 @@ class GitHubRepositoryImpl(
         const val MAX_CONCURRENT_BLOBS = 6
         const val MAX_TRANSIENT_RETRIES = 3
         const val MAX_RACE_RETRIES = 4
+        // Post-push verification (§13): a handful of quick retries to absorb a brief
+        // read-after-write lag on GitHub's side, not a real mismatch.
+        const val MAX_VERIFY_RETRIES = 4
     }
 
     private val errorJson = Json { ignoreUnknownKeys = true }
@@ -382,11 +385,27 @@ class GitHubRepositoryImpl(
             )
 
             // §13 Success Validation: confirm the branch head really did move to our commit
-            // before telling the user it worked.
+            // before telling the user it worked. Retried with backoff — GitHub's ref update
+            // itself already succeeded (updateRef/createRef didn't throw), but the very next
+            // GET can occasionally read a moment before that write is visible, which used to
+            // surface as a false "doesn't match" failure on a push that actually worked.
             onProgress(UploadPhase.VERIFYING, total, total, "")
-            val verifyRef = githubCallWithRetry { apiService.getRef(repo.owner, repo.name, branch) }
-            if (verifyRef.objectRef.sha != commitSha) {
-                Log.w(TAG, "Post-push verification mismatch: expected=$commitSha actual=${verifyRef.objectRef.sha}")
+            var verifiedSha: String? = null
+            var lastSeenSha: String? = null
+            for (verifyAttempt in 0 until MAX_VERIFY_RETRIES) {
+                val verifyRef = githubCallWithRetry { apiService.getRef(repo.owner, repo.name, branch) }
+                lastSeenSha = verifyRef.objectRef.sha
+                if (lastSeenSha == commitSha) {
+                    verifiedSha = lastSeenSha
+                    break
+                }
+                if (verifyAttempt < MAX_VERIFY_RETRIES - 1) {
+                    Log.w(TAG, "Post-push verification not visible yet (attempt=$verifyAttempt), retrying: expected=$commitSha actual=$lastSeenSha")
+                    delay(400L * (verifyAttempt + 1))
+                }
+            }
+            if (verifiedSha == null) {
+                Log.w(TAG, "Post-push verification mismatch after $MAX_VERIFY_RETRIES attempts: expected=$commitSha actual=$lastSeenSha")
                 throw IOException("Push reported success but GitHub's branch head doesn't match the new commit yet. Please check the repository or retry.")
             }
             Log.d(TAG, "Sync verified: commit=$commitSha branch=$branch")

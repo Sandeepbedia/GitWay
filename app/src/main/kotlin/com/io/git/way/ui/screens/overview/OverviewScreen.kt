@@ -73,6 +73,8 @@ import com.io.git.way.domain.model.GitRepository
 import com.io.git.way.domain.model.GitUser
 import com.io.git.way.ui.common.GitWaySessionViewModel
 import com.io.git.way.ui.theme.BottomNavTab
+import com.io.git.way.ui.theme.DiffModifiedYellow
+import com.io.git.way.ui.theme.DiffRemovedRed
 import com.io.git.way.ui.theme.GlassBlobBlue
 import com.io.git.way.ui.theme.GlassBlobPink
 import com.io.git.way.ui.theme.GlassBlobPurple
@@ -324,8 +326,8 @@ private fun ApiRateLimitCard(limit: ApiRateLimit) {
     val fraction = if (limit.limit > 0) limit.remaining.toFloat() / limit.limit.toFloat() else 1f
     val color = when {
         fraction > 0.5f -> GlassBlobTeal
-        fraction > 0.15f -> Color(0xFFD29922)
-        else -> Color(0xFFDA3633)
+        fraction > 0.15f -> DiffModifiedYellow
+        else -> DiffRemovedRed
     }
 
     GlassCard(modifier = Modifier.fillMaxWidth()) {

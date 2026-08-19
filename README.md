@@ -89,6 +89,14 @@ no laptop involved.
     <td width="50%"><img src="docs/screenshots/3.png" width="100%" /></td>
     <td width="50%"><img src="docs/screenshots/4.png" width="100%" /></td>
   </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/5.png" width="100%" /></td>
+    <td width="50%"><img src="docs/screenshots/6.png" width="100%" /></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/7.png" width="100%" /></td>
+    <td width="50%"><img src="docs/screenshots/8.png" width="100%" /></td>
+  </tr>
 </table>
 <!-- SCREENSHOTS:END -->
 

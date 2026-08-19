@@ -156,6 +156,7 @@ import com.io.git.way.ui.common.PendingDownloadHandler
 import com.io.git.way.ui.common.SyntaxHighlightTransformation
 import com.io.git.way.ui.common.SyntaxHighlighter
 import com.io.git.way.ui.common.formatRelativeTime
+import com.io.git.way.ui.theme.DiffAddedGreen
 import com.io.git.way.ui.theme.GlassBlobBlue
 import com.io.git.way.ui.theme.GlassCard
 import com.io.git.way.ui.theme.GlassScaffold
@@ -1540,7 +1541,7 @@ private fun CommitDiffDialog(
                         file.patch?.let { patch ->
                             patch.split("\n").forEach { line ->
                                 val color = when {
-                                    line.startsWith("+") && !line.startsWith("+++") -> Color(0xFF16A34A)
+                                    line.startsWith("+") && !line.startsWith("+++") -> DiffAddedGreen
                                     line.startsWith("-") && !line.startsWith("---") -> MaterialTheme.colorScheme.error
                                     line.startsWith("@@") -> MaterialTheme.colorScheme.primary
                                     else -> MaterialTheme.colorScheme.onSurfaceVariant
