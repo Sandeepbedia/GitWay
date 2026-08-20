@@ -1,4 +1,8 @@
 /*
+ * GitWay — Material 3 ColorScheme mapped from the Bravo-inspired palette
+ * defined in Color.kt: purple hero accent with teal secondary, porcelain
+ * neumorphic light surfaces and charcoal neumorphic dark surfaces.
+ *
  * GitWay — an Android client for GitHub.
  *
  * This file is part of GitWay. GitWay is free software: you can redistribute it
@@ -35,33 +39,58 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val LightColorScheme = lightColorScheme(
-    primary = RepoPurple,
+    primary = HyperPrimary,
+    onPrimary = Color.White,
+    primaryContainer = RepoPillGradientLight,
+    onPrimaryContainer = HyperPrimaryDark,
     secondary = RepoSecondary,
-    tertiary = RepoSuccess,
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFD5F5EF),
+    onSecondaryContainer = RepoSecondaryDark,
+    tertiary = HyperAuroraPurple,
+    onTertiary = Color.White,
+    tertiaryContainer = Color(0xFFE0E5FF),
+    onTertiaryContainer = Color(0xFF3440B8),
     background = RepoBgPrimaryLight,
     surface = RepoCardSurfaceLight,
     surfaceVariant = RepoElevatedSurfaceLight,
     onBackground = RepoTextPrimaryLight,
     onSurface = RepoTextPrimaryLight,
     onSurfaceVariant = RepoTextSecondaryLight,
-    error = RepoDanger
+    outline = RepoTextMutedLight,
+    error = RepoDanger,
+    onError = Color.White,
+    errorContainer = Color(0xFFFFE0DE),
+    onErrorContainer = Color(0xFF8E0F09)
 )
 
 // A single consistent dark palette end to end: background, cards, and every elevated
-// surface all come from the same near-black family (#09090B / #171923 / #1D2030),
-// with purple reserved strictly for accents (buttons, active tab, selection, icons) —
-// see Color.kt "Repository Screen — Premium Color System v2".
+// surface all come from the same charcoal neumorphic family (#23262C / #383C46 / #40454F),
+// with purple reserved strictly for accents (buttons, active tab, selection, icons).
 private val DarkColorScheme = darkColorScheme(
-    primary = RepoPurple,
-    secondary = RepoSecondary,
-    tertiary = RepoSuccess,
+    primary = HyperPrimaryLight,
+    onPrimary = Color(0xFF2A1A70),
+    primaryContainer = Color(0xFF4B379E),
+    onPrimaryContainer = Color(0xFFE9E2FF),
+    secondary = RepoSecondaryLight,
+    onSecondary = Color(0xFF003A33),
+    secondaryContainer = Color(0xFF005B50),
+    onSecondaryContainer = Color(0xFFC5F5EA),
+    tertiary = HyperAuroraPurpleLight,
+    onTertiary = Color(0xFF00344F),
+    tertiaryContainer = Color(0xFF1A4A75),
+    onTertiaryContainer = Color(0xFFCFE6FF),
     background = RepoBgPrimary,
     surface = RepoCardSurface,
     surfaceVariant = RepoElevatedSurface,
     onBackground = RepoTextPrimary,
     onSurface = RepoTextPrimary,
     onSurfaceVariant = RepoTextSecondary,
-    error = RepoDanger
+    outline = RepoTextMuted,
+    error = RepoDanger,
+    onError = Color.White,
+    errorContainer = Color(0xFF5C130E),
+    onErrorContainer = Color(0xFFFFDAD6)
 )
 
 // True-black background for OLED screens, same card/surface family as Dark so cards

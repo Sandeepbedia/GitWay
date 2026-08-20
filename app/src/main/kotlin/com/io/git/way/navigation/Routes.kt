@@ -21,7 +21,6 @@ sealed class Routes(val route: String) {
     data object Splash : Routes("splash")
     data object Token : Routes("token")
     data object RepositoryList : Routes("repository_list")
-    data object Overview : Routes("overview")
     data object Profile : Routes("profile")
     data object RepositoryBrowser : Routes("repository_browser")
     data object FolderSelection : Routes("folder_selection")

@@ -1,127 +1,130 @@
 /*
- * GitWay — an Android client for GitHub.
+ * GitWay — premium dark-mode color system.
  *
- * This file is part of GitWay. GitWay is free software: you can redistribute it
- * and/or modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation, either version 3 of the License,
- * or (at your option) any later version.
+ * Dark mode follows the MIUI/HyperOS-inspired premium spec: a near-black
+ * #0B0C0F base with layered surfaces (#15171C cards, #1D2026 elevated),
+ * soft #292C33 borders and a purple hero accent — never pure black except
+ * in AMOLED mode. Light mode keeps the Bravo neumorphic porcelain family
+ * (#E7EBF0 background, white cards).
  *
- * GitWay is distributed in the hope that it will be useful, but WITHOUT ANY
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
- * FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
- * details.
- *
- * You should have received a copy of the GNU General Public License along with
- * GitWay. If not, see <https://www.gnu.org/licenses/>.
+ * All semantic names are kept so every screen picks up the new look
+ * automatically — only the values changed.
  */
 package com.io.git.way.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Git Way brand palette — developer-tool feel, GitHub-adjacent blues/greens.
-val GitBlue80 = Color(0xFFCBD5FF)
-val GitBlueGrey80 = Color(0xFFC9D3E4)
-val GitGreen80 = Color(0xFFA0F0D0)
+// ── Accent hierarchy ─────────────────────────────────────────────────
+// Primary — Bravo hero purple (Home gradient)
+val HyperPrimary = Color(0xFF7F5CF0)
+val HyperPrimaryDark = Color(0xFF6A3DFF)      // pressed / emphasis on dark surfaces (pill bottom)
+val HyperPrimaryLight = Color(0xFFB18CFF)     // containers, tints (home gradient end)
+val HyperPrimaryDisabled = Color(0xFFCFC0FF)
 
-val GitBlue40 = Color(0xFF5B4FE8)
-val GitBlueGrey40 = Color(0xFF475569)
-val GitGreen40 = Color(0xFF12B886)
+// Secondary — teal, used for links, info states, secondary actions (Library gradient)
+val HyperCyan = Color(0xFF12C2A9)
+val HyperAuroraPurple = Color(0xFF4D6BFE)     // tertiary — tags, highlights (Settings gradient)
+val HyperAuroraPurpleLight = Color(0xFF6BC5FF)
+val HyperPink = Color(0xFFFF4E8E)             // Dashboard gradient
 
-val AmoledBlack = Color(0xFF000000)
-val AmoledSurface = Color(0xFF0C0C12)
+val RepoSuccess = Color(0xFF32D583)
+val RepoWarning = Color(0xFFFFB020)
+val RepoDanger = Color(0xFFFF5B5B)
+val RepoInfo = HyperCyan
+val RepoSecondary = HyperCyan
+val RepoSecondaryLight = Color(0xFF67E8C4)
+val RepoSecondaryDark = Color(0xFF0E8F7C)
 
-val DiffAddedGreen = Color(0xFF3FB876)
-val DiffModifiedYellow = Color(0xFFE0A83E)
-val DiffRemovedRed = Color(0xFFF0625E)
+// ── Dark mode — premium layered surfaces on a near-black base ──
+// #0B0C0F base with subtle depth gradient (pure black reserved for AMOLED).
+val RepoBgPrimary = Color(0xFF0B0C0F)
+val RepoBgGradientTop = Color(0xFF0E1014)
+val RepoBgGradientMid = Color(0xFF0B0C0F)
+val RepoBgGradientBottom = Color(0xFF08090C)
 
-// --- Liquid Glass palette: soft, saturated blobs that float behind frosted surfaces. ---
-val GlassBlobBlue = Color(0xFF5B4FE8)
-val GlassBlobPurple = Color(0xFF8A6FF0)
-val GlassBlobTeal = Color(0xFF19C3D6)
-val GlassBlobPink = Color(0xFFB16CE0)
+// section < card < elevated < dialog — layered surfaces instead of outlines
+val RepoSectionSurface = Color(0xFF0F1116)
+val RepoCardSurface = Color(0xFF15171C)
+val RepoElevatedSurface = Color(0xFF1D2026)
+val RepoDialogSurface = Color(0xFF23262E)
+val RepoBottomNavSurface = Color(0xF015171C)
+val RepoSearchBarSurface = Color(0xE615171C)
+val RepoFloatingButtonSurface = Color(0xFF1D2026)
 
-val GlassHighlight = Color(0xFFFFFFFF)
-val GlassShadowDark = Color(0xFF000000)
-
-// ============================================================================
-// GitWay unified application palette — "Premium Model" v3
-// Primary: royal indigo/violet, reserved for actions, active states, and the
-//   signature gradient (pill nav, buttons, key accents).
-// Secondary: refined electric teal — navigation highlights, links, info.
-// Tertiary: emerald — success/status only, never decorative.
-// Surfaces form one coherent tonal family per mode (a warm-neutral graphite in
-// dark, a soft indigo-tinted porcelain in light) so cards read as "elevated"
-// rather than mismatched, and every accent keeps full contrast on top.
-// ============================================================================
-
-// Dark surfaces — graphite family with a faint violet undertone, not flat navy.
-val RepoBgPrimary = Color(0xFF0B0C12)
-val RepoBgGradientTop = Color(0xFF17151F)
-val RepoBgGradientMid = Color(0xFF121017)
-val RepoBgGradientBottom = Color(0xFF0B0C12)
-val RepoCardSurface = Color(0xFF1A1826)
-val RepoElevatedSurface = Color(0xFF231F33)
-val RepoDialogSurface = Color(0xFF2A2440)
-val RepoBottomNavSurface = Color(0xF01A1826)
-val RepoSearchBarSurface = Color(0xFF191725)
-val RepoFloatingButtonSurface = Color(0xFF2A2440)
-
-// Light surfaces — porcelain with a whisper of indigo, not stark white.
-val RepoBgPrimaryLight = Color(0xFFF5F5FB)
-val RepoBgGradientTopLight = Color(0xFFFFFFFF)
-val RepoBgGradientBottomLight = Color(0xFFECEBF8)
+// ── Light mode — Bravo neumorphic porcelain with a faint cool-gray tone ─
+val RepoBgPrimaryLight = Color(0xFFE7EBF0)
+val RepoBgGradientTopLight = Color(0xFFF3F5F8)
+val RepoBgGradientBottomLight = Color(0xFFE4E8EE)
+val RepoSectionSurfaceLight = Color(0xFFE7EBF0)
 val RepoCardSurfaceLight = Color(0xFFFFFFFF)
-val RepoElevatedSurfaceLight = Color(0xFFF0EFFA)
+val RepoElevatedSurfaceLight = Color(0xFFDDE2E9)
 val RepoSearchBarSurfaceLight = Color(0xFFFFFFFF)
 val RepoBottomNavSurfaceLight = Color(0xF5FFFFFF)
 
-// Borders
-val RepoBorderNormal = Color(0x24FFFFFF)
-val RepoBorderSelected = Color(0x8A6D5EF0)
-val RepoBorderGlass = Color(0x33FFFFFF)
-val RepoBorderNormalLight = Color(0x1F171235)
-val RepoBorderSelectedLight = Color(0x8A6D5EF0)
+// AMOLED
+val AmoledBlack = Color(0xFF000000)
+val AmoledSurface = Color(0xFF0E0E10)
 
-// Primary / secondary / tertiary
-val RepoPurple = Color(0xFF6D5EF0)
-val RepoPurpleLight = Color(0xFF9285F5)
-val RepoPurpleDark = Color(0xFF4E3FD6)
-val RepoPurpleGradientStart = Color(0xFF9285F5)
-val RepoPurpleGradientEnd = Color(0xFF5B4FE8)
-val RepoPillGradientLight = Color(0xFFE3DFFC)
+// Neumorphic soft shadows (Bravo — light mode)
+val GlassHighlight = Color(0xFFFFFFFF)
+val GlassShadowDark = Color(0xFFA3B1C6)
+val RepoBorderNormal = Color(0xFF292C33)
+val RepoBorderGlass = Color(0x26FFFFFF)
+val RepoBorderSelected = HyperPrimary
+val RepoBorderNormalLight = Color(0x14A3B1C6)
+val RepoBorderSelectedLight = HyperPrimaryLight
 
-val RepoSecondary = Color(0xFF19C3D6)
-val RepoSecondaryLight = Color(0xFF4FE0EF)
-val RepoSecondaryDark = Color(0xFF0E96A8)
-val RepoSuccess = Color(0xFF2FCB80)
-val RepoInfo = Color(0xFF19C3D6)
-val RepoWarning = Color(0xFFF0A93E)
-val RepoDanger = Color(0xFFF0625E)
+// Accent gradients — restrained, used only for active controls.
+val RepoPurple = HyperPrimary
+val RepoPurpleLight = HyperPrimaryLight
+val RepoPurpleDark = HyperPrimaryDark
+val RepoPurpleGradientStart = Color(0xFF9D6CFF)   // pill top
+val RepoPurpleGradientEnd = Color(0xFF6A3DFF)     // pill bottom
+val RepoPillGradientLight = Color(0xFFE9E2FF)
 
-// Repository language colors — kept distinct from primary so cards don't camouflage
-// against the accent, tuned to the same saturation/lightness family for cohesion.
-val LangKotlin = Color(0xFF9285F5)
-val LangJava = Color(0xFFF0975C)
-val LangCpp = Color(0xFF5AA3F5)
-val LangPython = Color(0xFF2FCB80)
-val LangJavaScript = Color(0xFFEFCB5C)
-val LangMisc = Color(0xFF2FD1B8)
-val LangRust = Color(0xFFF0975C)
-val LangGo = Color(0xFF4FCBEF)
+val HyperPrimaryGradient = listOf(HyperPrimary, HyperPrimaryLight)
+val HyperAuroraGradient = listOf(HyperPrimary, HyperPink)
+val HyperDarkPremiumGradient = listOf(RepoBgPrimary, RepoCardSurface, RepoElevatedSurface)
+
+// Legacy names retained for source compatibility.
+val GlassBlobBlue = HyperPrimary
+val GlassBlobPurple = HyperAuroraPurple
+val GlassBlobTeal = HyperCyan
+val GlassBlobPink = HyperPink
+
+// Repository language colors — vivid, distinct, tuned for both surfaces.
+val LangKotlin = Color(0xFF7F52FF)
+val LangJava = Color(0xFFE8833E)
+val LangCpp = Color(0xFF4F8FE0)
+val LangPython = Color(0xFF22C55E)
+val LangJavaScript = Color(0xFFE8C547)
+val LangMisc = Color(0xFF16AFA0)
+val LangRust = Color(0xFFDE7B3B)
+val LangGo = Color(0xFF00ACD7)
 
 // Text — dark mode
-val RepoTextPrimary = Color(0xFFF7F6FC)
-val RepoTextSecondary = Color(0xFFBFBAD4)
-val RepoTextMuted = Color(0xFF8B85A6)
-val RepoTextDisabled = Color(0xFF615C78)
-val RepoTextHint = Color(0xFF7B7595)
+val RepoTextPrimary = Color(0xFFF7F7F8)
+val RepoTextSecondary = Color(0xFFA6A9B0)
+val RepoTextMuted = Color(0xFF767B85)
+val RepoTextDisabled = Color(0xFF4A4E56)
+val RepoTextHint = Color(0xFF767B85)
 
 // Text — light mode
-val RepoTextPrimaryLight = Color(0xFF1C1730)
-val RepoTextSecondaryLight = Color(0xFF524C6B)
-val RepoTextMutedLight = Color(0xFF7B7591)
+val RepoTextPrimaryLight = Color(0xFF1A1D26)
+val RepoTextSecondaryLight = Color(0xFF4E5563)
+val RepoTextMutedLight = Color(0xFF8A92A1)
 
 // Icons
-val RepoIconDefault = Color(0xFFEBE9F5)
-val RepoIconInactive = Color(0xFF9B95B5)
-val RepoIconAccent = Color(0xFF9285F5)
+val RepoIconDefault = Color(0xFFF7F7F8)
+val RepoIconInactive = Color(0xFF767B85)
+val RepoIconAccent = HyperPrimary
+
+// Theme aliases
+val RepoPrimary = HyperPrimary
+val RepoPrimaryLight = HyperPrimaryLight
+val RepoAuroraPurple = HyperAuroraPurple
+
+// Diff status colors
+val DiffAddedGreen = RepoSuccess
+val DiffModifiedYellow = RepoWarning
+val DiffRemovedRed = RepoDanger

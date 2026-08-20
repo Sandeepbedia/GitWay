@@ -25,16 +25,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.WorkOutline
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -45,12 +43,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -61,40 +57,62 @@ import com.io.git.way.ui.common.GitWaySessionViewModel
 import com.io.git.way.ui.common.PendingDownloadHandler
 import com.io.git.way.ui.common.formatRelativeTime
 import com.io.git.way.ui.theme.GlassCard
-import com.io.git.way.ui.theme.RepoSuccess
 import com.io.git.way.ui.theme.GlassChip
 import com.io.git.way.ui.theme.GlassScaffold
 import com.io.git.way.ui.theme.GlassSecondaryButton
+import com.io.git.way.ui.theme.RepoSuccess
 import kotlinx.coroutines.delay
 
-private enum class ActionsSection { RUNS, WORKFLOWS, ARTIFACTS }
+private enum class ActionsSection {
+    RUNS,
+    WORKFLOWS,
+    ARTIFACTS
+}
 
-/**
- * GitHub Actions hub for the selected repository: workflow runs with live status
- * (polled while any run is in progress), manual `workflow_dispatch` triggering,
- * re-run failed jobs / cancel, log download, and build artifacts (APK install).
- */
+private const val RUN_POLL_INTERVAL = 8_000L
+
 @Composable
 fun ActionsScreen(
     sessionViewModel: GitWaySessionViewModel,
     onBack: () -> Unit
 ) {
     val state = sessionViewModel.state
-    var section by remember { mutableIntStateOf(ActionsSection.RUNS.ordinal) }
-    val activeSection = ActionsSection.entries[section]
 
-    LaunchedEffect(state.selectedRepo) {
+    var sectionIndex by remember {
+        mutableIntStateOf(ActionsSection.RUNS.ordinal)
+    }
+
+    val activeSection = ActionsSection.entries[sectionIndex]
+
+    /*
+     * Load Actions data whenever the selected repository changes.
+     */
+    LaunchedEffect(state.selectedRepo?.fullName) {
         if (state.selectedRepo != null) {
             sessionViewModel.loadWorkflowRuns()
-            sessionViewModel.loadArtifacts()
             sessionViewModel.loadWorkflows()
+            sessionViewModel.loadArtifacts()
         }
     }
 
-    // Live-refresh runs while anything is still in progress.
-    LaunchedEffect(state.workflowRuns) {
-        while (state.workflowRuns.any { !it.isCompleted }) {
-            delay(8_000)
+    /*
+     * Poll only while there is an active workflow run.
+     */
+    val hasActiveRuns = state.workflowRuns.any { !it.isCompleted }
+
+    LaunchedEffect(
+        state.selectedRepo?.fullName,
+        hasActiveRuns
+    ) {
+        if (!hasActiveRuns) return@LaunchedEffect
+
+        while (true) {
+            delay(RUN_POLL_INTERVAL)
+
+            if (state.selectedRepo == null) {
+                break
+            }
+
             sessionViewModel.loadWorkflowRuns()
         }
     }
@@ -104,49 +122,71 @@ fun ActionsScreen(
         subtitle = state.selectedRepo?.name ?: "Actions",
         navigationIcon = {
             IconButton(onClick = onBack) {
-                Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                Icon(
+                    imageVector = Icons.Filled.ArrowBack,
+                    contentDescription = "Back"
+                )
             }
         },
         actions = {
-            IconButton(onClick = {
-                sessionViewModel.loadWorkflowRuns()
-                sessionViewModel.loadArtifacts()
-                sessionViewModel.loadWorkflows()
-            }) {
-                Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+            IconButton(
+                onClick = {
+                    sessionViewModel.loadWorkflowRuns()
+                    sessionViewModel.loadWorkflows()
+                    sessionViewModel.loadArtifacts()
+                }
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Refresh,
+                    contentDescription = "Refresh"
+                )
             }
         }
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
-                ActionsSection.entries.forEach { s ->
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 16.dp)
+        ) {
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(vertical = 8.dp)
+            ) {
+                ActionsSection.entries.forEach { item ->
                     GlassChip(
-                        text = s.name.capitalize(),
-                        selected = s == activeSection,
-                        onClick = { section = s.ordinal }
+                        text = item.displayName(),
+                        selected = item == activeSection,
+                        onClick = {
+                            sectionIndex = item.ordinal
+                        }
                     )
                 }
             }
 
-            if (state.workflowDispatchError != null) {
+            state.workflowDispatchError?.let { error ->
                 Text(
-                    state.workflowDispatchError,
+                    text = error,
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(bottom = 6.dp)
                 )
             }
-            if (state.workflowActionError != null) {
+
+            state.workflowActionError?.let { error ->
                 Text(
-                    state.workflowActionError,
+                    text = error,
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(bottom = 6.dp)
                 )
             }
-            if (state.downloadError != null) {
+
+            state.downloadError?.let { error ->
                 Text(
-                    state.downloadError,
+                    text = error,
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(bottom = 6.dp)
@@ -154,45 +194,84 @@ fun ActionsScreen(
             }
 
             when (activeSection) {
-                ActionsSection.RUNS -> RunsSection(
-                    runs = state.workflowRuns,
-                    isLoading = state.isLoadingWorkflowRuns,
-                    error = state.workflowRunsError,
-                    isActionRunning = state.isRunningWorkflowAction,
-                    onCancel = { sessionViewModel.cancelWorkflowRun(it) },
-                    onRerunFailed = { sessionViewModel.rerunFailedJobs(it) },
-                    onDownloadLogs = { sessionViewModel.downloadRunLogs(it) },
-                    onRetry = { sessionViewModel.loadWorkflowRuns() }
-                )
-                ActionsSection.WORKFLOWS -> WorkflowsSection(
-                    workflows = state.workflows,
-                    isLoading = state.isLoadingWorkflows,
-                    error = state.workflowsError,
-                    isDispatching = state.isDispatchingWorkflow,
-                    branch = state.selectedBranch ?: state.selectedRepo?.defaultBranch ?: "main",
-                    onRun = { sessionViewModel.triggerWorkflow(it) },
-                    onRetry = { sessionViewModel.loadWorkflows() }
-                )
-                ActionsSection.ARTIFACTS -> ArtifactsSection(
-                    artifacts = state.artifacts,
-                    isLoading = state.isLoadingArtifacts,
-                    error = state.artifactsError,
-                    downloadingName = state.downloadingArtifactName,
-                    onDownload = { sessionViewModel.downloadArtifact(it) },
-                    onRetry = { sessionViewModel.loadArtifacts() }
-                )
+
+                ActionsSection.RUNS -> {
+                    RunsSection(
+                        runs = state.workflowRuns,
+                        isLoading = state.isLoadingWorkflowRuns,
+                        error = state.workflowRunsError,
+                        isActionRunning = state.isRunningWorkflowAction,
+                        onCancel = {
+                            sessionViewModel.cancelWorkflowRun(it)
+                        },
+                        onRerunFailed = {
+                            sessionViewModel.rerunFailedJobs(it)
+                        },
+                        onDownloadLogs = {
+                            sessionViewModel.downloadRunLogs(it)
+                        },
+                        onRetry = {
+                            sessionViewModel.loadWorkflowRuns()
+                        }
+                    )
+                }
+
+                ActionsSection.WORKFLOWS -> {
+                    val branch =
+                        state.selectedBranch
+                            ?: state.selectedRepo?.defaultBranch
+                            ?: "main"
+
+                    WorkflowsSection(
+                        workflows = state.workflows,
+                        isLoading = state.isLoadingWorkflows,
+                        error = state.workflowsError,
+                        isDispatching = state.isDispatchingWorkflow,
+                        branch = branch,
+                        onRun = { workflow ->
+                            sessionViewModel.triggerWorkflow(workflow)
+                        },
+                        onRetry = {
+                            sessionViewModel.loadWorkflows()
+                        }
+                    )
+                }
+
+                ActionsSection.ARTIFACTS -> {
+                    ArtifactsSection(
+                        artifacts = state.artifacts,
+                        isLoading = state.isLoadingArtifacts,
+                        error = state.artifactsError,
+                        downloadingName = state.downloadingArtifactName,
+                        onDownload = {
+                            sessionViewModel.downloadArtifact(it)
+                        },
+                        onRetry = {
+                            sessionViewModel.loadArtifacts()
+                        }
+                    )
+                }
             }
         }
     }
 
     PendingDownloadHandler(
         pending = state.pendingDownload,
-        downloading = state.downloadingArtifactName != null && state.pendingDownload == null,
+        downloading = state.downloadingArtifactName != null &&
+            state.pendingDownload == null,
         downloadError = state.downloadError,
-        onClear = { sessionViewModel.clearPendingDownload() },
-        onClearError = { sessionViewModel.clearDownloadError() }
+        onClear = {
+            sessionViewModel.clearPendingDownload()
+        },
+        onClearError = {
+            sessionViewModel.clearDownloadError()
+        }
     )
 }
+
+/* -------------------------------------------------------------------------- */
+/* RUNS                                                                       */
+/* -------------------------------------------------------------------------- */
 
 @Composable
 private fun RunsSection(
@@ -206,25 +285,45 @@ private fun RunsSection(
     onRetry: () -> Unit
 ) {
     when {
-        isLoading && runs.isEmpty() -> Column(
-            modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) { CircularProgressIndicator() }
-
-        error != null && runs.isEmpty() -> CenteredMessage(error) {
-            GlassSecondaryButton(text = "Retry", onClick = onRetry)
+        isLoading && runs.isEmpty() -> {
+            LoadingView()
         }
 
-        runs.isEmpty() -> CenteredMessage("No workflow runs yet.") {
-            GlassSecondaryButton(text = "Refresh", onClick = onRetry)
+        error != null && runs.isEmpty() -> {
+            CenteredMessage(error) {
+                GlassSecondaryButton(
+                    text = "Retry",
+                    onClick = onRetry
+                )
+            }
         }
 
-        else -> LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxSize()
-        ) {
-            items(runs, key = { it.id }) { run ->
-                RunCard(run = run, isActionRunning = isActionRunning, onCancel = onCancel, onRerunFailed = onRerunFailed, onDownloadLogs = onDownloadLogs)
+        runs.isEmpty() -> {
+            CenteredMessage("No workflow runs yet.") {
+                GlassSecondaryButton(
+                    text = "Refresh",
+                    onClick = onRetry
+                )
+            }
+        }
+
+        else -> {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(
+                    items = runs,
+                    key = { it.id }
+                ) { run ->
+                    RunCard(
+                        run = run,
+                        isActionRunning = isActionRunning,
+                        onCancel = onCancel,
+                        onRerunFailed = onRerunFailed,
+                        onDownloadLogs = onDownloadLogs
+                    )
+                }
             }
         }
     }
@@ -238,19 +337,30 @@ private fun RunCard(
     onRerunFailed: (WorkflowRun) -> Unit,
     onDownloadLogs: (WorkflowRun) -> Unit
 ) {
-    GlassCard(modifier = Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+    GlassCard(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             RunStatusIcon(run)
-            Column(modifier = Modifier.weight(1f).padding(start = 10.dp)) {
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 10.dp)
+            ) {
                 Text(
-                    run.displayTitle,
+                    text = run.displayTitle,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+
                 Text(
-                    "${run.branch} · #${run.runNumber} · ${run.event} · ${formatRelativeTime(run.createdAt)}",
+                    text = "${run.branch} · #${run.runNumber} · " +
+                        "${run.event} · ${formatRelativeTime(run.createdAt)}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -258,6 +368,7 @@ private fun RunCard(
                 )
             }
         }
+
         Row(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -266,21 +377,31 @@ private fun RunCard(
             if (!run.isCompleted) {
                 GlassSecondaryButton(
                     text = "Cancel",
-                    onClick = { onCancel(run) },
+                    onClick = {
+                        onCancel(run)
+                    },
                     enabled = !isActionRunning,
                     modifier = Modifier.weight(1f)
                 )
-            } else if (run.isFailure && run.conclusion == "failure") {
+            } else if (
+                run.isFailure &&
+                run.conclusion == "failure"
+            ) {
                 GlassSecondaryButton(
                     text = "Re-run failed",
-                    onClick = { onRerunFailed(run) },
+                    onClick = {
+                        onRerunFailed(run)
+                    },
                     enabled = !isActionRunning,
                     modifier = Modifier.weight(1f)
                 )
             }
+
             GlassSecondaryButton(
                 text = "Logs",
-                onClick = { onDownloadLogs(run) },
+                onClick = {
+                    onDownloadLogs(run)
+                },
                 enabled = !isActionRunning,
                 modifier = Modifier.weight(1f)
             )
@@ -289,15 +410,40 @@ private fun RunCard(
 }
 
 @Composable
-private fun RunStatusIcon(run: WorkflowRun) {
+private fun RunStatusIcon(
+    run: WorkflowRun
+) {
     val (icon, color) = when {
-        run.isCompleted && run.isSuccess -> Icons.Filled.CheckCircle to RepoSuccess
-        run.isCompleted && run.isFailure -> Icons.Filled.Error to MaterialTheme.colorScheme.error
-        run.isCompleted -> Icons.Filled.Schedule to MaterialTheme.colorScheme.onSurfaceVariant
-        else -> Icons.Filled.Schedule to MaterialTheme.colorScheme.primary
+        run.isCompleted && run.isSuccess -> {
+            Icons.Filled.CheckCircle to RepoSuccess
+        }
+
+        run.isCompleted && run.isFailure -> {
+            Icons.Filled.Error to MaterialTheme.colorScheme.error
+        }
+
+        run.isCompleted -> {
+            Icons.Filled.Schedule to
+                MaterialTheme.colorScheme.onSurfaceVariant
+        }
+
+        else -> {
+            Icons.Filled.Schedule to
+                MaterialTheme.colorScheme.primary
+        }
     }
-    Icon(icon, contentDescription = run.conclusion ?: run.status, tint = color, modifier = Modifier.size(26.dp))
+
+    Icon(
+        imageVector = icon,
+        contentDescription = run.conclusion ?: run.status,
+        tint = color,
+        modifier = Modifier.size(26.dp)
+    )
 }
+
+/* -------------------------------------------------------------------------- */
+/* WORKFLOWS                                                                  */
+/* -------------------------------------------------------------------------- */
 
 @Composable
 private fun WorkflowsSection(
@@ -310,61 +456,121 @@ private fun WorkflowsSection(
     onRetry: () -> Unit
 ) {
     when {
-        isLoading && workflows.isEmpty() -> Column(
-            modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) { CircularProgressIndicator() }
-
-        error != null && workflows.isEmpty() -> CenteredMessage(error) {
-            GlassSecondaryButton(text = "Retry", onClick = onRetry)
+        isLoading && workflows.isEmpty() -> {
+            LoadingView()
         }
 
-        workflows.isEmpty() -> CenteredMessage("No workflows registered.") {
-            GlassSecondaryButton(text = "Refresh", onClick = onRetry)
+        error != null && workflows.isEmpty() -> {
+            CenteredMessage(error) {
+                GlassSecondaryButton(
+                    text = "Retry",
+                    onClick = onRetry
+                )
+            }
         }
 
-        else -> LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxSize()
-        ) {
-            items(workflows, key = { it.id }) { workflow ->
-                GlassCard(modifier = Modifier.fillMaxWidth()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.WorkOutline, contentDescription = null, modifier = Modifier.size(24.dp))
-                        Column(modifier = Modifier.weight(1f).padding(start = 10.dp)) {
-                            Text(workflow.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                            Text(
-                                workflow.path,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        IconButton(
-                            onClick = { onRun(workflow) },
-                            enabled = workflow.canDispatch && !isDispatching
+        workflows.isEmpty() -> {
+            CenteredMessage("No workflows registered.") {
+                GlassSecondaryButton(
+                    text = "Refresh",
+                    onClick = onRetry
+                )
+            }
+        }
+
+        else -> {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(
+                    items = workflows,
+                    key = { it.id }
+                ) { workflow ->
+
+                    GlassCard(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            if (isDispatching) {
-                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                            } else {
-                                Icon(Icons.Filled.PlayArrow, contentDescription = "Run on $branch")
+                            Icon(
+                                imageVector = Icons.Filled.WorkOutline,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp)
+                            )
+
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(start = 10.dp)
+                            ) {
+                                Text(
+                                    text = workflow.name,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+
+                                Text(
+                                    text = workflow.path,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+
+                                if (!workflow.canDispatch) {
+                                    Text(
+                                        text = "Manual run is not supported",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    )
+                                }
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    onRun(workflow)
+                                },
+                                enabled = workflow.canDispatch &&
+                                    !isDispatching
+                            ) {
+                                if (isDispatching) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Filled.PlayArrow,
+                                        contentDescription =
+                                            "Run ${workflow.name} on $branch"
+                                    )
+                                }
                             }
                         }
                     }
                 }
-            }
-            item {
-                Text(
-                    "Runs on branch \"$branch\". Only workflows with a workflow_dispatch trigger can be started manually.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
+
+                item {
+                    Text(
+                        text = "Runs on branch \"$branch\". " +
+                            "Only workflows with a workflow_dispatch " +
+                            "trigger can be started manually.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
             }
         }
     }
 }
+
+/* -------------------------------------------------------------------------- */
+/* ARTIFACTS                                                                  */
+/* -------------------------------------------------------------------------- */
 
 @Composable
 private fun ArtifactsSection(
@@ -376,46 +582,88 @@ private fun ArtifactsSection(
     onRetry: () -> Unit
 ) {
     when {
-        isLoading && artifacts.isEmpty() -> Column(
-            modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) { CircularProgressIndicator() }
-
-        error != null && artifacts.isEmpty() -> CenteredMessage(error) {
-            GlassSecondaryButton(text = "Retry", onClick = onRetry)
+        isLoading && artifacts.isEmpty() -> {
+            LoadingView()
         }
 
-        artifacts.isEmpty() -> CenteredMessage("No build artifacts yet.\nArtifacts appear after a run finishes.") {
-            GlassSecondaryButton(text = "Refresh", onClick = onRetry)
+        error != null && artifacts.isEmpty() -> {
+            CenteredMessage(error) {
+                GlassSecondaryButton(
+                    text = "Retry",
+                    onClick = onRetry
+                )
+            }
         }
 
-        else -> LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxSize()
-        ) {
-            items(artifacts, key = { it.id }) { artifact ->
-                GlassCard(modifier = Modifier.fillMaxWidth()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(artifact.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                            Text(
-                                if (artifact.expired) {
-                                    "${formatBytes(artifact.size)} · expired"
-                                } else {
-                                    "${formatBytes(artifact.size)} · ${formatRelativeTime(artifact.createdAt.orEmpty())}"
-                                },
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        IconButton(
-                            onClick = { onDownload(artifact) },
-                            enabled = !artifact.expired && downloadingName == null
+        artifacts.isEmpty() -> {
+            CenteredMessage(
+                "No build artifacts yet.\nArtifacts appear after a run finishes."
+            ) {
+                GlassSecondaryButton(
+                    text = "Refresh",
+                    onClick = onRetry
+                )
+            }
+        }
+
+        else -> {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(
+                    items = artifacts,
+                    key = { it.id }
+                ) { artifact ->
+
+                    GlassCard(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            if (downloadingName == artifact.name) {
-                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                            } else {
-                                Icon(Icons.Filled.Download, contentDescription = "Download ${artifact.name}")
+                            Column(
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(
+                                    text = artifact.name,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+
+                                Text(
+                                    text = if (artifact.expired) {
+                                        "${formatBytes(artifact.size)} · expired"
+                                    } else {
+                                        "${formatBytes(artifact.size)} · " +
+                                            formatRelativeTime(
+                                                artifact.createdAt.orEmpty()
+                                            )
+                                    },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    onDownload(artifact)
+                                },
+                                enabled = !artifact.expired &&
+                                    downloadingName == null
+                            ) {
+                                if (downloadingName == artifact.name) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Filled.Download,
+                                        contentDescription =
+                                            "Download ${artifact.name}"
+                                    )
+                                }
                             }
                         }
                     }
@@ -425,32 +673,85 @@ private fun ArtifactsSection(
     }
 }
 
+/* -------------------------------------------------------------------------- */
+/* COMMON                                                                     */
+/* -------------------------------------------------------------------------- */
+
 @Composable
-private fun CenteredMessage(message: String, action: @Composable () -> Unit = {}) {
+private fun LoadingView() {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(top = 48.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        CircularProgressIndicator()
+    }
+}
+
+@Composable
+private fun CenteredMessage(
+    message: String,
+    action: @Composable () -> Unit = {}
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 48.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            message,
+            text = message,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 12.dp)
         )
+
         action()
     }
 }
 
-private fun formatBytes(bytes: Long): String {
-    if (bytes <= 0) return "0 B"
-    val units = arrayOf("B", "KB", "MB", "GB")
-    var value = bytes.toDouble()
-    var unit = 0
-    while (value >= 1024 && unit < units.lastIndex) {
-        value /= 1024
-        unit++
-    }
-    return if (unit == 0) "${bytes} B" else "%.1f %s".format(value, units[unit])
+/* -------------------------------------------------------------------------- */
+/* HELPERS                                                                    */
+/* -------------------------------------------------------------------------- */
+
+private fun ActionsSection.displayName(): String {
+    return name
+        .lowercase()
+        .replaceFirstChar { it.uppercase() }
 }
 
-private fun String.capitalize(): String = replaceFirstChar { it.uppercase() }
+private fun formatBytes(
+    bytes: Long
+): String {
+    if (bytes <= 0L) {
+        return "0 B"
+    }
+
+    val units = arrayOf(
+        "B",
+        "KB",
+        "MB",
+        "GB"
+    )
+
+    var value = bytes.toDouble()
+    var unitIndex = 0
+
+    while (
+        value >= 1024.0 &&
+        unitIndex < units.lastIndex
+    ) {
+        value /= 1024.0
+        unitIndex++
+    }
+
+    return if (unitIndex == 0) {
+        "$bytes B"
+    } else {
+        "%.1f %s".format(
+            value,
+            units[unitIndex]
+        )
+    }
+}

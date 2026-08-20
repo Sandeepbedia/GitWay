@@ -58,8 +58,14 @@ suspend fun FragmentActivity.authenticateWithBiometrics(
     val promptInfo = BiometricPrompt.PromptInfo.Builder()
         .setTitle(title)
         .setSubtitle(subtitle)
-        .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-        .setNegativeButtonText("Cancel")
+        // Strong biometrics first; DEVICE_CREDENTIAL (PIN/pattern/password) as the
+        // fallback so the user is never permanently locked out when biometrics fail,
+        // get cancelled, or hit hardware lockout. When DEVICE_CREDENTIAL is allowed the
+        // system renders its own "Use device password" button, so no negative button.
+        .setAllowedAuthenticators(
+            BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        )
         .build()
 
     continuation.invokeOnCancellation { prompt.cancelAuthentication() }

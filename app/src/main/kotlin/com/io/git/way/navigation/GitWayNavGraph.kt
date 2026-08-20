@@ -34,7 +34,6 @@ import com.io.git.way.ui.screens.complete.CompletionScreen
 import com.io.git.way.ui.screens.confirm.ConfirmationScreen
 import com.io.git.way.ui.screens.folder.FolderSelectionScreen
 import com.io.git.way.ui.screens.issues.IssuesScreen
-import com.io.git.way.ui.screens.overview.OverviewScreen
 import com.io.git.way.ui.screens.profile.ProfileScreen
 import com.io.git.way.ui.screens.pulls.PullRequestsScreen
 import com.io.git.way.ui.screens.releases.ReleasesScreen
@@ -98,28 +97,19 @@ fun GitWayNavGraph(
                         popUpTo(Routes.RepositoryList.route) { inclusive = true }
                     }
                 },
-                onNavigateOverview = { navigateToTab(navController, Routes.Overview.route) },
                 onNavigateProfile = { navigateToTab(navController, Routes.Profile.route) },
                 themeMode = themeMode,
                 onThemeModeChange = onThemeModeChange
             )
         }
-        composable(Routes.Overview.route) {
-            OverviewScreen(
-                sessionViewModel = sessionViewModel,
-                onNavigateRepositories = { navigateToTab(navController, Routes.RepositoryList.route) },
-                onNavigateProfile = { navigateToTab(navController, Routes.Profile.route) },
-                onOpenRepository = { repo ->
-                    sessionViewModel.selectRepository(repo)
-                    navController.navigate(Routes.RepositoryBrowser.route)
-                }
-            )
-        }
         composable(Routes.Profile.route) {
             ProfileScreen(
                 sessionViewModel = sessionViewModel,
-                onNavigateOverview = { navigateToTab(navController, Routes.Overview.route) },
                 onNavigateRepositories = { navigateToTab(navController, Routes.RepositoryList.route) },
+                onRepositorySelected = { repo ->
+                    sessionViewModel.selectRepository(repo)
+                    navController.navigate(Routes.RepositoryBrowser.route)
+                },
                 onDisconnect = {
                     navController.navigate(Routes.Token.route) {
                         popUpTo(Routes.Profile.route) { inclusive = true }

@@ -16,6 +16,9 @@
  */
 package com.io.git.way.ui.screens.auth
 
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,6 +33,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -47,9 +53,9 @@ import com.io.git.way.GitWayApp
 import com.io.git.way.ui.common.GitWayViewModelFactory
 import com.io.git.way.ui.theme.DiffAddedGreen
 import com.io.git.way.ui.theme.GlassCard
-import com.io.git.way.ui.theme.GlassPrimaryButton
 import com.io.git.way.ui.theme.GlassScaffold
 import com.io.git.way.ui.theme.GlassSecondaryButton
+import com.io.git.way.ui.theme.RepoPurple
 
 /** The scopes Git Way actually needs. Classic PAT: tick all three. Fine-grained: give
  * the equivalent permissions (repository contents read/write, workflows, repo delete). */
@@ -58,6 +64,13 @@ private val REQUIRED_SCOPES = listOf(
     "workflow" to "Workflow updates & runs",
     "delete_repo" to "Delete repositories"
 )
+
+/** Short tutorial video on generating a GitHub PAT — opened in the default browser. */
+private const val TOKEN_TUTORIAL_URL = "https://youtube.com/shorts/KLWsGhUUFDM"
+
+/** App screenshot on GitHub showing the token screen — opened in the default browser. */
+private const val TOKEN_SCREENSHOT_URL =
+    "https://github.com/Sandeepbedia/GitWay/blob/main/docs/screenshots/1.png"
 
 /** Screen 2: GitHub Personal Access Token input, validated live against the GitHub API. */
 @Composable
@@ -70,6 +83,7 @@ fun TokenScreen(
     )
 ) {
     val state = viewModel.uiState
+    val context = LocalContext.current
 
     GlassScaffold(title = "Connect GitHub") { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp)) {
@@ -102,6 +116,49 @@ fun TokenScreen(
                     )
                 }
             }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                GlassSecondaryButton(
+                    text = "Create token",
+                    onClick = {
+                        runCatching {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse(TOKEN_TUTORIAL_URL))
+                            )
+                        }
+                    },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Filled.PlayArrow,
+                            contentDescription = null,
+                            tint = RepoPurple,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+                GlassSecondaryButton(
+                    text = "Screenshot",
+                    onClick = {
+                        runCatching {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse(TOKEN_SCREENSHOT_URL))
+                            )
+                        }
+                    },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Filled.Image,
+                            contentDescription = null,
+                            tint = RepoPurple,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+            }
             OutlinedTextField(
                 value = state.token,
                 onValueChange = viewModel::onTokenChange,
@@ -130,11 +187,25 @@ fun TokenScreen(
                     modifier = Modifier.padding(top = 8.dp)
                 )
             }
-            GlassPrimaryButton(
+            GlassSecondaryButton(
                 text = "Connect",
                 onClick = { viewModel.connect(onConnected) },
                 enabled = state.token.isNotBlank() && !state.isLoading,
-                loading = state.isLoading,
+                leadingIcon = {
+                    if (state.isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            Icons.Filled.CheckCircle,
+                            contentDescription = null,
+                            tint = RepoPurple,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                },
                 modifier = Modifier.padding(top = 16.dp)
             )
             if (state.missingScopes.isNotEmpty()) {

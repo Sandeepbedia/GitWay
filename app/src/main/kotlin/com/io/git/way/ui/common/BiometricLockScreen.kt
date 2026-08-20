@@ -57,10 +57,15 @@ fun BiometricLockScreen(onUnlocked: () -> Unit) {
         if (isPrompting) return
         isPrompting = true
         scope.launch {
-            val success = activity.authenticateWithBiometrics(
-                title = "Unlock Git Way",
-                subtitle = "Use your fingerprint or face to continue"
-            )
+            // runCatching so a rare prompt exception (already active prompt, hardware
+            // hiccup) can never leave the lock screen stuck in the "prompting" state —
+            // worst case the user just taps Try again.
+            val success = runCatching {
+                activity.authenticateWithBiometrics(
+                    title = "Unlock Git Way",
+                    subtitle = "Use your fingerprint, face, or device password to continue"
+                )
+            }.getOrDefault(false)
             isPrompting = false
             wasCancelled = !success
             if (success) onUnlocked()
@@ -84,7 +89,7 @@ fun BiometricLockScreen(onUnlocked: () -> Unit) {
                     modifier = Modifier.padding(top = 16.dp)
                 )
                 Text(
-                    "Unlock with your fingerprint or face to continue.",
+                    "Unlock with your fingerprint, face, or device password.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp, bottom = 28.dp)
