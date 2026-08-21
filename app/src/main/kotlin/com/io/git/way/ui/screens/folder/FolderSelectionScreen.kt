@@ -19,16 +19,28 @@ package com.io.git.way.ui.screens.folder
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.ExpandLess
@@ -54,7 +66,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.io.git.way.domain.model.AppIdentity
@@ -66,9 +85,14 @@ import com.io.git.way.ui.common.GitWaySessionViewModel
 import com.io.git.way.ui.theme.DiffModifiedYellow
 import com.io.git.way.ui.theme.DiffRemovedRed
 import com.io.git.way.ui.theme.GlassCard
-import com.io.git.way.ui.theme.GlassPrimaryButton
 import com.io.git.way.ui.theme.GlassScaffold
 import com.io.git.way.ui.theme.GlassSecondaryButton
+import com.io.git.way.ui.theme.RepoElevatedSurface
+import com.io.git.way.ui.theme.RepoElevatedSurfaceLight
+import com.io.git.way.ui.theme.RepoPurple
+import com.io.git.way.ui.theme.RepoPurpleDark
+import com.io.git.way.ui.theme.RepoPurpleGradientEnd
+import com.io.git.way.ui.theme.RepoPurpleGradientStart
 
 /** Screen 4: local updated project folder selection via SAF, shown as a file-manager
  * style browsable list — icon, name, path and size per file (PRD1 §2 Folder Selection). */
@@ -241,13 +265,125 @@ fun FolderSelectionScreen(
                 }
             }
 
-            GlassPrimaryButton(
-                text = "Continue",
+            // Smart continue: the label itself explains what's missing (no folder yet,
+            // still scanning, identity check running/failed, mismatch) so a disabled
+            // button never leaves the user guessing why.
+            val continueLabel = when {
+                state.appIdentityMismatch -> "Wrong project folder"
+                state.identityCheckError != null -> "Match check failed"
+                state.isCheckingAppIdentity -> "Verifying project match…"
+                state.isScanning -> "Scanning folder…"
+                state.localFiles.isEmpty() -> "Select a folder to continue"
+                else -> "Continue"
+            }
+            ContinueButton(
+                label = continueLabel,
+                enabled = canContinue,
+                isBusy = state.isComparing,
                 onClick = {
                     sessionViewModel.runComparison(context)
                     onContinue()
+                }
+            )
+        }
+    }
+}
+
+/**
+ * The flow's primary action — purple-gradient pill with press-scale feedback and a
+ * busy state. Visually a sibling of [GlassPrimaryButton], but adds the interactive
+ * polish (press shrink, colored shadow, busy spinner) and a context-aware label.
+ */
+@Composable
+private fun ContinueButton(
+    label: String,
+    enabled: Boolean,
+    isBusy: Boolean,
+    onClick: () -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(18.dp)
+    val dark = scheme.background.luminance() < 0.5f
+
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.97f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "continuePressScale"
+    )
+
+    // Enabled: the primary purple gradient. Disabled: the same elevated-surface +
+    // purple-accent treatment as GlassSecondaryButton, so an inactive Continue still
+    // reads as part of the same family instead of a washed-out grey.
+    val backdrop = if (enabled) {
+        Brush.horizontalGradient(listOf(RepoPurpleGradientStart, RepoPurple, RepoPurpleGradientEnd))
+    } else {
+        val fill = if (dark) RepoElevatedSurface else RepoElevatedSurfaceLight
+        Brush.horizontalGradient(listOf(fill, fill))
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .shadow(
+                elevation = if (enabled) 12.dp else 7.dp,
+                shape = shape,
+                clip = false,
+                ambientColor = RepoPurple.copy(alpha = 0.40f),
+                spotColor = RepoPurpleDark.copy(alpha = 0.45f)
+            )
+            .clip(shape)
+            .background(backdrop)
+            .border(
+                width = 1.dp,
+                color = if (enabled) {
+                    Color.White.copy(alpha = 0.35f)
+                } else {
+                    RepoPurple.copy(alpha = 0.25f)
                 },
-                enabled = canContinue
+                shape = shape
+            )
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                enabled = enabled && !isBusy,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (isBusy) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    color = Color.White,
+                    strokeWidth = 2.dp
+                )
+            } else {
+                if (enabled) {
+                    Icon(
+                        Icons.Filled.ArrowForward,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+            Text(
+                text = label,
+                color = if (enabled) Color.White else RepoPurple,
+                fontWeight = FontWeight.SemiBold
             )
         }
     }

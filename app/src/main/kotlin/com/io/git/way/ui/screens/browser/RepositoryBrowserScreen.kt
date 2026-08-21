@@ -18,6 +18,8 @@ package com.io.git.way.ui.screens.browser
 
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -83,7 +85,6 @@ import androidx.compose.material.icons.filled.FileCopy
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOff
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
@@ -98,6 +99,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.TrackChanges
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
@@ -204,11 +206,23 @@ fun RepositoryBrowserScreen(
     var browserQuery by remember { mutableStateOf("") }
     var explorerZoom by remember { mutableStateOf(1f) }
     val explorerHorizontalScroll = rememberScrollState()
+    // Whether the ABBravo/root row itself is expanded — previously the root row had no
+    // collapse state at all, so it never behaved like the other folders in the tree.
+    var rootExpanded by remember { mutableStateOf(true) }
     var showBranchPicker by remember { mutableStateOf(false) }
     var showCreateBranchDialog by remember { mutableStateOf(false) }
     var showCommitHistory by remember { mutableStateOf(false) }
     var showRepoSettings by remember { mutableStateOf(false) }
     var showDeleteRepoDialog by remember { mutableStateOf(false) }
+
+    // SAF picker for manual uploads — files land in the folder the user is browsing
+    // (or a specific folder when opened from a row's quick action, which sets the
+    // create target first).
+    val uploadFilesLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        if (uris.isNotEmpty()) sessionViewModel.uploadPickedFiles(context, uris)
+    }
 
     LaunchedEffect(state.selectedRepo) {
         if (state.selectedRepo != null && state.remoteTreeCache.isEmpty() && !state.isBrowserLoading) {
@@ -278,6 +292,14 @@ fun RepositoryBrowserScreen(
                     DropdownMenu(expanded = showCreateMenu, onDismissRequest = { showCreateMenu = false }) {
                         DropdownMenuItem(text = { Text("New file") }, onClick = { showCreateMenu = false; showNewFileDialog = true })
                         DropdownMenuItem(text = { Text("New folder") }, onClick = { showCreateMenu = false; showNewFolderDialog = true })
+                        DropdownMenuItem(
+                            text = { Text("Upload file(s)") },
+                            onClick = {
+                                showCreateMenu = false
+                                uploadFilesLauncher.launch(arrayOf("*/*"))
+                            },
+                            leadingIcon = { Icon(Icons.Filled.UploadFile, contentDescription = null) }
+                        )
                     }
                 }
                 Box {
@@ -382,6 +404,10 @@ fun RepositoryBrowserScreen(
                 }
             }
 
+            // New File / New Folder / Upload used to live here as a global bar, detached
+            // from any folder context. They now live on the ABBravo/root row itself (see
+            // RepositoryRootRow below), same as every other folder row — one consistent
+            // place for "act on this folder" actions instead of two.
             if (state.pasteError != null) {
                 Text(state.pasteError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
             }
@@ -393,6 +419,9 @@ fun RepositoryBrowserScreen(
             }
             if (state.duplicateError != null) {
                 Text(state.duplicateError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
+            }
+            if (state.uploadFilesError != null) {
+                Text(state.uploadFilesError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
             }
             if (state.repoSettingsError != null) {
                 Text(state.repoSettingsError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
@@ -520,15 +549,29 @@ fun RepositoryBrowserScreen(
                                 }
                         ) {
                             LazyColumn(
-                                modifier = Modifier.width(contentWidth),
-                                verticalArrangement = Arrangement.spacedBy(1.dp)
+                                // Was spacedBy(1.dp): that 1dp gap between every row broke
+                                // the vertical guide lines at each row boundary — barely
+                                // visible at 1x zoom but an obvious cut once zoomed in,
+                                // since the gap doesn't scale with the rest of the row.
+                                // Rows sit flush now so every guide column is continuous.
+                                modifier = Modifier.width(contentWidth)
                             ) {
                                 item(key = "repository-root") {
                                     RepositoryRootRow(
                                         repositoryName = repo?.name ?: "Repository",
-                                        itemCount = state.browserEntries.size
+                                        itemCount = state.browserEntries.size,
+                                        isExpanded = rootExpanded,
+                                        zoomScale = explorerZoom,
+                                        onToggleExpanded = { rootExpanded = !rootExpanded },
+                                        onNewFile = { sessionViewModel.setCreateTarget(""); showNewFileDialog = true },
+                                        onNewFolder = { sessionViewModel.setCreateTarget(""); showNewFolderDialog = true },
+                                        onUploadInto = {
+                                            sessionViewModel.setCreateTarget("")
+                                            uploadFilesLauncher.launch(arrayOf("*/*"))
+                                        }
                                     )
                                 }
+                                if (rootExpanded) {
                                 items(state.browserEntries, key = { it.entry.path }) { row ->
                                     TreeRowItem(
                                         row = row,
@@ -547,6 +590,10 @@ fun RepositoryBrowserScreen(
                                 onDuplicate = { sessionViewModel.duplicateEntry(row.entry) },
                                 onNewFile = { sessionViewModel.setCreateTarget(row.entry.path); showNewFileDialog = true },
                                 onNewFolder = { sessionViewModel.setCreateTarget(row.entry.path); showNewFolderDialog = true },
+                                onUploadInto = {
+                                    sessionViewModel.setCreateTarget(row.entry.path)
+                                    uploadFilesLauncher.launch(arrayOf("*/*"))
+                                },
                                 onRefresh = { sessionViewModel.loadBrowserRoot() },
                                 onCopyPath = { clipboard.setText(AnnotatedString(row.entry.path)) },
                                 onCopyName = { clipboard.setText(AnnotatedString(row.entry.name)) },
@@ -558,11 +605,12 @@ fun RepositoryBrowserScreen(
                                 fileSize = state.remoteFileSizes[row.entry.path]
                                     )
                                 }
+                                }
                             }
                         }
                     }
                 }
-                if (state.isDeletingEntry || state.isRenamingEntry || state.isDuplicatingEntry) {
+                if (state.isDeletingEntry || state.isRenamingEntry || state.isDuplicatingEntry || state.isUploadingFiles) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
                     }
@@ -789,66 +837,137 @@ private fun SearchResultRow(path: String, onClick: () -> Unit) {
 @Composable
 private fun RepositoryRootRow(
     repositoryName: String,
-    itemCount: Int
+    itemCount: Int,
+    isExpanded: Boolean = true,
+    zoomScale: Float = 1f,
+    onToggleExpanded: () -> Unit = {},
+    onNewFile: () -> Unit = {},
+    onNewFolder: () -> Unit = {},
+    onUploadInto: () -> Unit = {}
 ) {
     // Same styling constants as TreeIndentGuides, so the root's drop connects
     // seamlessly into the first child's guide column instead of leaving a gap —
     // RepositoryRootRow used to draw no guide line at all.
     val guideColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.34f)
-    val indentUnit = 18.dp
+    // The root guide column is wider because the root chevron lives inside it.
+    // This makes the vertical guide originate from the chevron itself and line up
+    // exactly with every depth-0 child row below it.
+    val rootGuideWidth = 28.dp
     val strokeWidth = 1.5.dp
     val hasChildren = itemCount > 0
+
+    // Root now scales with the same pinch-to-zoom gesture as every other row
+    // (TreeRowItem) instead of staying fixed at 1x while the rest of the tree
+    // grows/shrinks around it.
+    val uiScale = zoomScale.coerceIn(0.75f, 1.8f)
+    val rowHeight = 52.dp * uiScale
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(52.dp)
+            .height(rowHeight)
+            .clip(RoundedCornerShape(10.dp))
+            // The root now toggles open/closed exactly like every other folder row —
+            // previously it had no click target and always rendered its children.
+            .clickable(enabled = hasChildren, onClick = onToggleExpanded)
             .padding(horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (hasChildren) {
-            Box(
-                modifier = Modifier
-                    .width(indentUnit)
-                    .fillMaxHeight()
-            ) {
-                Canvas(Modifier.fillMaxSize()) {
-                    val x = size.width / 2f
-                    val midY = size.height / 2f
+        Box(
+            modifier = Modifier
+                .width(rootGuideWidth * uiScale)
+                .fillMaxHeight()
+        ) {
+            val rotation by animateFloatAsState(
+                targetValue = if (isExpanded) 90f else 0f,
+                label = "root-chevron"
+            )
+            // The chevron is centered on the exact same x-coordinate used by the
+            // depth-0 child guide column. The vertical line therefore comes directly
+            // out of the arrow instead of sitting to its left.
+            Canvas(Modifier.fillMaxSize()) {
+                val x = size.width / 2f
+                val midY = size.height / 2f
+                val stroke = strokeWidth.toPx()
+                if (hasChildren && isExpanded) {
                     drawLine(
                         color = guideColor,
                         start = Offset(x, midY),
                         end = Offset(x, size.height),
-                        strokeWidth = strokeWidth.toPx(),
+                        strokeWidth = stroke,
                         cap = StrokeCap.Round
                     )
                 }
             }
-        } else {
-            Spacer(Modifier.width(indentUnit))
+            Icon(
+                Icons.Filled.KeyboardArrowRight,
+                contentDescription = if (isExpanded) "Collapse repository root" else "Expand repository root",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(20.dp * uiScale)
+                    .graphicsLayer { rotationZ = rotation }
+            )
         }
-        Icon(
-            Icons.Filled.KeyboardArrowDown,
-            contentDescription = "Repository root",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp)
-        )
-        Spacer(Modifier.width(2.dp))
+        Spacer(Modifier.width(2.dp * uiScale))
         SvgRawIcon(
             resId = com.io.git.way.R.raw.folder_root,
             contentDescription = "Repository root",
-            modifier = Modifier.size(28.dp)
+            modifier = Modifier.size(28.dp * uiScale)
         )
         Text(
             repositoryName,
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontSize = MaterialTheme.typography.titleMedium.fontSize * uiScale,
+                lineHeight = MaterialTheme.typography.titleMedium.lineHeight * uiScale
+            ),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 10.dp).weight(1f)
+            softWrap = false,
+            // Was .weight(1f): on this very wide, horizontally-scrollable canvas that
+            // stretched the name across the entire virtual row width and pushed the
+            // New File / New Folder / Upload icons far off the right edge — invisible
+            // unless you scrolled all the way over. Every other folder row sizes its
+            // name to its content and puts the icons right after it; the root row now
+            // matches that so its icons actually show up next to "ABBravo" like they do
+            // for .github, app, gradle, and every other folder.
+            modifier = Modifier.padding(start = 10.dp * uiScale).widthIn(min = 40.dp * uiScale)
         )
+        // Same quick actions as folder rows — the root is just another folder target.
+        // These are the only New File / New Folder / Upload controls now: the old
+        // always-visible bar above the tree was removed so root-level actions live in
+        // exactly one place, same as every other folder.
+        IconButton(onClick = onNewFile, modifier = Modifier.size(28.dp * uiScale)) {
+            Icon(
+                Icons.Filled.NoteAdd,
+                contentDescription = "New file in root",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp * uiScale)
+            )
+        }
+        IconButton(onClick = onNewFolder, modifier = Modifier.size(28.dp * uiScale)) {
+            Icon(
+                Icons.Filled.CreateNewFolder,
+                contentDescription = "New folder in root",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp * uiScale)
+            )
+        }
+        IconButton(onClick = onUploadInto, modifier = Modifier.size(28.dp * uiScale)) {
+            Icon(
+                Icons.Filled.UploadFile,
+                contentDescription = "Upload files to root",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp * uiScale)
+            )
+        }
+        Spacer(Modifier.width(4.dp * uiScale))
         Text(
             itemCount.toString(),
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontSize = MaterialTheme.typography.labelMedium.fontSize * uiScale,
+                lineHeight = MaterialTheme.typography.labelMedium.lineHeight * uiScale
+            ),
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
@@ -909,6 +1028,7 @@ private fun TreeRowItem(
     onDuplicate: () -> Unit,
     onNewFile: () -> Unit,
     onNewFolder: () -> Unit,
+    onUploadInto: () -> Unit,
     onRefresh: () -> Unit,
     onCopyPath: () -> Unit,
     onCopyName: () -> Unit,
@@ -1033,6 +1153,17 @@ private fun TreeRowItem(
                             modifier = Modifier.size(16.dp)
                         )
                     }
+                    IconButton(
+                        onClick = onUploadInto,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.UploadFile,
+                            contentDescription = "Upload files here",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
 
                 Spacer(Modifier.width(12.dp))
@@ -1074,6 +1205,11 @@ private fun TreeRowItem(
                     leadingIcon = { Icon(Icons.Filled.CreateNewFolder, null) },
                     text = { Text("New Folder") },
                     onClick = { showMenu = false; onNewFolder() }
+                )
+                DropdownMenuItem(
+                    leadingIcon = { Icon(Icons.Filled.UploadFile, null) },
+                    text = { Text("Upload here") },
+                    onClick = { showMenu = false; onUploadInto() }
                 )
                 DropdownMenuItem(
                     leadingIcon = { Icon(Icons.Filled.Refresh, null) },
@@ -1128,54 +1264,90 @@ private fun TreeRowItem(
 @Composable
 private fun TreeIndentGuides(row: TreeRow, nameExtension: Dp = 0.dp) {
     val guideColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.34f)
+    // Depth 0 uses the same 28dp column as the repository-root chevron.
+    // Deeper levels then advance by 18dp, preserving the tree rhythm.
+    val rootGuideWidth = 28.dp
     val indentUnit = 18.dp
     val strokeWidth = 1.5.dp
     val corner = 5.dp
-    val extensionPx = with(LocalDensity.current) { nameExtension.toPx() }
+    // Folder rows have a chevron immediately after the guide column, so the
+    // horizontal elbow must reach that chevron. Files keep their caller-provided
+    // extension because they use a spacer instead of a chevron.
+    val connectorExtension = if (row.entry.isFolder) 10.dp else nameExtension
+    val extensionPx = with(LocalDensity.current) { connectorExtension.toPx() }
     val expandedFolder = row.entry.isFolder && row.isExpanded && row.directChildCount > 0
 
     if (row.depth <= 0) {
-        // Top-level expanded folder: a short nub + drop that connects to the first
-        // child's guide column so its vertical line doesn't float with a gap.
-        if (expandedFolder) {
-            Canvas(
-                modifier = Modifier
-                    .width(indentUnit)
-                    .fillMaxHeight()
-            ) {
-                val midY = size.height / 2f
-                val radius = corner.toPx()
-                val stroke = strokeWidth.toPx()
+        val hasNextRootSibling = row.ancestorLines.getOrElse(0) { false }
+        Box(
+            modifier = Modifier
+                .width(rootGuideWidth)
+                .fillMaxHeight()
+        ) {
+            Canvas(Modifier.fillMaxSize()) {
                 val x = size.width / 2f
-                drawLine(
+                val midY = size.height / 2f
+                val stroke = strokeWidth.toPx()
+                val radius = corner.toPx()
+
+                // The depth-0 guide starts at the previous row, turns into this
+                // row's chevron, and continues below only when another root sibling
+                // follows. This is the same x-coordinate used by the repository root.
+                val elbow = Path().apply {
+                    moveTo(x, 0f)
+                    lineTo(x, midY - radius)
+                    quadraticBezierTo(x, midY, x + radius, midY)
+                    lineTo(size.width + extensionPx, midY)
+                }
+                drawPath(
+                    elbow,
                     color = guideColor,
-                    start = Offset(0f, midY),
-                    end = Offset(x + radius, midY),
-                    strokeWidth = stroke,
-                    cap = StrokeCap.Round
+                    style = Stroke(width = stroke, cap = StrokeCap.Round)
                 )
-                drawLine(
-                    color = guideColor,
-                    start = Offset(x, midY),
-                    end = Offset(x, size.height),
-                    strokeWidth = stroke,
-                    cap = StrokeCap.Round
-                )
+
+                if (hasNextRootSibling) {
+                    drawLine(
+                        color = guideColor,
+                        start = Offset(x, midY),
+                        end = Offset(x, size.height),
+                        strokeWidth = stroke,
+                        cap = StrokeCap.Round
+                    )
+                }
             }
         }
         return
     }
 
     Row(
-        modifier = Modifier.height(50.dp),
+        // Was a hard-coded 50.dp, which ignored explorer zoom entirely: at any zoom level
+        // other than 1x the actual row was taller/shorter than this, so the guide lines
+        // drawn here stopped short of (or overshot) the real row boundary and looked cut
+        // off between rows once zoomed in. Filling the parent's actual height keeps this
+        // in sync with the real (zoom-scaled) row height.
+        modifier = Modifier.fillMaxHeight(),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // ancestorLines has depth+1 entries.
+        // The last entry is the current row's own sibling-continuation flag.
+        // It is used only by this row's elbow column; descendant pass-through
+        // columns use the ancestor mapping calculated below.
+        val ownContinues = row.ancestorLines.getOrElse(row.depth) { false }
+
         for (level in 0 until row.depth) {
-            val continues = row.ancestorLines.getOrElse(level) { false }
+            // Guide-column mapping:
+            // level 0 is the root-level ancestor line.
+            // Every deeper column belongs to the child-chain of the ancestor one
+            // level above it, so its continuation flag is stored at level + 1.
+            // Using `level` for every column caused the line to stop/restart when
+            // a folder such as assets had its own expanded children.
+            val continuationIndex = if (level == 0) 0 else level + 1
+            val continues = row.ancestorLines.getOrElse(continuationIndex) { false }
+            val columnWidth = if (level == 0) rootGuideWidth else indentUnit
 
             Box(
                 modifier = Modifier
-                    .width(indentUnit)
+                    .width(columnWidth)
                     .fillMaxHeight()
             ) {
                 Canvas(Modifier.fillMaxSize()) {
@@ -1200,8 +1372,11 @@ private fun TreeIndentGuides(row: TreeRow, nameExtension: Dp = 0.dp) {
                             lineTo(x, midY - radius)
                             quadraticBezierTo(x, midY, x + radius, midY)
                             if (expandedFolder) {
-                                // Reach the first child's stub column so the drop connects.
-                                lineTo(x + indentUnit.toPx() + radius, midY)
+                                // The first child starts in the next guide column.
+                                // Its center is exactly half an indentUnit after this
+                                // column, so the parent drop and child guide share one x.
+                                val childGuideX = size.width + indentUnit.toPx() / 2f
+                                lineTo(childGuideX, midY)
                             } else {
                                 lineTo(size.width + extensionPx, midY)
                             }
@@ -1214,7 +1389,7 @@ private fun TreeIndentGuides(row: TreeRow, nameExtension: Dp = 0.dp) {
                         )
 
                         if (expandedFolder) {
-                            val dropX = x + indentUnit.toPx()
+                            val dropX = size.width + indentUnit.toPx() / 2f
                             drawLine(
                                 color = guideColor,
                                 start = Offset(dropX, midY),
@@ -1224,7 +1399,7 @@ private fun TreeIndentGuides(row: TreeRow, nameExtension: Dp = 0.dp) {
                             )
                         }
 
-                        if (continues) {
+                        if (ownContinues) {
                             drawLine(
                                 color = guideColor,
                                 start = Offset(x, midY),

@@ -59,6 +59,7 @@ import com.io.git.way.data.remote.dto.UpdatePullRequestRequest
 import com.io.git.way.data.remote.dto.UpdateRefRequest
 import com.io.git.way.data.remote.dto.UpdateRepoRequest
 import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -68,6 +69,7 @@ import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
+import retrofit2.http.Url
 
 /** GitHub REST API v3 surface: auth, repository listing, and the Git Data API. */
 interface GitHubApiService {
@@ -436,14 +438,17 @@ interface GitHubApiService {
         @Path("release_id") releaseId: Long
     ): List<GitHubReleaseAssetListDto>
 
-    @POST("repos/{owner}/{repo}/releases/{release_id}/assets")
-    @retrofit2.http.Multipart
+    /**
+     * Upload a release asset through GitHub's uploads host.
+     *
+     * The asset name is a query parameter, not a MultipartBody.Part. Retrofit
+     * rejects @Part("name") when the parameter type is MultipartBody.Part.
+     */
+    @POST
     suspend fun uploadReleaseAsset(
-        @Path("owner") owner: String,
-        @Path("repo") repo: String,
-        @Path("release_id") releaseId: Long,
-        @retrofit2.http.Part("name") name: okhttp3.MultipartBody.Part,
-        @retrofit2.http.Part asset: okhttp3.MultipartBody.Part
+        @Url url: String,
+        @Query("name") name: String,
+        @retrofit2.http.Body body: RequestBody
     ): GitHubReleaseAssetListDto
 
     @GET("repos/{owner}/{repo}/releases/assets/{asset_id}")

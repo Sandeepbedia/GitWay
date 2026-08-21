@@ -32,11 +32,15 @@ data class TreeRow(
     val depth: Int,
     val isExpanded: Boolean = false,
     val directChildCount: Int = 0,
-    /** One flag per indent column (size == [depth]): index i (< depth-1) says whether the
-     * ancestor at that level still has more siblings after it (so its guide line should
-     * keep running past this row); the last index says whether THIS row itself has more
-     * siblings after it (so its own column's line should extend below its elbow for the
-     * next sibling to connect into). Empty for a root-level row (nothing to draw). */
+    /** One flag per indent column (size == [depth] + 1): index i (< size-1) says whether
+     * the ancestor at that level still has more siblings after it (so its guide line
+     * should keep running past this row); the last index says whether THIS row itself
+     * has more siblings after it (so its own column's line should extend below its elbow
+     * for the next sibling to connect into). This includes depth 0: a root-level folder's
+     * flag propagates into every row of its expanded subtree, so the guide column keeps
+     * running the full height of that subtree whenever the folder has more root-level
+     * siblings below it (e.g. "app" -> "gradle" -> "scripts"), instead of stopping right
+     * after the root row. */
     val ancestorLines: List<Boolean> = emptyList()
 )
 

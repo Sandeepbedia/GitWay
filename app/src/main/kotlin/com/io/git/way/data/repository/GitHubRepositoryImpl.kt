@@ -1202,11 +1202,13 @@ class GitHubRepositoryImpl(
         bytes: ByteArray
     ): Result<ReleaseAsset> = withContext(Dispatchers.IO) {
         runCatching {
-            val namePart = okhttp3.MultipartBody.Part.createFormData("name", fileName)
-            val body = bytes.toRequestBody("application/octet-stream".toMediaType())
-            val filePart = okhttp3.MultipartBody.Part.createFormData("asset", fileName, body)
+            // GitHub release assets use uploads.github.com and accept the APK
+            // as the raw request body. The filename belongs in ?name=, not in
+            // a MultipartBody.Part annotation.
+            val body = bytes.toRequestBody("application/vnd.android.package-archive".toMediaType())
+            val uploadUrl = "https://uploads.github.com/repos/${repo.owner}/${repo.name}/releases/$releaseId/assets"
             githubCallWithRetry {
-                apiService.uploadReleaseAsset(repo.owner, repo.name, releaseId, namePart, filePart)
+                apiService.uploadReleaseAsset(uploadUrl, fileName, body)
             }.let { ReleaseAsset(id = it.id, name = it.name, size = it.size, browserDownloadUrl = it.browserDownloadUrl, contentType = it.contentType, createdAt = it.createdAt) }
         }
     }

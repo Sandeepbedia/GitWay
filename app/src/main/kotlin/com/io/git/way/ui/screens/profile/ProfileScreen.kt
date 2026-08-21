@@ -321,7 +321,7 @@ fun ProfileScreen(
                     state.currentUser?.let { user ->
 
                         item {
-                            SectionLabel("Achievements")
+                            SectionLabel("GitHub Achievements")
                         }
 
                         item {
@@ -356,6 +356,14 @@ fun ProfileScreen(
                                     }
                             }
                         )
+                    }
+
+                    item {
+                        SectionLabel("Developer")
+                    }
+
+                    item {
+                        DeveloperCard()
                     }
 
                     item {
@@ -1107,125 +1115,141 @@ private fun CompositionTile(
 }
 
 
-private data class Achievement(
+private data class GitHubHighlight(
     val label: String,
-    val icon: ImageVector,
-    val unlocked: Boolean
+    val value: String,
+    val icon: ImageVector
 )
-
 
 @Composable
 private fun AchievementsRow(
     user: GitUser,
     repositories: List<GitRepository>
 ) {
+    // These are live values from GitHub, not threshold/dummy badges.
+    // The repository list is the same data loaded by the Profile screen.
+    val totalStars = repositories.sumOf { it.stargazersCount }
+    val totalForks = repositories.sumOf { it.forksCount }
+    val languageCount = repositories.mapNotNull { it.language }.distinct().size
+    val accountYear = user.createdAt.take(4).takeIf { it.length == 4 } ?: "—"
 
-    val totalStars =
-        repositories.sumOf {
-            it.stargazersCount
-        }
-
-    val languageCount =
-        repositories
-            .mapNotNull { it.language }
-            .distinct()
-            .size
-
-    val achievements =
-        listOf(
-
-            Achievement(
-                label = "10+ Repos",
-                icon = Icons.Filled.Description,
-                unlocked = user.publicRepos >= 10
-            ),
-
-            Achievement(
-                label = "50+ Repos",
-                icon = Icons.Filled.Description,
-                unlocked = user.publicRepos >= 50
-            ),
-
-            Achievement(
-                label = "100+ Followers",
-                icon = Icons.Filled.Groups,
-                unlocked = user.followers >= 100
-            ),
-
-            Achievement(
-                label = "100+ Stars",
-                icon = Icons.Filled.Star,
-                unlocked = totalStars >= 100
-            ),
-
-            Achievement(
-                label = "Polyglot",
-                icon = Icons.Filled.Palette,
-                unlocked = languageCount >= 3
-            ),
-
-            Achievement(
-                label = "Connected",
-                icon = Icons.Filled.Verified,
-                unlocked = true
-            )
-        )
+    val highlights = listOf(
+        GitHubHighlight("Public repos", user.publicRepos.toString(), Icons.Filled.Description),
+        GitHubHighlight("Followers", user.followers.toString(), Icons.Filled.Groups),
+        GitHubHighlight("Following", user.following.toString(), Icons.Filled.Groups),
+        GitHubHighlight("Stars", totalStars.toString(), Icons.Filled.Star),
+        GitHubHighlight("Forks", totalForks.toString(), Icons.Filled.CallSplit),
+        GitHubHighlight("Languages", languageCount.toString(), Icons.Filled.Palette),
+        GitHubHighlight("Member since", accountYear, Icons.Filled.Verified)
+    )
 
     LazyRow(
-        horizontalArrangement =
-            Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-
         items(
-            items = achievements,
+            items = highlights,
             key = { it.label }
-        ) { achievement ->
-
-            val tint =
-                if (achievement.unlocked) {
-                    GlassBlobTeal
-                } else {
-                    MaterialTheme.colorScheme
-                        .onSurfaceVariant
-                }
-
+        ) { highlight ->
             GlassCard(
-                modifier = Modifier.width(108.dp),
+                modifier = Modifier.width(112.dp),
                 padding = 14.dp
             ) {
-
-                Column(
-                    horizontalAlignment =
-                        Alignment.CenterHorizontally
-                ) {
-
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
-                        imageVector =
-                            achievement.icon,
+                        imageVector = highlight.icon,
                         contentDescription = null,
-                        tint = tint,
-                        modifier =
-                            Modifier.size(26.dp)
+                        tint = GlassBlobTeal,
+                        modifier = Modifier.size(24.dp)
                     )
-
                     Text(
-                        text = achievement.label,
-                        style =
-                            MaterialTheme.typography.labelSmall,
+                        text = highlight.value,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(top = 5.dp)
+                    )
+                    Text(
+                        text = highlight.label,
+                        style = MaterialTheme.typography.labelSmall,
                         textAlign = TextAlign.Center,
-                        color =
-                            if (achievement.unlocked) {
-                                MaterialTheme.colorScheme
-                                    .onSurface
-                            } else {
-                                MaterialTheme.colorScheme
-                                    .onSurfaceVariant
-                            },
-                        modifier =
-                            Modifier.padding(top = 6.dp)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 2.dp)
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun DeveloperCard() {
+    val context = LocalContext.current
+
+    fun open(url: String) {
+        runCatching {
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            )
+        }
+    }
+
+    GlassCard(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Filled.AccountCircle,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(28.dp)
+            )
+            Column(
+                modifier = Modifier
+                    .padding(start = 10.dp)
+                    .weight(1f)
+            ) {
+                Text(
+                    text = "Sandeep Bedia",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "GitWay Developer",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            GlassSecondaryButton(
+                text = "GitHub",
+                onClick = { open("https://github.com/Sandeepbedia") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.OpenInNew,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                },
+                modifier = Modifier.weight(1f)
+            )
+            GlassSecondaryButton(
+                text = "Telegram",
+                onClick = { open("https://t.me/Infinity_384") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.OpenInNew,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                },
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }

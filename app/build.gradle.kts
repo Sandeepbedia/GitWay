@@ -27,8 +27,8 @@ android {
         applicationId = "com.io.git.way"
         minSdk = 26
         targetSdk = 36
-        versionCode = 215
-        versionName = "2.0.5"
+        versionCode = 216
+        versionName = "2.0.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

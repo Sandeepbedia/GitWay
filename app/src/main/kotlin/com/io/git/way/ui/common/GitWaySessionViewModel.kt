@@ -18,6 +18,7 @@ package com.io.git.way.ui.common
 
 import android.content.Context
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -159,6 +160,8 @@ data class GitWaySessionState(
     val pendingFileBytes: Map<String, ByteArray> = emptyMap(),
     val isCreatingEntry: Boolean = false,
     val createEntryError: String? = null,
+    val isUploadingFiles: Boolean = false,
+    val uploadFilesError: String? = null,
     val isDeletingEntry: Boolean = false,
     val deleteEntryError: String? = null,
 
@@ -1121,6 +1124,95 @@ class GitWaySessionViewModel(
         state = state.copy(createEntryError = null)
     }
 
+    /**
+     * Uploads device files picked via SAF into [GitWaySessionState.browserPath] (the
+     * folder the user is browsing, or root) as one atomic commit — the same tested
+     * [GitHubRepository.syncChanges] pipeline used by createFile/createFolder. A file
+     * that already exists at the target path becomes a MODIFIED change (overwrite),
+     * everything else lands as ADDED. The user explicitly picked these files, so the
+     * Smart Upload Protection blocking pass is deliberately not applied here.
+     */
+    fun uploadPickedFiles(context: Context, uris: List<Uri>) {
+        val repo = state.selectedRepo ?: return
+        if (uris.isEmpty() || state.isUploadingFiles) return
+
+        state = state.copy(isUploadingFiles = true, uploadFilesError = null)
+        viewModelScope.launch {
+            val picked = withContext(Dispatchers.IO) {
+                uris.mapNotNull { uri -> readPickedFile(context, uri) }
+            }
+            if (picked.isEmpty()) {
+                state = state.copy(
+                    isUploadingFiles = false,
+                    uploadFilesError = "Couldn't read the selected file(s)."
+                )
+                return@launch
+            }
+
+            val targetDir = state.browserPath
+            val bytesByPath = picked.associate { (name, bytes) ->
+                val fullPath = if (targetDir.isEmpty()) name else "$targetDir/$name"
+                fullPath to bytes
+            }
+            val changes = bytesByPath.map { (fullPath, _) ->
+                FileChange(
+                    fileName = fullPath.substringAfterLast('/'),
+                    filePath = fullPath,
+                    type = if (state.remoteTreeCache.containsKey(fullPath)) {
+                        ChangeType.MODIFIED
+                    } else {
+                        ChangeType.ADDED
+                    }
+                )
+            }
+
+            gitHubRepository.syncChanges(
+                repo = repo,
+                changes = changes,
+                commitMessage = "Git Way: upload ${changes.size} file(s) to ${targetDir.ifEmpty { "root" }}",
+                targetBranch = state.selectedBranch,
+                readFileBytes = { path -> bytesByPath[path] ?: ByteArray(0) },
+                onProgress = { _, _, _, _ -> }
+            ).onSuccess {
+                val updatedTree = state.remoteTreeCache + bytesByPath.keys.associateWith { "" }
+                val expanded = if (targetDir.isEmpty()) {
+                    state.expandedFolders
+                } else {
+                    state.expandedFolders + targetDir
+                }
+                state = state.copy(
+                    isUploadingFiles = false,
+                    remoteTreeCache = updatedTree,
+                    pendingFileBytes = state.pendingFileBytes + bytesByPath,
+                    expandedFolders = expanded,
+                    browserEntries = buildVisibleRows(updatedTree.keys, expanded)
+                )
+                showGitWayToast(context, "Uploaded ${changes.size} file(s)")
+            }.onFailure { throwable ->
+                state = state.copy(
+                    isUploadingFiles = false,
+                    uploadFilesError = throwable.message ?: "Upload failed."
+                )
+            }
+        }
+    }
+
+    fun clearUploadFilesError() {
+        state = state.copy(uploadFilesError = null)
+    }
+
+    /** Display name + bytes for one SAF-picked file; null when unreadable (permission
+     * revoked, cloud item not available offline, etc). */
+    private fun readPickedFile(context: Context, uri: Uri): Pair<String, ByteArray>? = runCatching {
+        val name = context.contentResolver
+            .query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+            ?: uri.lastPathSegment?.substringAfterLast('/')
+            ?: return null
+        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
+        name to bytes
+    }.getOrNull()
+
     /** Creates an empty text file inside [GitWaySessionState.browserPath] (the last-tapped
      * folder, or root) as a single, immediate commit — reuses the same tested
      * [GitHubRepository.syncChanges] pipeline (validation, retries, atomic tree/commit/ref,
@@ -1681,18 +1773,14 @@ class GitWaySessionViewModel(
             children.forEachIndexed { index, entry ->
                 val hasNextSibling = index < children.lastIndex
 
-                // The repository root has no visual parent guide. Including the root's
-                // sibling state here creates an extra full-height vertical line on the
-                // far left of every descendant (visible in deep paths such as
-                // app/src/main/kotlin/... and res/drawable/...).
-                //
-                // For depth > 0, keep the normal ancestor/sibling state so each real
-                // folder level still gets one continuous guide column.
-                val guideState = if (depth == 0) {
-                    ancestorsContinue
-                } else {
-                    ancestorsContinue + hasNextSibling
-                }
+                // Every level — including depth 0 — appends its own "has a next sibling"
+                // flag. This is what lets the guide column for a root-level folder (e.g.
+                // "app") keep running down through that folder's ENTIRE expanded subtree
+                // when "app" itself has more root-level siblings below it (gradle, scripts,
+                // ...) — matching how every deeper level already connects, instead of the
+                // line stopping right after the root row (previously depth 0 was excluded
+                // here, which is why the guide line touched app but then cut inside it).
+                val guideState = ancestorsContinue + hasNextSibling
 
                 rows += if (entry.isFolder) {
                     TreeRow(

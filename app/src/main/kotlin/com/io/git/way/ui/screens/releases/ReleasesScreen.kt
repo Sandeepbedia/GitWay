@@ -54,6 +54,7 @@ import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.SystemUpdateAlt
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -579,6 +580,16 @@ private fun LatestReleaseCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
+            if (release.apkAsset != null) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "APK update available",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
             Spacer(Modifier.height(12.dp))
 
             Row(
@@ -601,14 +612,14 @@ private fun LatestReleaseCard(
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Filled.Download,
-                            contentDescription = null,
+                            imageVector = Icons.Filled.SystemUpdateAlt,
+                            contentDescription = "Update APK",
                             modifier = Modifier.size(18.dp)
                         )
 
                         Spacer(Modifier.width(5.dp))
 
-                        Text("Install APK")
+                        Text("Update APK")
                     }
                 }
             }
@@ -886,6 +897,7 @@ private fun AssetsDialog(
     var uploadTarget by remember {
         mutableStateOf<Pair<String, ByteArray>?>(null)
     }
+    var apkName by remember { mutableStateOf("") }
 
     val launcher =
         rememberLauncherForActivityResult(
@@ -922,6 +934,7 @@ private fun AssetsDialog(
             }.getOrNull()
 
             if (bytes != null) {
+                apkName = name
                 uploadTarget = name to bytes
             } else {
                 Toast.makeText(
@@ -1031,6 +1044,23 @@ private fun AssetsDialog(
                     }
                 }
 
+                if (uploadTarget != null) {
+
+                    Spacer(Modifier.height(10.dp))
+
+                    OutlinedTextField(
+                        value = apkName,
+                        onValueChange = { value ->
+                            apkName = value.filter { it != '/' && it != '\\' }
+                        },
+                        label = { Text("APK name") },
+                        placeholder = { Text("Example: GitWay-v1.0.0.apk") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isUploading
+                    )
+                }
+
                 if (uploadError != null) {
 
                     Spacer(Modifier.height(10.dp))
@@ -1109,8 +1139,16 @@ private fun AssetsDialog(
 
         LaunchedEffect(target) {
 
+            val finalName = apkName.trim().let {
+                when {
+                    it.isBlank() -> target.first
+                    it.endsWith(".apk", ignoreCase = true) -> it
+                    else -> "$it.apk"
+                }
+            }
+
             onUploadApk(
-                target.first,
+                finalName,
                 target.second
             )
 
