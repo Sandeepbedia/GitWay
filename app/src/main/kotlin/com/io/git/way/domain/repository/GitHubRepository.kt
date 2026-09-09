@@ -36,9 +36,17 @@ import com.io.git.way.domain.model.RemoteTreeEntry
 import com.io.git.way.domain.model.TokenValidationResult
 import com.io.git.way.domain.model.UploadPhase
 import com.io.git.way.domain.model.WorkflowRun
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 
 /** Abstraction over GitHub authentication + repository access. */
 interface GitHubRepository {
+
+    /** Emits immediately whenever the active GitHub account changes. */
+    val activeAccountFlow: StateFlow<String?>
+
+    /** Emits after a successful remote write so list/browser screens can refresh without restart. */
+    val remoteDataChanged: SharedFlow<Unit>
 
     /**
      * Validates [token] against the GitHub API and, on success, persists it securely.

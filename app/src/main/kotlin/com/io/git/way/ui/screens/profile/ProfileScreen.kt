@@ -83,6 +83,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -165,6 +166,25 @@ fun ProfileScreen(
     val activity = context as FragmentActivity
     val scope = rememberCoroutineScope()
 
+    val tokenManager = remember {
+        (context.applicationContext as GitWayApp).container.tokenManager
+    }
+
+    var accountUsernames by remember {
+        mutableStateOf(tokenManager.getAccountUsernames())
+    }
+    var activeAccount by remember {
+        mutableStateOf(tokenManager.getActiveAccount())
+    }
+    var accountAvatars by remember {
+        mutableStateOf<Map<String, String>>(emptyMap())
+    }
+    var showAddAccount by remember { mutableStateOf(false) }
+    var accountTokenInput by remember { mutableStateOf("") }
+    var accountError by remember { mutableStateOf<String?>(null) }
+    var addingAccount by remember { mutableStateOf(false) }
+    var accountToRemove by remember { mutableStateOf<String?>(null) }
+
     val biometricLockManager = remember {
         (context.applicationContext as GitWayApp)
             .container
@@ -191,6 +211,19 @@ fun ProfileScreen(
 
     LaunchedEffect(Unit) {
         sessionViewModel.loadOverviewData()
+    }
+
+    LaunchedEffect(state.currentUser?.username) {
+        state.currentUser?.username?.let { username ->
+            tokenManager.getToken()?.let { token ->
+                tokenManager.saveAccount(username, token, state.currentUser?.avatarUrl)
+            }
+        }
+        accountUsernames = tokenManager.getAccountUsernames()
+        activeAccount = tokenManager.getActiveAccount()
+        accountAvatars = accountUsernames.mapNotNull { username ->
+            tokenManager.getAccountAvatar(username)?.let { username to it }
+        }.toMap()
     }
 
     val isRefreshing =
@@ -276,6 +309,39 @@ fun ProfileScreen(
                                 repositories = state.overviewRepositories
                             )
                         }
+                    }
+
+                    item {
+                        SectionLabel("Accounts")
+                    }
+
+                    item {
+                        AccountSwitcherCard(
+                            accounts = accountUsernames,
+                            accountAvatars = accountAvatars,
+                            activeAccount = activeAccount
+                                ?: state.currentUser?.username,
+                            onAddAccount = {
+                                accountTokenInput = ""
+                                accountError = null
+                                showAddAccount = true
+                            },
+                            onSwitchAccount = { username ->
+                                if (username != activeAccount) {
+                                    if (tokenManager.switchAccount(username)) {
+                                        accountUsernames = tokenManager.getAccountUsernames()
+                                        activeAccount = username
+                                        accountAvatars = accountUsernames.mapNotNull { name ->
+                                            tokenManager.getAccountAvatar(name)?.let { name to it }
+                                        }.toMap()
+                                        sessionViewModel.switchAccount(username)
+                                    }
+                                }
+                            },
+                            onRemoveAccount = { username ->
+                                accountToRemove = username
+                            }
+                        )
                     }
 
                     item {
@@ -430,6 +496,130 @@ fun ProfileScreen(
         )
     }
 
+    if (showAddAccount) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!addingAccount) showAddAccount = false
+            },
+            title = { Text("Add GitHub account") },
+            text = {
+                Column {
+                    Text(
+                        "Paste another Personal Access Token. The current account will stay saved.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    OutlinedTextField(
+                        value = accountTokenInput,
+                        onValueChange = {
+                            accountTokenInput = it
+                            accountError = null
+                        },
+                        label = { Text("Personal Access Token") },
+                        singleLine = true,
+                        enabled = !addingAccount,
+                        isError = accountError != null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp)
+                    )
+                    accountError?.let {
+                        Text(
+                            it,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(top = 6.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = accountTokenInput.isNotBlank() && !addingAccount,
+                    onClick = {
+                        addingAccount = true
+                        accountError = null
+                        scope.launch {
+                            val result = (context.applicationContext as GitWayApp)
+                                .container
+                                .gitHubRepository
+                                .validateTokenAndFetchUser(accountTokenInput.trim())
+
+                            result.onSuccess {
+                                accountUsernames = tokenManager.getAccountUsernames()
+                                accountTokenInput = ""
+                                addingAccount = false
+                                showAddAccount = false
+                                tokenManager.saveAccount(it.user.username, tokenManager.getToken().orEmpty(), it.user.avatarUrl)
+                                activeAccount = it.user.username
+                                accountUsernames = tokenManager.getAccountUsernames()
+                                accountAvatars = accountUsernames.mapNotNull { name ->
+                                    tokenManager.getAccountAvatar(name)?.let { name to it }
+                                }.toMap()
+                                sessionViewModel.switchAccount(it.user.username)
+                            }.onFailure {
+                                addingAccount = false
+                                accountError = it.message ?: "Couldn't validate this token."
+                            }
+                        }
+                    }
+                ) {
+                    Text(if (addingAccount) "Checking…" else "Add account")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !addingAccount,
+                    onClick = { showAddAccount = false }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    accountToRemove?.let { username ->
+        AlertDialog(
+            onDismissRequest = { accountToRemove = null },
+            title = { Text("Remove @$username?") },
+            text = {
+                Text(
+                    "The encrypted token for this account will be removed from this device. " +
+                        "Your GitHub account itself is not affected."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val wasActive = tokenManager.getActiveAccount() == username
+                        tokenManager.removeAccount(username)
+                        accountUsernames = tokenManager.getAccountUsernames()
+                        activeAccount = tokenManager.getActiveAccount()
+                        accountAvatars = accountUsernames.mapNotNull { name ->
+                            tokenManager.getAccountAvatar(name)?.let { name to it }
+                        }.toMap()
+                        accountToRemove = null
+                        if (wasActive) {
+                            val next = tokenManager.getActiveAccount()
+                            if (next != null) {
+                                sessionViewModel.switchAccount(next)
+                            } else {
+                                sessionViewModel.disconnect()
+                                onDisconnect()
+                            }
+                        }
+                    }
+                ) {
+                    Text("Remove", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { accountToRemove = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     if (showCreateRepoDialog) {
 
         CreateRepositoryDialog(
@@ -511,6 +701,106 @@ fun ProfileScreen(
     }
 }
 
+
+@Composable
+private fun AccountSwitcherCard(
+    accounts: List<String>,
+    accountAvatars: Map<String, String>,
+    activeAccount: String?,
+    onAddAccount: () -> Unit,
+    onSwitchAccount: (String) -> Unit,
+    onRemoveAccount: (String) -> Unit
+) {
+    GlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        padding = 10.dp
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (accounts.isEmpty()) {
+                Text(
+                    "No saved accounts yet.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                accounts.forEach { username ->
+                    val active = username == activeAccount
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable(enabled = !active) { onSwitchAccount(username) }
+                            .padding(horizontal = 10.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val avatarUrl = accountAvatars[username]
+                        if (!avatarUrl.isNullOrBlank()) {
+                            AsyncImage(
+                                model = avatarUrl,
+                                contentDescription = "@$username avatar",
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                            )
+                        } else {
+                            Icon(
+                                Icons.Filled.AccountCircle,
+                                contentDescription = null,
+                                tint = if (active) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(34.dp)
+                            )
+                        }
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 10.dp)
+                        ) {
+                            Text(
+                                "@$username",
+                                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal
+                            )
+                            Text(
+                                if (active) "Active account" else "Tap to switch",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (active) {
+                            Icon(
+                                Icons.Filled.Verified,
+                                contentDescription = "Active",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        if (accounts.size > 1) {
+                            IconButton(onClick = { onRemoveAccount(username) }) {
+                                Icon(
+                                    Icons.Filled.Logout,
+                                    contentDescription = "Remove account"
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            GlassSecondaryButton(
+                text = "Add another account",
+                onClick = onAddAccount,
+                leadingIcon = {
+                    Icon(
+                        Icons.Filled.Add,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                },
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
+            )
+        }
+    }
+}
 
 @Composable
 private fun SectionLabel(text: String) {

@@ -66,6 +66,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.IOException
@@ -367,6 +368,27 @@ class GitWaySessionViewModel(
     var state by mutableStateOf(GitWaySessionState())
         private set
 
+    init {
+        // Account changes invalidate every account-scoped object held by this
+        // activity-scoped ViewModel. No Activity restart is needed.
+        viewModelScope.launch {
+            gitHubRepository.activeAccountFlow.collect { account ->
+                if (account != null) {
+                    state = GitWaySessionState()
+                    loadOverviewData()
+                }
+            }
+        }
+        // Remote writes (especially project uploads) invalidate the in-memory
+        // repository/tree snapshots immediately.
+        viewModelScope.launch {
+            gitHubRepository.remoteDataChanged.collect {
+                state.selectedRepo?.let { loadBrowserRoot() }
+                refreshOverviewData()
+            }
+        }
+    }
+
     fun selectRepository(repo: GitRepository) {
         // Full reset except the account-wide Overview data (user/repos/rate-limit) —
         // that's independent of which repo is selected and shouldn't need re-fetching
@@ -418,6 +440,14 @@ class GitWaySessionViewModel(
     /** Clears the saved token (Profile "Danger Zone > Disconnect") — the caller is
      * responsible for navigating back to the Token screen afterwards, same pattern as
      * [com.io.git.way.ui.screens.repos.RepositoryListViewModel.disconnect]. */
+    fun switchAccount(username: String) {
+        // The Profile screen performs the encrypted account switch before calling this
+        // method. Reset all account-scoped UI/cache state so no data from the previous
+        // GitHub identity remains visible while the new account is loading.
+        state = GitWaySessionState()
+        loadOverviewData()
+    }
+
     fun disconnect() {
         gitHubRepository.clearToken()
         state = GitWaySessionState()
@@ -793,6 +823,10 @@ class GitWaySessionViewModel(
                         commitSha = sha,
                         commitMessageDraft = ""
                     )
+                    // GitHub now contains the new commit. Re-fetch the remote tree
+                    // immediately so the Explorer reflects it without an app restart.
+                    loadBrowserRoot()
+                    refreshOverviewData()
                 }.onFailure { throwable ->
                     // Deliberately NOT resetting uploadPhase to IDLE here: the phase it
                     // was in when this failed (e.g. "Updating branch") is exactly what

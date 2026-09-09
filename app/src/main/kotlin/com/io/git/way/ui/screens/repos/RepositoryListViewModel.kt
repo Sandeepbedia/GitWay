@@ -24,6 +24,7 @@ import androidx.lifecycle.viewModelScope
 import com.io.git.way.domain.model.GitRepository
 import com.io.git.way.domain.repository.GitHubRepository
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collect
 
 data class RepoListUiState(
     val isLoading: Boolean = false,
@@ -64,6 +65,21 @@ class RepositoryListViewModel(
 
     init {
         loadRepositories()
+        // Keep the repository list bound to the currently selected GitHub account.
+        viewModelScope.launch {
+            gitHubRepository.activeAccountFlow.collect { account ->
+                if (account != null) {
+                    uiState = RepoListUiState()
+                    loadRepositories()
+                }
+            }
+        }
+        // A successful upload/create from another screen invalidates this list immediately.
+        viewModelScope.launch {
+            gitHubRepository.remoteDataChanged.collect {
+                loadRepositories()
+            }
+        }
     }
 
     fun loadRepositories() {

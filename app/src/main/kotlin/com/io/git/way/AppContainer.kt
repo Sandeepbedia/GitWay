@@ -28,7 +28,7 @@ import com.io.git.way.domain.repository.GitHubRepository
  * Retrofit -> GitHubRepositoryImpl once per process and exposes the interface only.
  */
 class AppContainer(context: Context) {
-    private val tokenManager = TokenManager(context)
+    val tokenManager = TokenManager(context)
 
     // Deferred: building the OkHttpClient + Retrofit involves real work (TLS setup,
     // interceptor construction) that has no reason to happen synchronously during

@@ -137,45 +137,63 @@ private fun GitWayRoot() {
                 .onSuccess { update -> availableUpdate = update }
         }
 
-        if (!isUnlocked) {
-            BiometricLockScreen(onUnlocked = { isUnlocked = true })
-        } else {
-            Box {
-                GitWayNavGraph(
-                    navController = navController,
-                    themeMode = themeMode,
-                    onThemeModeChange = { themeMode = it }
-                )
+        // GitWayNavGraph now stays mounted (in this same Box) at all times, whether locked
+        // or not — the lock screen is overlaid on top of it rather than swapping it out.
+        //
+        // Bug fix: any screen inside the NavGraph that launches a system picker/share sheet
+        // via rememberLauncherForActivityResult — e.g. FolderSelectionScreen's SAF
+        // ActivityResultContracts.OpenDocumentTree() folder picker — has to background this
+        // activity to show it, which fires ON_STOP and (with fingerprint lock on) flips
+        // isUnlocked to false. When that used to swap BiometricLockScreen in *instead of*
+        // GitWayNavGraph, it tore the NavGraph (and FolderSelectionScreen's launcher) out of
+        // composition; rememberLauncherForActivityResult unregisters its callback on dispose,
+        // so by the time the folder picker returned its result, nothing was left registered
+        // to receive it — the pick silently did nothing and no scan ever started. Keeping the
+        // NavGraph composed underneath the whole time means that launcher (and its callback,
+        // and whatever state it updates) survives the lock/unlock cycle, so the folder pick
+        // — and the scan it kicks off — completes normally even if the screen got locked and
+        // unlocked again in between.
+        Box {
+            GitWayNavGraph(
+                navController = navController,
+                themeMode = themeMode,
+                onThemeModeChange = { themeMode = it }
+            )
 
-                availableUpdate?.let { update ->
-                    UpdateAvailableDialog(
-                        update = update,
-                        isDownloading = isDownloadingUpdate,
-                        downloadError = updateError,
-                        onUpdate = {
-                            val target = update.apkDownloadUrl
-                            if (target != null) {
-                                // Direct in-app download + install via the package installer.
-                                isDownloadingUpdate = true
-                                updateError = null
-                                scope.launch {
-                                    runCatching { ApkInstaller.downloadBytes(target) }
-                                        .onSuccess { bytes ->
-                                            val file = ApkInstaller.writeToCache(context, "gitway-update.apk", bytes)
-                                            ApkInstaller.installApk(context, file)?.let { updateError = it }
-                                            if (updateError == null) availableUpdate = null
-                                        }
-                                        .onFailure { updateError = it.message ?: "Update download failed." }
-                                    isDownloadingUpdate = false
-                                }
-                            } else {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(update.releasePageUrl)))
-                                availableUpdate = null
+            availableUpdate?.let { update ->
+                UpdateAvailableDialog(
+                    update = update,
+                    isDownloading = isDownloadingUpdate,
+                    downloadError = updateError,
+                    onUpdate = {
+                        val target = update.apkDownloadUrl
+                        if (target != null) {
+                            // Direct in-app download + install via the package installer.
+                            isDownloadingUpdate = true
+                            updateError = null
+                            scope.launch {
+                                runCatching { ApkInstaller.downloadBytes(target) }
+                                    .onSuccess { bytes ->
+                                        val file = ApkInstaller.writeToCache(context, "gitway-update.apk", bytes)
+                                        ApkInstaller.installApk(context, file)?.let { updateError = it }
+                                        if (updateError == null) availableUpdate = null
+                                    }
+                                    .onFailure { updateError = it.message ?: "Update download failed." }
+                                isDownloadingUpdate = false
                             }
-                        },
-                        onDismiss = { availableUpdate = null }
-                    )
-                }
+                        } else {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(update.releasePageUrl)))
+                            availableUpdate = null
+                        }
+                    },
+                    onDismiss = { availableUpdate = null }
+                )
+            }
+
+            // Drawn last -> on top -> fully covers the NavGraph underneath (see
+            // BiometricLockScreen's own pointerInput for why touches can't leak through too).
+            if (!isUnlocked) {
+                BiometricLockScreen(onUnlocked = { isUnlocked = true })
             }
         }
     }

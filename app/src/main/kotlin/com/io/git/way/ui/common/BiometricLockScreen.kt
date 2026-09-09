@@ -16,6 +16,7 @@
  */
 package com.io.git.way.ui.common
 
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,7 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,9 +36,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.io.git.way.ui.theme.GlassBlobPurple
 import com.io.git.way.ui.theme.GlassPrimaryButton
 import com.io.git.way.ui.theme.LiquidGlassBackground
@@ -72,10 +77,52 @@ fun BiometricLockScreen(onUnlocked: () -> Unit) {
         }
     }
 
-    LaunchedEffect(Unit) { promptNow() }
+    // Bug fix: this screen is a single long-lived composable instance for as long as the
+    // app stays locked — MainActivity just flips isUnlocked back to false and recomposes
+    // the *same* BiometricLockScreen rather than leaving/re-entering composition. A
+    // LaunchedEffect(Unit) here only ever fires once for that instance's lifetime, so the
+    // old code only auto-prompted on the very first appearance.
+    //
+    // That first appearance is also the wrong moment on its own: MainActivity sets
+    // isUnlocked = false from an ON_STOP observer (screen turning off), which recomposes
+    // this screen and fires the effect *while the activity is stopped* — the system can't
+    // show a BiometricPrompt over a non-resumed activity, so that attempt silently does
+    // nothing (or errors), and nothing was left to retry it once the screen came back on.
+    //
+    // Listening for ON_RESUME instead covers both cases correctly: it fires once when the
+    // activity first becomes resumed after cold start/re-lock (same moment as before, but
+    // now guaranteed to be foregrounded), and it fires again every subsequent time the
+    // screen is turned back on while this lock screen is still showing.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) promptNow()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     LiquidGlassBackground {
-        Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                // MainActivity now overlays this screen on top of the still-mounted app
+                // content instead of swapping it in, so — unlike a plain Box with no click
+                // handling, which lets touches fall through to whatever's underneath at the
+                // same position — every pointer event needs to be consumed here explicitly,
+                // or a tap on an "empty" part of this lock screen could still reach and
+                // trigger something in the (invisible, but still interactive) screen below.
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        do {
+                            val event = awaitPointerEvent()
+                            event.changes.forEach { it.consume() }
+                        } while (event.changes.any { it.pressed })
+                    }
+                }
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(
                     Icons.Filled.Fingerprint,

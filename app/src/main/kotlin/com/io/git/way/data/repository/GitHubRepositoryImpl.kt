@@ -67,6 +67,9 @@ import com.io.git.way.domain.model.UploadPhase
 import com.io.git.way.domain.model.WorkflowRun
 import com.io.git.way.domain.repository.GitHubRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -105,10 +108,25 @@ class GitHubRepositoryImpl(
     private val apiService: GitHubApiService
 ) : GitHubRepository {
 
+    override val activeAccountFlow: StateFlow<String?> = tokenManager.activeAccountFlow
+    private val _remoteDataChanged = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    override val remoteDataChanged: SharedFlow<Unit> = _remoteDataChanged
+
+    private fun notifyRemoteDataChanged() {
+        _remoteDataChanged.tryEmit(Unit)
+    }
+
     private companion object {
         const val TAG = "GitWayUpload"
-        const val MAX_CONCURRENT_BLOBS = 6
+        // Lowered from 6: firing that many concurrent createBlob writes at once is exactly
+        // what trips GitHub's *secondary* rate limit (its abuse-detection layer, separate
+        // from the primary quota) on large uploads — the more files, the more likely a
+        // batch of 6 lands close enough together to get flagged mid-upload.
+        const val MAX_CONCURRENT_BLOBS = 3
         const val MAX_TRANSIENT_RETRIES = 3
+        // Secondary rate limits are meant to be waited out, not failed immediately — this
+        // gets its own (higher) retry budget with real delays, see githubCallWithRetry.
+        const val MAX_SECONDARY_RATE_LIMIT_RETRIES = 6
         const val MAX_RACE_RETRIES = 4
         // Post-push verification (§13): a handful of quick retries to absorb a brief
         // read-after-write lag on GitHub's side, not a real mismatch.
@@ -141,28 +159,32 @@ class GitHubRepositoryImpl(
 
     override suspend fun validateTokenAndFetchUser(token: String): Result<TokenValidationResult> =
         withContext(Dispatchers.IO) {
-            runCatching {
+            val previousToken = tokenManager.getToken()
+            try {
+                // Temporarily expose the candidate token so the existing Retrofit client
+                // validates it. On success it becomes a named encrypted account.
                 tokenManager.saveToken(token)
-                val stored = tokenManager.getToken()
-                Log.d("TokenValidation", "pasted len=${token.length} prefix=${token.take(6)} | stored len=${stored?.length} prefix=${stored?.take(6)}")
                 val response = apiService.getAuthenticatedUser()
-                Log.d("TokenValidation", "code=${response.code()}")
                 if (!response.isSuccessful) throw HttpException(response)
-                TokenValidationResult(
-                    user = response.body()!!.toDomain(),
-                    // Classic PATs report their scopes in this header; fine-grained
-                    // tokens (and scoped-down classic tokens) send an empty header, in
-                    // which case the UI shows a "couldn't verify" warning instead.
-                    grantedScopes = response.headers()["X-OAuth-Scopes"]
-                        ?.split(",")
-                        ?.map { it.trim() }
-                        ?.filter { it.isNotBlank() }
-                        ?.toSet()
-                        ?: emptySet()
+
+                val user = response.body()!!.toDomain()
+                tokenManager.saveAccount(user.username, token)
+
+                Result.success(
+                    TokenValidationResult(
+                        user = user,
+                        grantedScopes = response.headers()["X-OAuth-Scopes"]
+                            ?.split(",")
+                            ?.map { it.trim() }
+                            ?.filter { it.isNotBlank() }
+                            ?.toSet()
+                            ?: emptySet()
+                    )
                 )
-            }.onFailure {
-                Log.d("TokenValidation", "failure=${it::class.simpleName}: ${it.message}")
-                tokenManager.clearToken()
+            } catch (t: Throwable) {
+                // Adding a second account must never log the user out if validation fails.
+                tokenManager.restoreToken(previousToken)
+                throw t
             }
         }
 
@@ -497,6 +519,7 @@ class GitHubRepositoryImpl(
                 } else {
                     apiService.createRef(owner, repoName, CreateRefRequest(ref = "refs/heads/$branch", sha = newCommit.sha))
                 }
+                notifyRemoteDataChanged()
                 return newCommit.sha
             } catch (e: HttpException) {
                 // errorBody() can only be read once, so capture it up front and reuse it
@@ -539,33 +562,60 @@ class GitHubRepositoryImpl(
      */
     private suspend fun <T> githubCallWithRetry(block: suspend () -> T): T {
         var lastError: Throwable? = null
-        repeat(MAX_TRANSIENT_RETRIES) { attempt ->
+        var transientAttempt = 0
+        var rateLimitAttempt = 0
+        repeat(MAX_TRANSIENT_RETRIES + MAX_SECONDARY_RATE_LIMIT_RETRIES) {
             try {
                 return block()
             } catch (e: HttpException) {
-                if (e.code() == 403) throw IOException(e.toFriendlyMessage(), e)
+                if (e.code() == 403) {
+                    // A 403 here is almost always GitHub's *secondary* rate limit (abuse
+                    // detection triggered by many concurrent/rapid write requests — exactly
+                    // what a big project upload does), not the primary quota exhaustion
+                    // handled below in toFriendlyMessage. GitHub asks for that one to be
+                    // waited out and retried, not failed immediately — it flags this with a
+                    // Retry-After header and/or "secondary rate limit"/"abuse" text in the
+                    // body, unlike a real permissions 403 which has neither.
+                    val body = runCatching { e.response()?.errorBody()?.string() }.getOrNull()
+                    val retryAfterSeconds = e.response()?.headers()?.get("Retry-After")?.toLongOrNull()
+                    val isSecondaryRateLimit = retryAfterSeconds != null ||
+                        body?.contains("secondary rate limit", ignoreCase = true) == true ||
+                        body?.contains("abuse detection", ignoreCase = true) == true
+                    if (isSecondaryRateLimit && rateLimitAttempt < MAX_SECONDARY_RATE_LIMIT_RETRIES) {
+                        rateLimitAttempt++
+                        lastError = e
+                        val waitMs = (retryAfterSeconds ?: (3L * rateLimitAttempt)) * 1000
+                        Log.w(TAG, "GitHub secondary rate limit hit, waiting ${waitMs}ms (attempt=$rateLimitAttempt)")
+                        delay(waitMs)
+                        return@repeat
+                    }
+                    throw IOException(e.toFriendlyMessage(body), e)
+                }
                 val transient = e.code() in intArrayOf(500, 502, 503, 504)
-                if (transient && attempt < MAX_TRANSIENT_RETRIES - 1) {
+                if (transient && transientAttempt < MAX_TRANSIENT_RETRIES - 1) {
+                    transientAttempt++
                     lastError = e
-                    Log.w(TAG, "Transient HTTP ${e.code()}, retrying (attempt=$attempt)")
-                    delay(400L * (attempt + 1))
+                    Log.w(TAG, "Transient HTTP ${e.code()}, retrying (attempt=$transientAttempt)")
+                    delay(400L * transientAttempt)
                     return@repeat
                 }
-                // 401 / 403 / 404 / 422 (and any other non-retryable code) surface immediately.
+                // 401 / 404 / 422 (and any other non-retryable code) surface immediately.
                 throw IOException(e.toFriendlyMessage(), e)
             } catch (e: SocketTimeoutException) {
                 lastError = e
-                if (attempt < MAX_TRANSIENT_RETRIES - 1) {
-                    Log.w(TAG, "Socket timeout, retrying (attempt=$attempt)")
-                    delay(400L * (attempt + 1))
+                if (transientAttempt < MAX_TRANSIENT_RETRIES - 1) {
+                    transientAttempt++
+                    Log.w(TAG, "Socket timeout, retrying (attempt=$transientAttempt)")
+                    delay(400L * transientAttempt)
                     return@repeat
                 }
                 throw IOException("Request timed out after $MAX_TRANSIENT_RETRIES attempts. Check your connection and try again.", e)
             } catch (e: IOException) {
                 lastError = e
-                if (attempt < MAX_TRANSIENT_RETRIES - 1) {
-                    Log.w(TAG, "Network error, retrying (attempt=$attempt): ${e.message}")
-                    delay(400L * (attempt + 1))
+                if (transientAttempt < MAX_TRANSIENT_RETRIES - 1) {
+                    transientAttempt++
+                    Log.w(TAG, "Network error, retrying (attempt=$transientAttempt): ${e.message}")
+                    delay(400L * transientAttempt)
                     return@repeat
                 }
                 throw IOException("Network error after $MAX_TRANSIENT_RETRIES attempts: ${e.message}", e)
@@ -609,6 +659,17 @@ class GitHubRepositoryImpl(
                     "need this extra permission. Generate a new token with the \"workflow\" scope " +
                     "checked (classic tokens: check the top-level \"workflow\" checkbox; fine-grained " +
                     "tokens: grant \"Workflows\" read-and-write access), then reconnect on the Token screen."
+            }
+
+            val retryAfterSeconds = headers?.get("Retry-After")?.toLongOrNull()
+            val isSecondaryRateLimit = retryAfterSeconds != null ||
+                body403?.contains("secondary rate limit", ignoreCase = true) == true ||
+                body403?.contains("abuse detection", ignoreCase = true) == true
+            if (isSecondaryRateLimit) {
+                return "GitHub temporarily blocked this upload for sending too many requests too quickly " +
+                    "(its secondary rate limit) — this is common on large projects with hundreds of files. " +
+                    "Wait a few minutes, then tap Retry upload; it'll pick up from a clean state rather than " +
+                    "duplicating what already went through."
             }
 
             return "GitHub request forbidden (403). Check the token's repo permissions."
@@ -751,7 +812,7 @@ class GitHubRepositoryImpl(
                         apiService.createRepository(
                             CreateRepoRequest(name = name, description = description.ifBlank { null }, isPrivate = isPrivate, autoInit = true)
                         )
-                    }.toDomain()
+                    }.toDomain().also { notifyRemoteDataChanged() }
                 } catch (e: HttpException) {
                     val friendly = if (e.code() == 422) {
                         "A repository named \"$name\" already exists on this account."

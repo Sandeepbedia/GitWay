@@ -7,12 +7,25 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-// Shared release keystore — NOT stored in this project. The JKS and passwords
-// live in the shared keystore folder (e.g. /storage/emulated/0/AndroidCSProjects/keystore).
-// If that folder isn't reachable the release build still compiles (unsigned),
-// so R8/shrink work is never blocked by a missing key.
-val sharedKeystoreDir = System.getenv("AB_KEYSTORE_DIR")
-    ?: "/storage/emulated/0/AndroidCSProjects/keystore"
+// Shared release keystore — NOT stored in this project. JKS + passwords live in shared folder.
+// Supports both `keystore` and `1keystore` names across device (/storage/emulated/0/...) and container (/root/storage/...) layouts.
+// Override via env: AB_KEYSTORE_DIR=/path/to/keystore
+// If no folder is reachable the release build still compiles (unsigned) so R8/shrink is never blocked.
+val sharedKeystoreDir = run {
+    val envDir = System.getenv("AB_KEYSTORE_DIR")
+    if (!envDir.isNullOrBlank() && File("$envDir/config.properties").exists()) return@run envDir
+    if (!envDir.isNullOrBlank() && File(envDir).exists()) return@run envDir
+    val candidates = listOf(
+        "/storage/emulated/0/AndroidCSProjects/keystore",
+        "/storage/emulated/0/AndroidCSProjects/1keystore",
+        "/root/storage/AndroStudioProjects/1keystore",
+        "/root/storage/AndroStudioProjects/keystore"
+    )
+    candidates.firstOrNull { File("$it/config.properties").exists() }
+        ?: candidates.firstOrNull { File(it).exists() }
+        ?: envDir?.takeIf { it.isNotBlank() }
+        ?: "/storage/emulated/0/AndroidCSProjects/keystore"
+}
 val signingProps = Properties().apply {
     File("$sharedKeystoreDir/config.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
 }
@@ -27,8 +40,8 @@ android {
         applicationId = "com.io.git.way"
         minSdk = 26
         targetSdk = 36
-        versionCode = 216
-        versionName = "2.0.6"
+        versionCode = 217
+        versionName = "2.6.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
