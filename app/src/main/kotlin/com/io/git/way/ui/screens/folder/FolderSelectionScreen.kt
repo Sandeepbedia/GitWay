@@ -82,6 +82,7 @@ import com.io.git.way.domain.model.ScanIssue
 import com.io.git.way.domain.model.ScanReport
 import com.io.git.way.ui.common.FileTypeIcons
 import com.io.git.way.ui.common.GitWaySessionViewModel
+import com.io.git.way.ui.screens.browser.SvgRawIcon
 import com.io.git.way.ui.theme.DiffModifiedYellow
 import com.io.git.way.ui.theme.DiffRemovedRed
 import com.io.git.way.ui.theme.GlassCard
@@ -493,12 +494,21 @@ private fun MismatchFieldRow(label: String, localValue: String, remoteValue: Str
 private fun FileRow(file: LocalFile, onExclude: () -> Unit) {
     GlassCard(modifier = Modifier.fillMaxWidth(), padding = 12.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                FileTypeIcons.iconFor(file.displayName),
-                contentDescription = null,
-                tint = FileTypeIcons.colorFor(file.displayName),
-                modifier = Modifier.size(22.dp)
-            )
+            val iconRes = FileTypeIcons.iconResFor(file.displayName)
+            if (iconRes != null) {
+                SvgRawIcon(
+                    resId = iconRes,
+                    contentDescription = null,
+                    modifier = Modifier.size(22.dp)
+                )
+            } else {
+                Icon(
+                    FileTypeIcons.iconFor(file.displayName),
+                    contentDescription = null,
+                    tint = FileTypeIcons.colorFor(file.displayName),
+                    modifier = Modifier.size(22.dp)
+                )
+            }
             Column(modifier = Modifier.weight(1f).padding(start = 10.dp)) {
                 Text(
                     file.displayName,

@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 200 260"
+     width="200"
+     height="260">
+
+  <defs>
+    <clipPath id="clip-nav-ui">
+      <rect
+        x="30"
+        y="20"
+        width="140"
+        height="220"
+        rx="24"
+        ry="24"/>
+    </clipPath>
+  </defs>
+
+  <!-- Phone Background -->
+  <rect
+    x="30"
+    y="20"
+    width="140"
+    height="220"
+    rx="24"
+    fill="#29272E"/>
+
+  <g clip-path="url(#clip-nav-ui)">
+
+    <!-- Main Content -->
+    <rect
+      x="30"
+      y="20"
+      width="140"
+      height="220"
+      fill="#35313D"/>
+
+    <!-- Top Navigation Bar -->
+    <rect
+      x="30"
+      y="20"
+      width="140"
+      height="44"
+      fill="#43A047"/>
+
+    <!-- Back Button -->
+    <circle
+      cx="52"
+      cy="42"
+      r="14"
+      fill="#388E3C"/>
+
+    <!-- Back Arrow -->
+    <path
+      d="M57 42H47M51.5 36.5L46 42L51.5 47.5"
+      fill="none"
+      stroke="#FFFFFF"
+      stroke-width="2.2"
+      stroke-linecap="round"
+      stroke-linejoin="round"/>
+
+    <!-- More Menu -->
+    <circle
+      cx="151"
+      cy="36"
+      r="1.7"
+      fill="#FFFFFF"/>
+
+    <circle
+      cx="151"
+      cy="42"
+      r="1.7"
+      fill="#FFFFFF"/>
+
+    <circle
+      cx="151"
+      cy="48"
+      r="1.7"
+      fill="#FFFFFF"/>
+
+    <!-- Bottom Navigation -->
+    <rect
+      x="30"
+      y="214"
+      width="140"
+      height="26"
+      fill="#43A047"/>
+
+    <!-- Selected Navigation Item -->
+    <rect
+      x="77"
+      y="217"
+      width="46"
+      height="20"
+      rx="10"
+      fill="#B8F7D8"/>
+
+    <!-- Bottom Navigation Indicator -->
+    <circle
+      cx="100"
+      cy="227"
+      r="3"
+      fill="#2E7D32"/>
+
+  </g>
+
+  <!-- Phone Border -->
+  <rect
+    x="30.5"
+    y="20.5"
+    width="139"
+    height="219"
+    rx="23.5"
+    fill="none"
+    stroke="#49454F"
+    stroke-width="1"/>
+
+</svg>

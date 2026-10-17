@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 200 260"
+     width="200"
+     height="260">
+
+  <defs>
+    <clipPath id="clip-basic-views">
+      <rect
+        x="30"
+        y="20"
+        width="140"
+        height="220"
+        rx="24"
+        ry="24"/>
+    </clipPath>
+  </defs>
+
+  <!-- Phone Background -->
+  <rect
+    x="30"
+    y="20"
+    width="140"
+    height="220"
+    rx="24"
+    fill="#29272E"/>
+
+  <g clip-path="url(#clip-basic-views)">
+
+    <!-- Soft background -->
+    <rect
+      x="30"
+      y="20"
+      width="140"
+      height="220"
+      fill="#302D38"/>
+
+    <!-- Plus Button Shadow -->
+    <circle
+      cx="145"
+      cy="214"
+      r="13"
+      fill="#1F1D23"
+      opacity="0.35"/>
+
+    <!-- Plus Button -->
+    <circle
+      cx="145"
+      cy="212"
+      r="12"
+      fill="#B8F7D8"/>
+
+    <!-- Plus -->
+    <path
+      d="M145 206.5V217.5M139.5 212H150.5"
+      stroke="#365A4A"
+      stroke-width="2.2"
+      stroke-linecap="round"/>
+
+  </g>
+
+  <!-- Phone Border -->
+  <rect
+    x="30.5"
+    y="20.5"
+    width="139"
+    height="219"
+    rx="23.5"
+    fill="none"
+    stroke="#49454F"
+    stroke-width="1"/>
+
+</svg>

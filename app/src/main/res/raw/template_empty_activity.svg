@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 200 260"
+     width="200"
+     height="260">
+
+  <defs>
+    <clipPath id="clip-dev-ui">
+      <rect x="30" y="20"
+            width="140" height="220"
+            rx="24"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background -->
+  <rect
+    x="30"
+    y="20"
+    width="140"
+    height="220"
+    rx="24"
+    fill="#29272E"/>
+
+  <g clip-path="url(#clip-dev-ui)">
+
+    <!-- Background glow -->
+    <circle
+      cx="100"
+      cy="128"
+      r="62"
+      fill="#35313D"/>
+
+    <circle
+      cx="100"
+      cy="128"
+      r="48"
+      fill="#302D38"/>
+
+    <!-- Top Face -->
+    <polygon
+      points="100,82 142,106 100,130 58,106"
+      fill="#5CE1A3"/>
+
+    <!-- Left Face -->
+    <polygon
+      points="58,106 100,130 100,178 58,154"
+      fill="#405A78"/>
+
+    <!-- Right Face -->
+    <polygon
+      points="100,130 142,106 142,154 100,178"
+      fill="#5B8DEF"/>
+
+    <!-- Top Highlight -->
+    <polygon
+      points="100,92 124,106 100,120 76,106"
+      fill="#B8F7D8"/>
+
+    <!-- Inner Cube Top -->
+    <polygon
+      points="100,112 117,122 100,132 83,122"
+      fill="#FFFFFF"/>
+
+    <!-- Inner Cube Left -->
+    <polygon
+      points="83,122 100,132 100,151 83,141"
+      fill="#C7D0DA"/>
+
+    <!-- Inner Cube Right -->
+    <polygon
+      points="100,132 117,122 117,141 100,151"
+      fill="#9CC2FF"/>
+
+  </g>
+
+  <!-- Border -->
+  <rect
+    x="30.5"
+    y="20.5"
+    width="139"
+    height="219"
+    rx="23.5"
+    fill="none"
+    stroke="#49454F"
+    stroke-width="1"/>
+
+</svg>

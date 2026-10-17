@@ -1,5 +1,66 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-<path fill="#607D8B" d="M6 4H22L26 8V28H6Z"/>
-<path fill="#90A4AE" d="M22 4V8H26Z"/>
-<text x="9" y="21" font-family="Arial" font-size="9" font-weight="bold" fill="#fff">7Z</text>
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 200 200"
+     width="200"
+     height="200">
+
+  <defs>
+    <linearGradient id="zipFile"
+                    x1="0" y1="0"
+                    x2="1" y2="1">
+      <stop offset="0%" stop-color="#B69CFF"/>
+      <stop offset="100%" stop-color="#6750A4"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ZIP file -->
+  <path
+    d="M38 42
+       Q38 30 50 30
+       H112
+       L162 80
+       V158
+       Q162 170 150 170
+       H50
+       Q38 170 38 158
+       Z"
+    fill="url(#zipFile)"/>
+
+  <!-- Folded corner -->
+  <path
+    d="M112 30V80H162Z"
+    fill="#806CB5"/>
+
+  <!-- Zipper track -->
+  <rect
+    x="88"
+    y="52"
+    width="24"
+    height="98"
+    rx="6"
+    fill="#3D3453"/>
+
+  <!-- Zipper teeth -->
+  <rect x="93" y="59" width="14" height="7" rx="2" fill="#EADDFF"/>
+  <rect x="93" y="70" width="14" height="7" rx="2" fill="#EADDFF"/>
+  <rect x="93" y="81" width="14" height="7" rx="2" fill="#EADDFF"/>
+  <rect x="93" y="92" width="14" height="7" rx="2" fill="#EADDFF"/>
+  <rect x="93" y="103" width="14" height="7" rx="2" fill="#EADDFF"/>
+  <rect x="93" y="114" width="14" height="7" rx="2" fill="#EADDFF"/>
+  <rect x="93" y="125" width="14" height="7" rx="2" fill="#EADDFF"/>
+
+  <!-- Zipper slider -->
+  <rect
+    x="85"
+    y="136"
+    width="30"
+    height="16"
+    rx="5"
+    fill="#D0BCFF"/>
+
+  <circle
+    cx="100"
+    cy="144"
+    r="3"
+    fill="#6750A4"/>
+
 </svg>

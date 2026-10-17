@@ -41,6 +41,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -155,6 +158,9 @@ import com.io.git.way.ui.common.showGitWayToast
 import com.io.git.way.ui.common.MarkdownLinkResolver
 import com.io.git.way.ui.common.MarkdownView
 import com.io.git.way.ui.common.PendingDownloadHandler
+import com.io.git.way.ui.common.RevealStyle
+import com.io.git.way.ui.common.rememberReveal
+import com.io.git.way.ui.common.revealIn
 import com.io.git.way.ui.common.SyntaxHighlightTransformation
 import com.io.git.way.ui.common.SyntaxHighlighter
 import com.io.git.way.ui.common.formatRelativeTime
@@ -548,12 +554,42 @@ fun RepositoryBrowserScreen(
                                     }
                                 }
                         ) {
+                            // Rows ease into place the same way the PhoneIDE/LSP project
+                            // tree does: the first screenful slides in from the left, one
+                            // after another, and a folder expanded later fans its new
+                            // children in starting from wherever they land in the list —
+                            // not restarting the stagger from the top every time.
+                            val treeListState = rememberLazyListState()
+                            val treeReveal = rememberReveal()
+                            val firstRowAtOpen = remember { treeListState.firstVisibleItemIndex }
+                            // Paths the tree held as of the last recomposition, so a folder
+                            // that was *just expanded* (brand-new rows, animate) can be told
+                            // apart from the user merely scrolling to a row that was already
+                            // there (no animation). Seeded with what's on screen already so
+                            // the very first composition doesn't treat everything as "new".
+                            var knownRowPaths by remember(treeReveal) {
+                                mutableStateOf<Set<String>>(
+                                    state.browserEntries.mapTo(mutableSetOf()) { it.entry.path }
+                                )
+                            }
+                            val firstNewRowIndex = remember(state.browserEntries, knownRowPaths) {
+                                state.browserEntries.indexOfFirst { it.entry.path !in knownRowPaths }
+                            }
+                            LaunchedEffect(state.browserEntries) {
+                                val newPaths = state.browserEntries.mapTo(mutableSetOf()) { it.entry.path }
+                                // A row that just dropped out (its folder collapsed) replays
+                                // its entrance the next time that folder reopens, instead of
+                                // staying marked "already played" forever.
+                                for (goneRowPath in knownRowPaths - newPaths) treeReveal.played.remove(goneRowPath)
+                                knownRowPaths = newPaths
+                            }
                             LazyColumn(
                                 // Was spacedBy(1.dp): that 1dp gap between every row broke
                                 // the vertical guide lines at each row boundary — barely
                                 // visible at 1x zoom but an obvious cut once zoomed in,
                                 // since the gap doesn't scale with the rest of the row.
                                 // Rows sit flush now so every guide column is continuous.
+                                state = treeListState,
                                 modifier = Modifier.width(contentWidth)
                             ) {
                                 item(key = "repository-root") {
@@ -572,7 +608,34 @@ fun RepositoryBrowserScreen(
                                     )
                                 }
                                 if (rootExpanded) {
-                                items(state.browserEntries, key = { it.entry.path }) { row ->
+                                itemsIndexed(state.browserEntries, key = { _, row -> row.entry.path }) { index, row ->
+                                    // EVERY row animates when it comes on screen — no cut-off
+                                    // by depth or by how far down the list it is. Rows in the
+                                    // first screenful fan in one after another from the top of
+                                    // the explorer; a row further down (a long list, a deeply
+                                    // expanded folder) plays the same slide-in the moment it
+                                    // scrolls into view. Each row plays once per path
+                                    // (RevealController.played), so scrolling back and forth
+                                    // does not replay it.
+                                    val justRevealed = row.entry.path !in knownRowPaths
+                                    // Decided once, when the row first enters composition, and
+                                    // then held: knownRowPaths is refreshed a frame after an
+                                    // expand, and reading it live would change the stagger
+                                    // mid-entrance.
+                                    val entranceOrder = remember(row.entry.path) {
+                                        if (justRevealed && firstNewRowIndex >= 0) index - firstNewRowIndex
+                                        else (index - firstRowAtOpen).coerceAtLeast(0)
+                                    }
+                                    // A row that leaves the screen forgets it has played, so it
+                                    // slides in again every time it scrolls back into view.
+                                    DisposableEffect(row.entry.path) {
+                                        onDispose { treeReveal.played.remove(row.entry.path) }
+                                    }
+                                    Box(
+                                        Modifier
+                                            .animateItem()
+                                            .revealIn(treeReveal, row.entry.path, entranceOrder, RevealStyle.Row)
+                                    ) {
                                     TreeRowItem(
                                         row = row,
                                         selectionMode = selectionMode,
@@ -604,6 +667,7 @@ fun RepositoryBrowserScreen(
                                 },
                                 fileSize = state.remoteFileSizes[row.entry.path]
                                     )
+                                    }
                                 }
                                 }
                             }
@@ -973,26 +1037,37 @@ private fun RepositoryRootRow(
     }
 }
 
-/** Generic renderer for any wired res/raw SVG icon (folders, file types, ...). */
+/**
+ * Process-wide [ImageLoader] with the SVG decoder registered, built once instead of
+ * per icon: a file tree renders dozens of rows, and each `ImageLoader` carries its own
+ * memory/disk cache — creating one per row threw away the decoded bitmap immediately
+ * and re-parsed the same SVG on every scroll.
+ */
+private object SvgTreeIconLoader {
+    @Volatile
+    private var instance: ImageLoader? = null
+
+    fun get(context: android.content.Context): ImageLoader = instance ?: synchronized(this) {
+        instance ?: ImageLoader.Builder(context.applicationContext)
+            .components { add(SvgDecoder.Factory()) }
+            .build()
+            .also { instance = it }
+    }
+}
+
+/** Generic renderer for any wired res/raw SVG icon (folders, file types, ...). Shared
+ * with [com.io.git.way.ui.screens.folder.FolderSelectionScreen] so the local-folder
+ * file list and the remote Project Explorer tree use the exact same icon set. */
 @Composable
-private fun SvgRawIcon(
+fun SvgRawIcon(
     resId: Int,
     contentDescription: String?,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-
-    val imageLoader = remember(context) {
-        ImageLoader.Builder(context)
-            .components {
-                add(SvgDecoder.Factory())
-            }
-            .build()
-    }
-
     val painter = rememberAsyncImagePainter(
         model = resId,
-        imageLoader = imageLoader
+        imageLoader = SvgTreeIconLoader.get(context)
     )
 
     Image(

@@ -3,32 +3,44 @@
      height="32"
      viewBox="0 0 32 32">
 
-  <!-- XML document -->
+  <!-- File Shape -->
   <path
-    fill="#FF9800"
-    d="M6 3H20L26 9V29H6Z"/>
+    d="M7 3.5
+       H19
+       L25 9.5
+       V28.5
+       H7
+       Z"
+    fill="#FFB74D"/>
 
-  <!-- Fold -->
+  <!-- Folded Corner -->
   <path
-    fill="#FFB74D"
-    d="M20 3V9H26Z"/>
+    d="M19 3.5V9.5H25L19 3.5Z"
+    fill="#F57C00"/>
 
-  <!-- XML brackets -->
+  <!-- XML Brackets -->
   <path
-    d="M12 12L9 16L12 20
-       M20 12L23 16L20 20"
+    d="M12 13L9 16L12 19"
     fill="none"
-    stroke="#FFFFFF"
-    stroke-width="2.2"
+    stroke="#5D4037"
+    stroke-width="1.8"
     stroke-linecap="round"
     stroke-linejoin="round"/>
 
-  <!-- XML slash -->
   <path
-    d="M18 11L14 21"
+    d="M20 13L23 16L20 19"
     fill="none"
-    stroke="#FFFFFF"
-    stroke-width="2"
+    stroke="#5D4037"
+    stroke-width="1.8"
+    stroke-linecap="round"
+    stroke-linejoin="round"/>
+
+  <!-- Slash -->
+  <path
+    d="M18 12L14 20"
+    fill="none"
+    stroke="#5D4037"
+    stroke-width="1.6"
     stroke-linecap="round"/>
 
 </svg>
