@@ -1,6 +1,11 @@
 [versions]
-agp = "8.13.0"
-kotlin = "2.1.0"
+# AGP 9.x is required: AGP 8.x calls Gradle's internal `InternalProblems` API,
+# which Gradle removed in 9.6.0, so AGP 8.x cannot run on Gradle 9.6+ at all.
+agp = "9.0.0"
+# AGP 9 has built-in Kotlin support and pulls in KGP 2.2.10 itself, so the
+# `kotlin-android` plugin is gone (it is incompatible with AGP 9's new DSL).
+# The remaining Kotlin compiler plugins must match the Kotlin version AGP runs.
+kotlin = "2.2.10"
 coreKtx = "1.17.0"
 biometric = "1.1.0"
 lifecycleRuntimeKtx = "2.9.2"
@@ -19,7 +24,7 @@ coilSvg = "2.7.0"
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+# No kotlin-android alias: AGP 9 compiles Kotlin on its own.
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 
