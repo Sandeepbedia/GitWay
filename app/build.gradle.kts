@@ -7,8 +7,11 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-// Shared release keystore — NOT stored in this project. JKS + passwords live in shared folder.
-// Supports both `keystore` and `1keystore` names across device (/storage/emulated/0/...) and container (/root/storage/...) layouts.
+// Shared release keystore — NOT stored in this project. JKS + passwords live in a shared folder.
+// 1Keystore/ is the shared registry (registry.json + one sub-folder per keystore); the
+// sub-folder is what actually holds config.properties + the .jks, so "universe" is listed
+// before its parent. Both device (/storage/emulated/0/...) and container (/root/storage/...)
+// layouts are tried.
 // Override via env: AB_KEYSTORE_DIR=/path/to/keystore
 // If no folder is reachable the release build still compiles (unsigned) so R8/shrink is never blocked.
 val sharedKeystoreDir = run {
@@ -16,6 +19,9 @@ val sharedKeystoreDir = run {
     if (!envDir.isNullOrBlank() && File("$envDir/config.properties").exists()) return@run envDir
     if (!envDir.isNullOrBlank() && File(envDir).exists()) return@run envDir
     val candidates = listOf(
+        "/root/storage/PhoneIDEProjects/1Keystore/universe",
+        "/storage/emulated/0/PhoneIDEProjects/1Keystore/universe",
+        "/root/storage/PhoneIDEProjects/1Keystore",
         "/storage/emulated/0/AndroidCSProjects/keystore",
         "/storage/emulated/0/AndroidCSProjects/1keystore",
         "/root/storage/AndroStudioProjects/1keystore",
@@ -24,7 +30,7 @@ val sharedKeystoreDir = run {
     candidates.firstOrNull { File("$it/config.properties").exists() }
         ?: candidates.firstOrNull { File(it).exists() }
         ?: envDir?.takeIf { it.isNotBlank() }
-        ?: "/storage/emulated/0/AndroidCSProjects/keystore"
+        ?: "/root/storage/PhoneIDEProjects/1Keystore/universe"
 }
 val signingProps = Properties().apply {
     File("$sharedKeystoreDir/config.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }

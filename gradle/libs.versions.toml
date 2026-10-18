@@ -16,7 +16,14 @@ lifecycleViewmodelCompose = "2.9.2"
 securityCrypto = "1.1.0"
 retrofit = "2.11.0"
 okhttp = "4.12.0"
-kotlinxSerializationJson = "1.7.3"
+# Must stay in step with the Kotlin version above: the serialization *compiler
+# plugin* ships with Kotlin (2.2.10), and the *runtime* has to be new enough to
+# provide the APIs that plugin generates calls to. 1.7.3 predates Kotlin 2.2 by
+# several releases (1.8.0 ... 1.11.0 all exist), which is a recipe for
+# NoSuchMethodError on the first GitHub API response. Json's behaviour is pinned
+# explicitly in RetrofitProvider, so moving forward is safe.
+# 1.12.0 is still RC — latest STABLE is 1.11.0.
+kotlinxSerializationJson = "1.11.0"
 documentfile = "1.0.1"
 kotlinxCoroutines = "1.9.0"
 coil = "2.7.0"
