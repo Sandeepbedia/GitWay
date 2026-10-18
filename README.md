@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="docs/banner.png" alt="Git Way — Update GitHub from your pocket" width="100%" />
+<img src="docs/banner.png" alt="Git Way — GitHub from your pocket" width="100%" />
 
 # Git Way
 
-**Push local Android projects straight to GitHub — from your phone, no laptop required.**
+**Your GitHub, from your phone — push projects and manage repos, PRs, issues and releases, no laptop required.**
 
 [![Kotlin](https://img.shields.io/badge/Kotlin-100%25-8B5CF6?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose-6D28D9?style=flat-square)](https://developer.android.com/jetpack/compose)
@@ -18,15 +18,18 @@
 
 ---
 
-Git Way turns your phone into a real GitHub push client. Point it at a project
-folder, it compares that folder against a repository's actual Git tree (real blob
-SHA hashing, not just filenames), shows you exactly what changed, and pushes a
-single atomic commit — all from the Storage Access Framework, no `git` binary and
-no laptop involved.
+Git Way is a real GitHub client that runs entirely on Android. It started as a
+way to push a local Android project to GitHub straight from the Storage Access
+Framework — no `git` binary, no laptop — and grew into a full client: repositories,
+file browser, Actions, pull requests, issues, releases and code search.
+
+Everything talks to `api.github.com` directly using a Personal Access Token you
+paste in at runtime. No backend, no proxy, no third-party server.
 
 ## Table of contents
 
 - [Features](#features)
+- [Screens](#screens)
 - [Screenshots](#screenshots)
 - [Tech stack](#tech-stack)
 - [Project structure](#project-structure)
@@ -37,38 +40,69 @@ no laptop involved.
 
 ## Features
 
-**Compare & push**
-- Real diff engine — hashes local files as Git blobs and compares against the
-  repository's live tree, so Added / Modified / Removed is always accurate, not
-  guessed from timestamps.
-- Repository-scaffolding files (`README.md`, `LICENSE`, `.gitignore`, `.github/`
-  workflows, `.gitkeep`, Play Store `screenshots/`, etc.) are automatically excluded
-  from "Removed" detection — pushing from your phone never threatens to delete files
-  GitHub itself owns. Anything else can be marked "don't track" per-file, permanently.
-- Manual file selection before every push — select all, clear, or pick files one by
-  one per Added/Modified/Removed group.
-- Atomic commits via GitHub's Git Data API (blob → tree → commit → ref update) — a
-  push either lands completely or not at all, never a half-finished commit.
-- Automatic retry with backoff on transient network errors (timeouts, 502/503/504);
-  GitHub's *real* error message is parsed and shown — never just a bare `HTTP 422`.
-- Live, granular progress: Validating → Uploading files → Creating tree → Creating
-  commit → Updating branch → Verifying → Done, with a cancel button at every stage.
+**Push & compare**
+- Real diff engine — local files are hashed exactly the way Git hashes a blob and
+  compared against the repository's live tree, so Added / Modified / Removed is
+  accurate, never guessed from timestamps.
+- Atomic commits via the Git Data API (blob → tree → commit → ref update) — a push
+  either lands completely or not at all.
+- Retry with backoff on transient failures only (timeouts, 500/502/503/504).
+  Permissions and validation errors are never retried — GitHub's real message is
+  parsed and shown instead of a bare `HTTP 422`.
+- Live progress through every stage: Validating → Uploading files → Creating tree →
+  Creating commit → Updating branch → Verifying → Done, cancellable at each step.
+- Push to any branch, or create a new one from an existing branch.
+- Commit history and per-file commit diffs are viewable in-app.
 
 **Safety**
 - **Smart Upload Protection** — scans every file before upload for secrets (API
-  keys, tokens) and known-sensitive files (keystores, `.env`), and blocks or
-  redacts them automatically.
-- **Project/Repository Identity Match** — detects the Android `applicationId` from
-  both the local folder and the remote repo before a push, and warns if they don't
-  match, so you can't accidentally push one app's code into another app's repo.
+  keys, tokens) and sensitive files (keystores, `.env`), blocking or redacting them.
+- **Project/Repository Identity Match** — reads the Android `applicationId` from both
+  the local folder and the remote repo, and warns on mismatch, so one app's code
+  can't land in another app's repo.
+- **Scaffold-safe deletes** — repository-owned files (`README.md`, `LICENSE`,
+  `.github/`, `.gitignore`, `.gitkeep`, `screenshots/`, `docs/`, …) are never
+  reported as "Removed". Anything else can be marked "don't track" permanently.
+
+**GitHub client**
+- Repository list with search, sort and per-language colour coding; create, rename,
+  re-scope, delete and fork repositories.
+- **Repository Browser** — browse the remote tree, open files with syntax
+  highlighting and markdown rendering, edit and save, plus create, rename,
+  duplicate, copy/paste and delete files and folders directly on GitHub.
+- **Actions** — list workflows, watch runs, dispatch `workflow_dispatch` workflows,
+  cancel runs, re-run failed jobs, download build artifacts and run logs.
+- **Pull requests** — list, create (with dialog), close/reopen, merge, view changed files.
+- **Issues** — list, create, close/reopen, read and post comments.
+- **Releases** — list, create, delete, upload and download release assets.
+- Star / unstar, code search within a repository, repository search, zipball download.
+- API rate-limit meter and multi-account switching.
 
 **Everyday use**
-- GitHub sign-in via a Personal Access Token only — no OAuth backend, nothing
-  proxied through a third-party server.
-- In-app **Repository Browser** — view a repo's remote file tree, open files with
-  syntax highlighting, delete files/folders directly on GitHub.
-- Repository list with search, sort (recent / A–Z), and per-language color coding.
-- Light, Dark, and true-black AMOLED themes.
+- GitHub sign-in via Personal Access Token only.
+- Optional **biometric app lock** (AndroidX BiometricPrompt).
+- Light, Dark and true-black AMOLED themes.
+- Checks the [latest release](https://github.com/Sandeepbedia/GitWay/releases/latest)
+  on launch and shows an in-app **Update available** dialog, including APK install.
+
+## Screens
+
+| Route | Screen | What it does |
+|---|---|---|
+| `splash` | Splash | Boot, token check, update check |
+| `token` | Connect | PAT entry + live scope validation |
+| `repository_list` | Repositories | List, search, sort, filter, create |
+| `repository_browser` | Browser | Remote tree, view/edit/create/rename/delete |
+| `folder_selection` | Folder picker | SAF project folder selection |
+| `analysis` | Compare | Added/Modified/Removed selection + scan report |
+| `confirmation` | Confirm | Commit message, branch, final review |
+| `upload_progress` | Upload | Live stage progress, cancellable |
+| `completion` | Done | New commit SHA, success |
+| `actions` | Actions | Workflows, runs, artifacts, logs |
+| `pull_requests` | Pull requests | List, create, merge, files |
+| `issues` | Issues | List, create, comment |
+| `releases` | Releases | CRUD + assets |
+| `profile` | Profile | Account, repo settings, security, theme |
 
 ## Screenshots
 
@@ -89,6 +123,18 @@ no laptop involved.
     <td width="50%"><img src="docs/screenshots/3.png" width="100%" /></td>
     <td width="50%"><img src="docs/screenshots/4.png" width="100%" /></td>
   </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/5.png" width="100%" /></td>
+    <td width="50%"><img src="docs/screenshots/6.png" width="100%" /></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/7.png" width="100%" /></td>
+    <td width="50%"><img src="docs/screenshots/8.png" width="100%" /></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/9.png" width="100%" /></td>
+    <td width="50%"></td>
+  </tr>
 </table>
 <!-- SCREENSHOTS:END -->
 
@@ -96,172 +142,224 @@ no laptop involved.
 
 | Layer | Choice |
 |---|---|
-| Language | Kotlin |
+| Language | Kotlin 2.2.10 (AGP built-in Kotlin — no `kotlin-android` plugin) |
 | UI | Jetpack Compose + Material 3 (custom "Liquid Glass" design system) |
 | Architecture | MVVM (`ui` → `domain` → `data`), manual DI (no Hilt/Koin) |
+| Build | AGP 9.0.0 · Gradle 9.8.0 · JDK 17 · compileSdk 36 · minSdk 26 |
 | Networking | Retrofit + kotlinx.serialization, GitHub REST + Git Data API |
 | Async | Kotlin Coroutines |
-| Local storage | Storage Access Framework (project files), AndroidX Security /
-  EncryptedSharedPreferences (GitHub token) |
-| Min SDK | 26 (Android 8.0) |
+| Local storage | Storage Access Framework (project files), AndroidX Security / EncryptedSharedPreferences (token) |
 
 ## Project structure
 
 ```
 Git_Way/
 ├── app/
-│   └── src/main/
-│       ├── kotlin/com/io/git/way/
-│       │   ├── AppContainer.kt          # Manual DI container
-│       │   ├── GitWayApp.kt             # Application class
-│       │   ├── MainActivity.kt          # Single-activity host
-│       │   │
-│       │   ├── data/
-│       │   │   ├── local/               # On-device logic — no network
-│       │   │   │   ├── FolderScanner.kt          # SAF folder walk → LocalFile list
-│       │   │   │   ├── GitBlobHasher.kt          # Real Git blob SHA-1 hashing
-│       │   │   │   ├── PathNormalizer.kt         # Path cleanup before pushing
-│       │   │   │   ├── SecretScanner.kt          # Smart Upload Protection: secrets
-│       │   │   │   ├── KeystoreSanitizer.kt      # Smart Upload Protection: keystores
-│       │   │   │   ├── ProtectionScanner.kt      # Orchestrates the scan above
-│       │   │   │   ├── IgnoreEngine.kt           # .gitignore-style local filtering
-│       │   │   │   ├── IgnoreListManager.kt      # User's manual "don't track" list
-│       │   │   │   ├── AppIdentityDetector.kt    # applicationId match protection
-│       │   │   │   ├── TokenManager.kt           # Encrypted PAT storage
-│       │   │   │   └── NetworkUtils.kt           # Connectivity pre-check
+│   ├── proguard-rules.pro
+│   └── src/
+│       ├── main/
+│       │   ├── AndroidManifest.xml
+│       │   ├── kotlin/com/io/git/way/
+│       │   │   ├── AppContainer.kt          # Manual DI: TokenManager → Retrofit → Repository
+│       │   │   ├── GitWayApp.kt             # Application class
+│       │   │   ├── MainActivity.kt          # Single-activity host + biometric lock
 │       │   │   │
-│       │   │   ├── remote/
-│       │   │   │   ├── GitHubApiService.kt       # Retrofit endpoints (REST + Git Data API)
-│       │   │   │   ├── RetrofitProvider.kt       # Client/JSON setup
-│       │   │   │   └── dto/GitHubDtos.kt         # Wire-format models
+│       │   │   ├── data/
+│       │   │   │   ├── local/               # On-device logic — no network
+│       │   │   │   │   ├── FolderScanner.kt          # SAF folder walk → LocalFile list
+│       │   │   │   │   ├── GitBlobHasher.kt          # Real Git blob SHA-1 hashing
+│       │   │   │   │   ├── PathNormalizer.kt         # Path cleanup before pushing
+│       │   │   │   │   ├── ProtectionScanner.kt      # Orchestrates the scan below
+│       │   │   │   │   ├── SecretScanner.kt          # Smart Upload Protection: secrets
+│       │   │   │   │   ├── KeystoreSanitizer.kt      # Smart Upload Protection: keystores
+│       │   │   │   │   ├── IgnoreEngine.kt           # .gitignore-style local filtering
+│       │   │   │   │   ├── IgnoreListManager.kt      # User's manual "don't track" list
+│       │   │   │   │   ├── AppIdentityDetector.kt    # applicationId match protection
+│       │   │   │   │   ├── AndroidProjectInspector.kt# Reads Gradle/AGP info
+│       │   │   │   │   ├── BiometricLockManager.kt   # App lock enable/disable
+│       │   │   │   │   ├── TokenManager.kt           # Encrypted PAT storage, multi-account
+│       │   │   │   │   └── NetworkUtils.kt           # Connectivity pre-check
+│       │   │   │   │
+│       │   │   │   ├── remote/
+│       │   │   │   │   ├── GitHubApiService.kt       # ~55 REST + Git Data API endpoints
+│       │   │   │   │   ├── RetrofitProvider.kt       # Client/JSON setup
+│       │   │   │   │   └── dto/GitHubDtos.kt         # ~50 wire-format models
+│       │   │   │   │
+│       │   │   │   └── repository/
+│       │   │   │       └── GitHubRepositoryImpl.kt   # Push pipeline, retries, error parsing
 │       │   │   │
-│       │   │   └── repository/
-│       │   │       └── GitHubRepositoryImpl.kt   # Push pipeline, retries, error parsing
-│       │   │
-│       │   ├── domain/
-│       │   │   ├── ComparisonEngine.kt           # Added/Modified/Removed diff logic
-│       │   │   ├── RepositoryScaffoldFiles.kt    # Repo-only-file exclusion rules
-│       │   │   ├── CommitMessageBuilder.kt
-│       │   │   ├── model/                        # Plain Kotlin domain models
-│       │   │   └── repository/GitHubRepository.kt # Interface the ViewModels depend on
-│       │   │
-│       │   ├── navigation/
-│       │   │   ├── GitWayNavGraph.kt
-│       │   │   └── Routes.kt
-│       │   │
-│       │   └── ui/
-│       │       ├── common/               # Shared ViewModel, formatters, file-icon mapping
-│       │       ├── theme/                # Color tokens, Type, Theme, "Liquid Glass" components
-│       │       └── screens/
-│       │           ├── splash/
-│       │           ├── auth/             # Token entry
-│       │           ├── overview/
-│       │           ├── repos/            # Repository list
-│       │           ├── browser/          # In-app remote file browser
-│       │           ├── folder/           # Local folder picker
-│       │           ├── analysis/         # Compare / select files to push
-│       │           ├── confirm/          # Final push confirmation
-│       │           ├── upload/           # Live push progress
-│       │           ├── complete/         # Success screen
-│       │           └── profile/
-│       │
-│       ├── res/                          # Standard Android resources
-│       └── AndroidManifest.xml
+│       │   │   ├── domain/
+│       │   │   │   ├── ComparisonEngine.kt           # Added/Modified/Removed diff logic
+│       │   │   │   ├── RepositoryScaffoldFiles.kt    # Repo-only-file exclusion rules
+│       │   │   │   ├── CommitMessageBuilder.kt
+│       │   │   │   ├── VersionComparator.kt
+│       │   │   │   ├── WorkflowTemplates.kt
+│       │   │   │   ├── model/                        # Plain Kotlin domain models
+│       │   │   │   └── repository/GitHubRepository.kt # Interface the ViewModels depend on
+│       │   │   │
+│       │   │   ├── navigation/
+│       │   │   │   ├── GitWayNavGraph.kt
+│       │   │   │   └── Routes.kt
+│       │   │   │
+│       │   │   └── ui/
+│       │   │       ├── common/
+│       │   │       │   ├── GitWaySessionViewModel.kt  # Central session state (shared VM)
+│       │   │       │   ├── GitWayViewModelFactory.kt
+│       │   │       │   ├── FileTypeIcons.kt           # File-type → icon mapping
+│       │   │       │   ├── MarkdownRenderer.kt        # Markdown → Compose
+│       │   │       │   ├── SyntaxHighlighter.kt
+│       │   │       │   ├── BiometricLockScreen.kt
+│       │   │       │   ├── BiometricAuthenticator.kt
+│       │   │       │   ├── ApkInstaller.kt
+│       │   │       │   ├── PendingDownloadHandler.kt
+│       │   │       │   ├── Reveal.kt
+│       │   │       │   ├── GitWayToast.kt
+│       │   │       │   └── RelativeTimeFormatter.kt
+│       │   │       ├── components/
+│       │   │       │   ├── CreatePullRequestDialog.kt
+│       │   │       │   └── UpdateAvailableDialog.kt
+│       │   │       ├── theme/                         # "Liquid Glass" design system
+│       │   │       │   ├── LiquidGlass.kt, Color.kt, Type.kt, Theme.kt
+│       │   │       │   └── RepoVisuals.kt, AppThemeMode.kt
+│       │   │       └── screens/
+│       │   │           ├── splash/       # Boot + update check
+│       │   │           ├── auth/         # Token entry + scope validation
+│       │   │           ├── repos/        # Repository list (+ its ViewModel)
+│       │   │           ├── browser/      # Remote file browser + editor
+│       │   │           ├── folder/       # Local folder picker
+│       │   │           ├── analysis/     # Compare / select files to push
+│       │   │           ├── confirm/      # Final push confirmation
+│       │   │           ├── upload/       # Live push progress
+│       │   │           ├── complete/     # Success screen
+│       │   │           ├── actions/      # GitHub Actions
+│       │   │           ├── pulls/        # Pull requests
+│       │   │           ├── issues/       # Issues
+│       │   │           ├── releases/     # Releases + assets
+│       │   │           └── profile/      # Account, repo settings, security, theme
+│       │   └── res/                          # 186 SVG file-type icons, mipmaps, themes
+│       ├── debug/kotlin/.../DebugLogging.kt  # OkHttp logging interceptor (debug only)
+│       └── release/kotlin/.../DebugLogging.kt # No-op stub (never logs in release)
 │
 ├── .github/
 │   └── workflows/
-│       ├── release.yml                   # Tag push -> build APK -> publish GitHub Release
-│       └── build-check.yml               # Compile check on every push/PR
+│       ├── build.yml                # GPL-3.0 header check → assembleDebug
+│       ├── build-check.yml          # Same checks (legacy duplicate of build.yml)
+│       └── release.yml              # Tag push → build APK → publish GitHub Release
 │
 ├── docs/
-│   ├── banner.png                        # This README's banner
-│   ├── generate_screenshots.py           # Rebuilds the Screenshots section above
-│   ├── RELEASING.md                      # How to cut a new release
-│   └── screenshots/                      # Drop 1.png, 2.png, 3.png, ... here
+│   ├── ATTRIBUTION.md               # Third-party asset credits
+│   ├── banner.png                   # This README's banner
+│   ├── generate_screenshots.py      # Rebuilds the Screenshots section above
+│   ├── RELEASING.md                 # How to cut a new release
+│   ├── verify_fixes.sh              # Pre-push sanity check (AGP 9, GPL headers)
+│   └── screenshots/                 # 1.png … 9.png
 │
-├── gradle/                               # Version catalog + wrapper
+├── gradle/                          # libs.versions.toml + wrapper
 ├── build.gradle.kts
 ├── settings.gradle.kts
-├── keystore.properties.example           # Copy to keystore.properties for release builds
+├── gradle.properties
+├── gradlew / gradlew.bat
 ├── LICENSE
 ├── CONTRIBUTING.md
+├── DISCLAIMER.md
 └── README.md
 ```
 
 ## How a push actually works
 
-1. **Scan** — the selected local folder is walked via the Storage Access
-   Framework; every file is run through Smart Upload Protection (secret scanning,
-   keystore detection) before anything else touches it.
-2. **Identity check** — the app's `applicationId` is read from both the local
-   project and the target repository's remote tree; a mismatch blocks the push.
-3. **Compare** — every local file is hashed the same way Git hashes a blob and
-   compared against the repository's current tree via the Git Data API. Repo
-   scaffolding (README, `.github/`, etc.) never shows up as "Removed".
+1. **Scan** — the selected local folder is walked via the Storage Access Framework;
+   every file passes through Smart Upload Protection (secret scanning, keystore
+   detection) before anything else touches it.
+2. **Identity check** — the `applicationId` is read from both the local project and
+   the target repository's remote tree; a mismatch blocks the push.
+3. **Compare** — each local file is hashed the way Git hashes a blob and compared
+   against the repository's current tree via the Git Data API. Repo scaffolding is
+   never reported as "Removed".
 4. **Select** — you pick exactly which Added/Modified/Removed files to include.
-5. **Push** — blobs are created for changed files, a new tree is built on top of
-   the current `base_tree`, a commit is created, and the branch ref is updated —
-   in that order, atomically. Any transient failure (timeout, 5xx) retries
-   automatically; anything else (permissions, invalid tree, etc.) shows GitHub's
-   real error text.
-6. **Verify** — after the push, the branch ref is re-fetched to confirm it now
-   points at the new commit before the app reports success.
+5. **Push** — blobs are created for changed files, a tree is built on top of the
+   current `base_tree`, a commit is created, and the branch ref is updated — in that
+   order, atomically. Transient failures retry automatically; everything else shows
+   GitHub's real error text.
+6. **Verify** — the branch ref is re-fetched to confirm it now points at the new
+   commit before the app reports success.
 
 ## Getting started
+
+Requirements: **JDK 17** and an **Android SDK with platform 36**. Nothing else —
+no backend, no API keys, no `.env` setup.
 
 ```bash
 git clone https://github.com/Sandeepbedia/GitWay.git
 cd GitWay
-cp keystore.properties.example keystore.properties
+./gradlew assembleDebug
 ```
 
-Open the project in Android Studio, let Gradle sync, and run the `app`
-configuration on a device or emulator (API 26+). No backend, API keys, or `.env`
-setup needed — Git Way talks to `api.github.com` directly using a GitHub
-[Personal Access Token](https://github.com/settings/tokens) you paste in at
-runtime.
+The APK lands in `app/build/outputs/apk/debug/`. Open the project in Android Studio
+and run the `app` configuration on a device or emulator (API 26+) if you prefer.
+
+> **Building on a phone / in a proot?** AGP's own aapt2 binary usually can't be
+> executed there, so put this in your **user-level** `~/.gradle/gradle.properties`
+> (never in the repo — a hard-coded device path breaks CI):
+> ```properties
+> android.aapt2FromMavenOverride=/usr/bin/aapt2
+> ```
+
+### Release signing
+
+`app/build.gradle.kts` never stores keystore material in the repo. It looks for a
+shared keystore folder and falls back to an **unsigned** release build if none is
+found, so R8 and resource shrinking are never blocked:
+
+| Source | How |
+|---|---|
+| Local folder | Any of the documented shared-keystore paths, or `AB_KEYSTORE_DIR=/path/to/keystore` with `config.properties` + a `.jks` |
+| CI | Four repository secrets — `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` — consumed by `release.yml` |
 
 ### Token scopes
 
-Create a classic token with these three scopes (the Connect screen validates and
-flags any that are missing):
+Create a classic token with these three scopes (the Connect screen validates them
+and flags any that are missing):
 
-| Scope          | Needed for                                             |
-|----------------|--------------------------------------------------------|
-| `repo`         | Read/write all repositories (contents, PRs, issues, releases) |
-| `workflow`     | Updating `.github/workflows` files and triggering runs  |
-| `delete_repo`  | Deleting repositories (Profile → Repo settings)        |
+| Scope | Needed for |
+|---|---|
+| `repo` | Read/write all repositories (contents, PRs, issues, releases) |
+| `workflow` | Updating `.github/workflows` files and triggering runs |
+| `delete_repo` | Deleting repositories (Profile → repo settings) |
 
-A fine-grained token works too, but GitHub doesn't report its permissions via
-the API — grant the equivalent repository permissions (contents read/write,
-workflows, and delete) and the app will proceed with a "couldn't verify scopes"
-warning.
+A fine-grained token works too, but GitHub doesn't report permissions for those —
+grant the equivalent repository permissions (contents read/write, workflows, delete)
+and the app proceeds with a "couldn't verify scopes" warning.
 
 ## Releases & updates
 
-Tagged pushes (`v1.0`, `v1.1`, ...) are built and published automatically by
+Tagged pushes (`v1.0`, `v1.1`, …) are built and published automatically by
 [`.github/workflows/release.yml`](.github/workflows/release.yml) — see
-[`docs/RELEASING.md`](docs/RELEASING.md) for the full process. The app itself
-checks the [latest release](https://github.com/Sandeepbedia/GitWay/releases/latest)
-on launch and shows an in-app **Update available** dialog when a newer version has
-been published — no manual "check for updates" needed.
+[`docs/RELEASING.md`](docs/RELEASING.md) for the full process. The app itself checks
+the latest release on launch and shows an in-app **Update available** dialog when a
+newer version has been published — no manual "check for updates" needed.
 
 ## Contributing
 
-Contributions are genuinely welcome — bug fixes, small features, docs, and UI
-polish. Please read **[CONTRIBUTING.md](CONTRIBUTING.md)** first; it covers dev
-setup, code conventions, and the Pull Request checklist. Please open an issue
-before starting on anything larger than a small fix, so scope can be agreed on
-before you invest time.
+Contributions are genuinely welcome — bug fixes, small features, docs, and UI polish.
+Please read **[CONTRIBUTING.md](CONTRIBUTING.md) first; it covers dev setup, code
+conventions, and the Pull Request checklist.
+
+> **Every `.kt` file under `app/src` must start with the GPL-3.0 header block** (see
+> any existing source file for the exact wording). CI fails the build if even one file
+> is missing it, so copy the header when you create a new file.
+
+Please open an issue before starting on anything larger than a small fix, so scope
+can be agreed on before you invest time.
 
 ## License
 
 Git Way is released under the **GNU General Public License v3.0** — see
-**[LICENSE](LICENSE)** for the full text. The short version:
+**[LICENSE](LICENSE)** for the full text. Bundled third-party artwork is credited in
+[docs/ATTRIBUTION.md](docs/ATTRIBUTION.md). The short version:
 
 - ✅ You can read the code, fork it, build it, modify it, and redistribute it.
-- ✅ You can publish your own modified/rebranded copy — as long as it also
-  stays open source under GPL-3.0 and you keep the copyright/license notices.
+- ✅ You can publish your own modified/rebranded copy — as long as it also stays open
+  source under GPL-3.0 and you keep the copyright/license notices.
 - ❌ You can't relicense it as closed-source or strip the GPL terms from a
   redistributed copy.
 

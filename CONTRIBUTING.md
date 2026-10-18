@@ -43,7 +43,7 @@ need to get a change from your machine into the app.
 ```bash
 git clone https://github.com/<your-fork>/Git_Way.git
 cd Git_Way
-cp keystore.properties.example keystore.properties   # debug builds work without editing this
+./gradlew assembleDebug          # debug builds need no keystore, no secrets
 ```
 
 Open the folder in Android Studio and let Gradle sync. Run the `app` configuration
@@ -51,8 +51,13 @@ on a device/emulator — no additional setup, API keys, or backend is required, 
 Git Way talks directly to the GitHub REST API using a Personal Access Token you
 paste in at runtime (nothing is hardcoded).
 
-> `keystore.properties` is git-ignored. Release (signed) builds need your own
-> keystore; debug builds work out of the box without one.
+> **Requirements:** AGP 9.0 needs **Gradle 9.1+** and **JDK 17+**. The Kotlin
+> compiler comes from AGP's built-in Kotlin support (2.2.10) — do **not** re-add the
+> `kotlin-android` plugin, it is incompatible with AGP 9's DSL.
+>
+> Release builds stay unsigned unless a keystore is provided: point `AB_KEYSTORE_DIR`
+> at a folder containing `config.properties` + the `.jks`, or set the signing secrets
+> in CI. Debug builds work out of the box.
 
 ## Project conventions
 
@@ -94,6 +99,8 @@ paste in at runtime (nothing is hardcoded).
 ## Pull request checklist
 
 - [ ] The app builds and runs (`./gradlew assembleDebug`)
+- [ ] Every new `.kt` file under `app/src` starts with the GPL-3.0 header block —
+      CI fails the build otherwise (copy it from any existing source file)
 - [ ] You tested the actual flow your change touches, on a real device or emulator
 - [ ] No secrets, tokens, or personal keystore files are included in the diff
 - [ ] The PR description explains **what** changed and **why** (link an issue if
