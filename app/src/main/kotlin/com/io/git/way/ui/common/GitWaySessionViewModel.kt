@@ -1136,15 +1136,51 @@ class GitWaySessionViewModel(
     /** Expands or collapses a folder in place (VS Code Explorer style — the whole tree
      * stays on screen, no drill-down navigation). The tapped folder also becomes the
      * target for the next "New file/folder" or "Paste". */
+    /**
+     * Expand a collapsed folder, or collapse an expanded one (ported from the
+     * PhoneIDE/LSP project tree's `FileTreeState.toggle`).
+     *
+     * Expanding follows a chain: while the folder being opened holds nothing but a
+     * single sub-folder, that sub-folder is opened too, and so on. Tapping `app` in
+     * `app/src/main/java/com/io/…` therefore lands on the first folder that actually
+     * has something to show — files, or several folders — instead of making the user
+     * tap through one-child levels one at a time. Collapsing closes the same chain,
+     * so the tree returns to exactly the state it had before the tap.
+     */
     fun toggleFolderExpanded(entry: BrowserEntry) {
         if (!entry.isFolder) return
         val expanded = state.expandedFolders
-        val newExpanded = if (entry.path in expanded) expanded - entry.path else expanded + entry.path
+        val chain = singleChildChain(entry.path)
+        val newExpanded = if (entry.path in expanded) {
+            expanded - entry.path - chain.toSet()
+        } else {
+            expanded + entry.path + chain
+        }
         state = state.copy(
             expandedFolders = newExpanded,
             browserPath = entry.path,
             browserEntries = buildVisibleRows(state.remoteTreeCache.keys, newExpanded)
         )
+    }
+
+    /**
+     * The folders below [folderPath] reached by repeatedly stepping into an only
+     * child that is itself a folder. Ends at the first one whose contents are a
+     * file, several entries, or nothing — that last folder is included, so it is
+     * the one left open. Bounded so a pathological repo layout can't loop.
+     */
+    private fun singleChildChain(folderPath: String): List<String> {
+        val chain = mutableListOf<String>()
+        var current = folderPath
+        var guard = 0
+        while (guard++ < 64) {
+            val kids = childrenOf(state.remoteTreeCache.keys, current)
+            val onlyChild = kids.singleOrNull() ?: break
+            if (!onlyChild.isFolder) break
+            chain += onlyChild.path
+            current = onlyChild.path
+        }
+        return chain
     }
 
     /** Sets which folder "New file"/"New folder"/"Paste" target next, without touching

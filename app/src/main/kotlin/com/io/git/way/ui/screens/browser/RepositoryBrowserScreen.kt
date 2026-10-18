@@ -159,6 +159,9 @@ import com.io.git.way.ui.common.MarkdownLinkResolver
 import com.io.git.way.ui.common.MarkdownView
 import com.io.git.way.ui.common.PendingDownloadHandler
 import com.io.git.way.ui.common.RevealStyle
+import com.io.git.way.ui.common.TreeSearchQuery
+import com.io.git.way.ui.common.compareTreeResults
+import com.io.git.way.ui.common.matchTreeName
 import com.io.git.way.ui.common.rememberReveal
 import com.io.git.way.ui.common.revealIn
 import com.io.git.way.ui.common.SyntaxHighlightTransformation
@@ -454,14 +457,31 @@ fun RepositoryBrowserScreen(
             }
 
             Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                // Ranked, fuzzy search (ported from the PhoneIDE/LSP project tree): typing
+                // "Main" surfaces MainActivity.kt before a hundred generated files that merely
+                // contain "main", and an extension shorthand (`*.kt`, `.kt`, `kt:`) narrows the
+                // scope the way a developer actually types it, without any query syntax to learn.
                 val searchResults = remember(browserQuery, state.remoteTreeCache) {
                     if (browserQuery.isBlank()) {
                         emptyList()
                     } else {
+                        val query = TreeSearchQuery.parse(browserQuery)
                         state.remoteTreeCache.keys
+                            .asSequence()
                             .filter { !it.endsWith("/.gitkeep") && it != ".gitkeep" }
-                            .filter { it.substringAfterLast('/').contains(browserQuery, ignoreCase = true) }
-                            .sorted()
+                            .mapNotNull { path ->
+                                val name = path.substringAfterLast('/')
+                                if (query.extensions.isNotEmpty() &&
+                                    name.substringAfterLast('.', "").lowercase() !in query.extensions
+                                ) {
+                                    return@mapNotNull null
+                                }
+                                val match = matchTreeName(name, query.needle) ?: return@mapNotNull null
+                                Triple(match.score, name, path)
+                            }
+                            .sortedWith(::compareTreeResults)
+                            .map { it.third }
+                            .toList()
                     }
                 }
 

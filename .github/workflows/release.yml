@@ -1,42 +1,54 @@
-# Builds the release APK and publishes a GitHub Release with it attached,
-# automatically, whenever a version tag is pushed.
+name: Release APK
+
+# Builds the release APK and publishes a GitHub Release with it attached.
 #
 # Trigger:
 #   git tag v1.0
 #   git push origin v1.0
+#   Or: Actions tab -> Release APK -> Run workflow
 #
-# That's it — this workflow does what you'd otherwise do by hand on
+# That is it. This workflow does what you would otherwise do by hand on
 # https://github.com/Sandeepbedia/GitWay/releases/new, including uploading the APK.
 #
 # Signing (optional but recommended):
 #   Without any secrets configured, this still builds and publishes an UNSIGNED
-#   release APK (app/build.gradle.kts already supports that — it detects the
+#   release APK (app/build.gradle.kts already supports that -- it detects the
 #   keystore folder and falls back to unsigned builds when missing). To get a
 #   properly signed APK instead, add these four repository secrets
 #   (Settings -> Secrets and variables -> Actions):
-#     KEYSTORE_BASE64     base64 of your .jks/.keystore file — generate with:
+#     KEYSTORE_BASE64     base64 of your .jks/.keystore file -- generate with:
 #                         base64 -w0 your-release-key.jks   (Linux/macOS)
 #                         certutil -encode your-release-key.jks tmp.b64  (Windows)
 #     KEYSTORE_PASSWORD   the keystore's store password
 #     KEY_ALIAS           the key alias inside the keystore
-#     KEY_PASSWORD        the key's password
+#     KEY_PASSWORD        the key alias' password
 #
-# The signing secrets are written to $AB_KEYSTORE_DIR/config.properties and the
-# keystore JKS placed in the same folder — app/build.gradle.kts reads exactly
-# this layout, so no project file is modified by the workflow.
-name: Release APK
+#   The signing secrets are written to $AB_KEYSTORE_DIR/config.properties and the
+#   keystore JKS placed in the same folder. app/build.gradle.kts reads exactly this
+#   layout, so no project file is modified by this workflow.
 
 on:
   push:
     tags:
+      # Both cases on purpose: this repo already carries a "V2.6.7" tag, and tag
+      # filters are case-sensitive, so "v*" alone would silently skip those releases.
       - "v*"
+      - "V*"
+  workflow_dispatch:
 
 permissions:
   contents: write
 
+# Two tags pushed in quick succession shouldn't fight over the release.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-and-release:
-    runs-on: ubuntu-latest
+    # Pinned instead of ubuntu-latest: the floating label is migrating to Ubuntu 26,
+    # and a release build should not change OS underneath itself.
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -61,12 +73,10 @@ jobs:
         run: |
           mkdir -p "$AB_KEYSTORE_DIR"
           echo "$KEYSTORE_BASE64" | base64 -d > "$AB_KEYSTORE_DIR/release.jks"
-          cat > "$AB_KEYSTORE_DIR/config.properties" <<EOF
-          storeFile=release.jks
-          storePassword=$STORE_PASSWORD
-          keyAlias=$KEY_ALIAS
-          keyPassword=$KEY_PASSWORD
-          EOF
+          printf 'storeFile=release.jks\n' > "$AB_KEYSTORE_DIR/config.properties"
+          printf 'storePassword=%s\n' "$STORE_PASSWORD" >> "$AB_KEYSTORE_DIR/config.properties"
+          printf 'keyAlias=%s\n' "$KEY_ALIAS" >> "$AB_KEYSTORE_DIR/config.properties"
+          printf 'keyPassword=%s\n' "$KEY_PASSWORD" >> "$AB_KEYSTORE_DIR/config.properties"
 
       - name: Make gradlew executable
         run: chmod +x gradlew
