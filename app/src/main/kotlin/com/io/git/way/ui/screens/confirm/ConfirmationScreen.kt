@@ -119,7 +119,7 @@ fun ConfirmationScreen(
                 label = { Text("Commit message") },
                 placeholder = { Text(CommitMessageBuilder.summary(state.selectedChanges)) },
                 supportingText = {
-                    Text("Will appear on GitHub as: \"${CommitMessageBuilder.resolve(state.commitMessageDraft, state.selectedChanges)}\"")
+                    Text("Will appear on GitHub as: \"${CommitMessageBuilder.applyWatermark(CommitMessageBuilder.resolve(state.commitMessageDraft, state.selectedChanges))}\"")
                 },
                 enabled = !isBlocked && !state.isUploading,
                 modifier = Modifier.fillMaxWidth()

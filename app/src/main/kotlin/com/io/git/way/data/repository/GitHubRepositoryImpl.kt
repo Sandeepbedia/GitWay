@@ -43,6 +43,7 @@ import com.io.git.way.data.remote.dto.UpdateIssueRequest
 import com.io.git.way.data.remote.dto.UpdatePullRequestRequest
 import com.io.git.way.data.remote.dto.UpdateRefRequest
 import com.io.git.way.data.remote.dto.UpdateRepoRequest
+import com.io.git.way.domain.CommitMessageBuilder
 import com.io.git.way.domain.VersionComparator
 import com.io.git.way.domain.model.ApiRateLimit
 import com.io.git.way.domain.model.AppUpdateInfo
@@ -257,6 +258,7 @@ class GitHubRepositoryImpl(
             onProgress(UploadPhase.VALIDATING, 0, changes.size, "")
             val validatedDefaultBranch = validateRepositoryForUpload(repo).getOrThrow()
             val branch = targetBranch?.takeIf { it.isNotBlank() } ?: validatedDefaultBranch
+            val finalCommitMessage = CommitMessageBuilder.applyWatermark(commitMessage)
 
             data class NormalizedChange(val original: FileChange, val cleanPath: String)
             val normalized = changes.map { change ->
@@ -289,7 +291,7 @@ class GitHubRepositoryImpl(
                         repo.owner, repo.name,
                         path = bootstrap.cleanPath.encodedForContentsPath(),
                         body = CreateFileContentRequest(
-                            message = "Initial commit",
+                            message = CommitMessageBuilder.applyWatermark("Initial commit"),
                             content = base64,
                             branch = branch
                         )
@@ -335,7 +337,7 @@ class GitHubRepositoryImpl(
                 repoName = repo.name,
                 branch = branch,
                 treeEntries = blobEntries + deleteEntries,
-                message = commitMessage,
+                message = finalCommitMessage,
                 total = total,
                 onProgress = onProgress
             )

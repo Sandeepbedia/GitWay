@@ -1,5 +1,3 @@
-import java.util.Properties
-
 plugins {
     alias(libs.plugins.android.application)
     // kotlin-android removed — AGP 9 compiles Kotlin via built-in Kotlin support.
@@ -7,38 +5,19 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-// Shared release keystore — NOT stored in this project. JKS + passwords live in a shared folder.
-// 1Keystore/ is the shared registry (registry.json + one sub-folder per keystore); the
-// sub-folder is what actually holds config.properties + the .jks, so "universe" is listed
-// before its parent. Both device (/storage/emulated/0/...) and container (/root/storage/...)
-// layouts are tried.
-// Override via env: AB_KEYSTORE_DIR=/path/to/keystore
-// If no folder is reachable the release build still compiles (unsigned) so R8/shrink is never blocked.
-val sharedKeystoreDir = run {
-    val envDir = System.getenv("AB_KEYSTORE_DIR")
-    if (!envDir.isNullOrBlank() && File("$envDir/config.properties").exists()) return@run envDir
-    if (!envDir.isNullOrBlank() && File(envDir).exists()) return@run envDir
-    val candidates = listOf(
-        "/root/storage/PhoneIDEProjects/1Keystore/universe",
-        "/storage/emulated/0/PhoneIDEProjects/1Keystore/universe",
-        "/root/storage/PhoneIDEProjects/1Keystore",
-        "/storage/emulated/0/AndroidCSProjects/keystore",
-        "/storage/emulated/0/AndroidCSProjects/1keystore",
-        "/root/storage/AndroStudioProjects/1keystore",
-        "/root/storage/AndroStudioProjects/keystore"
-    )
-    candidates.firstOrNull { File("$it/config.properties").exists() }
-        ?: candidates.firstOrNull { File(it).exists() }
-        ?: envDir?.takeIf { it.isNotBlank() }
-        ?: "/root/storage/PhoneIDEProjects/1Keystore/universe"
-}
-val signingProps = Properties().apply {
-    File("$sharedKeystoreDir/config.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
-}
-val hasReleaseSigning =
-    File("$sharedKeystoreDir/${signingProps.getProperty("storeFile", "Universe-release.jks")}").exists()
-
 android {
+    // PHONEIDE_SIGNING_START
+    signingConfigs {
+        create("release") {
+            // PhoneIDE: release signing — filled in at build time from
+            // the project's central keystore. See 1Keystore / JKS Manager.
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
+        }
+    }
+    // PHONEIDE_SIGNING_END
+
     namespace = "com.io.git.way"
     compileSdk = 36
 
@@ -46,37 +25,22 @@ android {
         applicationId = "com.io.git.way"
         minSdk = 26
         targetSdk = 36
-        versionCode = 217
-        versionName = "2.6.7"
+        versionCode = 218
+        versionName = "2.6.8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    signingConfigs {
-        if (hasReleaseSigning) {
-            create("release") {
-                storeFile = File(sharedKeystoreDir, signingProps.getProperty("storeFile"))
-                storePassword = signingProps.getProperty("storePassword")
-                keyAlias = signingProps.getProperty("keyAlias")
-                keyPassword = signingProps.getProperty("keyPassword")
-                enableV1Signing = true
-                enableV2Signing = true
-                enableV3Signing = true
-            }
-        }
-    }
-
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            if (hasReleaseSigning) {
-                signingConfig = signingConfigs.getByName("release")
-            }
+            // Default debug signing — no external keystore path needed.
         }
         debug {
             applicationIdSuffix = ".debug"

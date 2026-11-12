@@ -20,6 +20,15 @@ import com.io.git.way.domain.model.ChangeType
 import com.io.git.way.domain.model.FileChange
 
 object CommitMessageBuilder {
+    // ============================================================
+    //  COMMIT WATERMARK
+    //  Yahan apna watermark text likho — jab chaho laga/hata sakte ho.
+    //  Har commit message ke neeche (body me) ye text add hoga.
+    //  Example: "Made with Git Way"
+    //  Blank ("") = watermark OFF.
+    // ============================================================
+    const val WATERMARK: String = ""
+
     fun summary(changes: List<FileChange>): String {
         val added = changes.count { it.type == ChangeType.ADDED }
         val modified = changes.count { it.type == ChangeType.MODIFIED }
@@ -27,8 +36,15 @@ object CommitMessageBuilder {
         return "$added added, $modified modified, $removed removed"
     }
 
+    /** Appends the watermark as a commit-message body when one is configured. */
+    fun applyWatermark(message: String): String {
+        val watermark = WATERMARK.trim()
+        return if (watermark.isEmpty()) message else "$message\n\n$watermark"
+    }
+
     fun resolve(customMessage: String, changes: List<FileChange>): String =
         customMessage.trim().ifBlank { summary(changes) }
 
-    fun defaultPreview(changes: List<FileChange>): String = summary(changes)
+    fun defaultPreview(changes: List<FileChange>): String =
+        applyWatermark(summary(changes))
 }

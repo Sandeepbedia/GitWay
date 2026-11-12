@@ -1,0 +1,8 @@
+{
+  "keystoreRef": "ks_FB62B3",
+  "alias": "universe-release",
+  "v1Enabled": true,
+  "v2Enabled": true,
+  "v3Enabled": true,
+  "abiFilters": []
+}
