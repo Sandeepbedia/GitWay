@@ -16,16 +16,8 @@
  */
 package com.io.git.way.data.local
 
-/**
- * Secret Detection Engine (PRD "Smart GitHub Upload Protection" §6). Scans a text file's
- * content for likely API keys, tokens, credentials, and connection strings. Only ever run
- * on files that already passed [IgnoreEngine] and look like text under [isScannable]'s
- * size/extension guard, to keep the scan fast and avoid false positives on binaries.
- */
 object SecretScanner {
 
-    /** Kept close to the PRD's own regex examples (§6). Label is shown to the user on the
-     * matching warning card / file badge — never the matched text itself. */
     private val PATTERNS: List<Pair<String, Regex>> = listOf(
         "Google API key" to Regex("AIza[0-9A-Za-z\\-_]{35}"),
         "GitHub personal access token" to Regex("ghp_[0-9A-Za-z]{36}"),

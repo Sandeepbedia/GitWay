@@ -56,18 +56,10 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 
-/**
- * Resolves a possibly-relative markdown link/image target against the repo it came
- * from — e.g. a README under `docs/` that links to `../assets/banner.png` needs to
- * become an absolute raw.githubusercontent.com URL before Coil can load it, and a plain
- * `CONTRIBUTING.md` link needs to become a real github.com blob URL to be openable.
- */
 class MarkdownLinkResolver(
     private val owner: String,
     private val repo: String,
     private val branch: String,
-    /** Directory the file being previewed lives in, e.g. "docs" for "docs/README.md",
-     * or "" for a root-level README.md. */
     private val currentFileDir: String
 ) {
     /** Absolute URL to fetch raw bytes from — what an `<img>`/`![]()` needs. */
@@ -129,10 +121,6 @@ private object MarkdownParser {
     private val taskItem = Regex("""^[-*+]\s+\[([ xX])]\s+(.*)$""")
     /** A GFM table separator row: `|---|:---:|---:|` (with optional leading/trailing `|`). */
     private val tableSeparator = Regex("""^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?$""")
-    /** Strips block-level HTML tags GFM READMEs commonly use for layout
-     * (`<div align="center">`, `<p>`, `<br>`, `<details>/<summary>`, comments) — Git Way
-     * doesn't render real HTML, so these are dropped rather than shown as raw markup;
-     * their *text content* (e.g. inside `<summary>click me</summary>`) is kept. */
     private val htmlTag = Regex("""</?[a-zA-Z][^>]*>""")
     private val htmlComment = Regex("""<!--.*?-->""", RegexOption.DOT_MATCHES_ALL)
 
@@ -281,8 +269,6 @@ private object MarkdownParser {
     }
 }
 
-/** Parses `**bold**`, `*italic*`, `` `code` `` and `[text](url)` inline markdown into a
- * clickable [androidx.compose.ui.text.AnnotatedString]. */
 private fun inlineAnnotated(text: String, resolver: MarkdownLinkResolver, linkColor: Color) = buildAnnotatedString {
     var i = 0
     while (i < text.length) {
@@ -320,11 +306,6 @@ private fun inlineAnnotated(text: String, resolver: MarkdownLinkResolver, linkCo
                     i = end + 1
                 }
             }
-            // Inline image/badge — `![alt](img)`, optionally wrapped in a link:
-            // `[![alt](img)](href)`. Compose's plain AnnotatedString can't embed a real
-            // <img> inline, so this renders as clickable alt-text instead of leaking the
-            // raw markdown syntax onto the screen (badges are almost always short labels
-            // like "build passing", so the text alone stays meaningful).
             text.startsWith("[![", i) -> {
                 val altClose = text.indexOf(']', i + 3)
                 val imgUrlClose = if (altClose != -1 && text.getOrNull(altClose + 1) == '(') text.indexOf(')', altClose) else -1
@@ -368,12 +349,6 @@ private fun inlineAnnotated(text: String, resolver: MarkdownLinkResolver, linkCo
     }
 }
 
-/** Renders GitHub-flavoured README markdown — headings, bold/italic/inline-code, links
- * that open the real GitHub page, images loaded from raw.githubusercontent.com, lists,
- * block quotes, fenced code blocks and horizontal rules. Built without a third-party
- * markdown library: just enough of GFM to make a typical README readable, kept as plain
- * Compose so it reflows correctly at any width — phone, foldable, or a DeX/Chromebook
- * "desktop mode" window. */
 @Composable
 fun MarkdownView(markdown: String, resolver: MarkdownLinkResolver, modifier: Modifier = Modifier) {
     val blocks = remember(markdown) { MarkdownParser.parse(markdown) }
@@ -462,9 +437,6 @@ fun MarkdownView(markdown: String, resolver: MarkdownLinkResolver, modifier: Mod
     }
 }
 
-/** GFM table, rendered close to how GitHub shows it: bordered cells, a bold/tinted
- * header row, alternating row shading, and horizontal scroll for tables wider than the
- * screen (very common for READMEs with many columns) instead of wrapping/squeezing text. */
 @Composable
 private fun MarkdownTable(table: MdBlock.Table, resolver: MarkdownLinkResolver, linkColor: Color) {
     val borderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)

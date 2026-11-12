@@ -31,6 +31,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.ExpandLess
@@ -71,11 +72,10 @@ import com.io.git.way.ui.theme.GlassCard
 import com.io.git.way.ui.theme.GlassPrimaryButton
 import com.io.git.way.ui.theme.GlassScaffold
 
-/** Screen 5: Added / Modified / Removed diff preview, with manual + select-all controls
- * over exactly which changes get pushed (PRD1 §3.4 Analysis Screen). */
 @Composable
 fun AnalysisScreen(
     sessionViewModel: GitWaySessionViewModel,
+    onBack: () -> Unit = {},
     onContinue: () -> Unit
 ) {
     val context = LocalContext.current
@@ -94,6 +94,11 @@ fun AnalysisScreen(
 
     GlassScaffold(
         title = "Changes",
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+            }
+        },
         actions = {
             if (hasChanges) {
                 IconButton(onClick = { sessionViewModel.selectAllChanges() }) {
@@ -343,9 +348,6 @@ private fun CountBadge(count: Int, color: Color) {
     }
 }
 
-/** Explains, in place, why README/LICENSE/.github/etc. that only exist on GitHub don't
- * show up under Removed — they're repository scaffolding, not app project files, so
- * this app never treats them as something the person deleted locally. */
 @Composable
 private fun ScaffoldFilesNotice(files: List<String>) {
     var expanded by remember { mutableStateOf(false) }

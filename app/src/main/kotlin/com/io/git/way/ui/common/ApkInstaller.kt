@@ -30,25 +30,16 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipInputStream
 
-/** A completed download waiting for the UI to decide what to do with it — install
- * (when [isApk]), save via SAF, or share. */
 data class DownloadResult(
     val fileName: String,
     val bytes: ByteArray,
     val isApk: Boolean
 )
 
-/**
- * Downloads → device helpers: write bytes to the app cache, extract an APK from an
- * Actions-artifact zip archive, and hand it to the system package installer via
- * FileProvider. No `MANAGE_EXTERNAL_STORAGE` needed — everything stays in app storage.
- */
 object ApkInstaller {
 
     private const val AUTHORITY_SUFFIX = ".fileprovider"
 
-    /** Downloads arbitrary bytes (e.g. a release APK from its browser_download_url —
-     * codeload / objects.githubusercontent.com, which needs no auth). */
     suspend fun downloadBytes(url: String): ByteArray = withContext(Dispatchers.IO) {
         val client = OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
@@ -90,8 +81,6 @@ object ApkInstaller {
         return null
     }
 
-    /** Hands an APK file to the system package installer. Returns an error string on
-     * failure, or null when the install intent was launched successfully. */
     fun installApk(context: Context, apkFile: File): String? {
         if (!apkFile.exists() || apkFile.length() == 0L) return "APK file is empty or missing."
         return try {

@@ -87,26 +87,6 @@ import com.io.git.way.ui.theme.RepoTextSecondaryLight
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/**
- * Screen 1: Git Way branding over the liquid glass background.
- *
- * Premium choreography, all driven by the app's own purple palette so the first
- * thing anyone sees on-device matches the identity everywhere else:
- *
- *  1. Ambient aurora orbs drift slowly behind everything (dark mode only shows
- *     them at full strength; light mode keeps them faint).
- *  2. The logo mark springs in with EaseOutBack over a breathing glow, wrapped
- *     by a slow comet-tail orbit ring that doubles as the "working" cue.
- *  3. A light sheen sweeps across the mark periodically (glass feel).
- *  4. "Git Way" lands letter-by-letter with a rising fade, tagline follows.
- *  5. A slim gradient loading line + version pill anchor the bottom.
- *  6. The whole center block fades/scales out before [onFinished] fires, so the
- *     hand-off to the next destination never feels like a hard cut.
- *
- * Respects the system "remove animations" accessibility setting
- * (ANIMATOR_DURATION_SCALE == 0): every stage snaps to its final state and the
- * screen finishes quickly instead of animating for two seconds.
- */
 @Composable
 fun SplashScreen(onFinished: () -> Unit) {
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
@@ -120,8 +100,6 @@ fun SplashScreen(onFinished: () -> Unit) {
     val exit = remember { Animatable(0f) }
     val letters = remember { "Git Way".map { Animatable(if (reducedMotion) 1f else 0f) } }
 
-    // Master timeline: mark springs in → letters/tagline/bottom are already
-    // running on their own delays → hold → exit fade → hand off.
     LaunchedEffect(Unit) {
         if (reducedMotion) {
             delay(600)
@@ -179,8 +157,6 @@ fun SplashScreen(onFinished: () -> Unit) {
 
                 Spacer(modifier = Modifier.height(36.dp))
 
-                // Letter-by-letter title — every glyph is laid out from frame one
-                // (only alpha/translation animate), so the row never reflows.
                 Row {
                     "Git Way".forEachIndexed { index, char ->
                         Text(
@@ -245,11 +221,6 @@ private fun rememberReducedMotion(): Boolean {
     }
 }
 
-/**
- * Soft colored glows drifting behind everything. Radial gradients fading to
- * transparent do the "blur" work — no RenderEffect cost, works identically on
- * API 26+. Three hues from the accent hierarchy keep it on-brand, not rainbow.
- */
 @Composable
 private fun AuroraOrbs(dark: Boolean, reducedMotion: Boolean) {
     val baseAlpha = if (dark) 0.16f else 0.09f
@@ -360,16 +331,6 @@ private fun OrbitRing(dark: Boolean, reducedMotion: Boolean) {
     }
 }
 
-/**
- * The brand tile: deep-dark rounded square (like the app icon, premium-fied) so
- * the multicolour Git Way logo pops against it — glass sheen on top, colored
- * elevation shadow, hairline border, and a periodic light sweep clipped to the
- * tile shape. The sweep uses keyframes so it plays for ~850ms then rests ~2.5s.
- *
- * The launcher foreground PNG is drawn at native tile size and then scaled up:
- * adaptive-icon assets keep a large safe-zone margin around the artwork, and
- * zooming past that margin is what makes the logo actually fill the tile.
- */
 @Composable
 private fun LogoMark(markScale: Float, markAlpha: Float, reducedMotion: Boolean) {
     val shape = RoundedCornerShape(26.dp)

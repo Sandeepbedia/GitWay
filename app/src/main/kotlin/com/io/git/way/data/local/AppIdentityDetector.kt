@@ -20,29 +20,6 @@ import android.content.Context
 import com.io.git.way.domain.model.AppIdentity
 import com.io.git.way.domain.model.LocalFile
 
-/**
- * Detects which app/project a folder or GitHub repository belongs to, per PRD
- * "Repository Project Validation & Safe Upload System": Package Name / Application ID
- * (the primary signal — every supported project type has one) plus, when resolvable,
- * a human-readable App Name.
- *
- * Package/Application ID comes from whichever of these a project has: an Android
- * module's build.gradle(.kts) `applicationId`/`namespace` (or the older `package`
- * attribute on AndroidManifest.xml), a Flutter project's pubspec.yaml `name:`, or a
- * Node/JS project's package.json `"name"`.
- *
- * App Name comes from Android's `android:label` on AndroidManifest.xml's
- * `<application>` tag — resolved through res/values/strings.xml when it's a
- * `@string/...` reference rather than a literal string. Non-Android projects don't have
- * a meaningfully separate "app name" field, so it stays null there and only the
- * package/project name is compared for them.
- *
- * This exists purely to catch "wrong repo selected" or "wrong local folder selected"
- * before Git Way diffs or uploads anything. It is intentionally best-effort: if a
- * project exposes no recognisable package/name at all, detection returns null and no
- * mismatch is reported — Git Way only blocks when it can actually read an identifier
- * from *both* sides and they disagree.
- */
 object AppIdentityDetector {
 
     private val APPLICATION_ID_REGEX = Regex("""applicationId\s*=?\s*["']([\w.]+)["']""")
@@ -67,9 +44,6 @@ object AppIdentityDetector {
     private fun isStringsXmlFile(path: String) =
         path.endsWith("res/values/strings.xml")
 
-    /** Shallower paths first — an app-module's own build.gradle.kts (or a project's root
-     * pubspec.yaml/package.json) is a much more reliable signal than one nested inside a
-     * random subfolder, sample module, or node_modules-adjacent package. */
     private fun byDepth(path: String) = path.count { it == '/' }
 
     private fun extractFromGradleText(text: String): String? =
@@ -92,9 +66,6 @@ object AppIdentityDetector {
         Regex("""<string\s+name\s*=\s*["']${Regex.escape(name)}["'][^>]*>([^<]*)</string>""")
             .find(stringsXmlText)?.groupValues?.get(1)?.trim()
 
-    /** Finds the first candidate file matching [matches], reads it, and runs [extract] —
-     * returns the extracted value paired with which file it came from. Closest-to-root
-     * candidate wins when several match. */
     private suspend fun <T> firstMatch(
         candidates: List<T>,
         pathOf: (T) -> String,
@@ -120,8 +91,6 @@ object AppIdentityDetector {
             ?: firstMatch(candidates, pathOf, read, ::isPubspecFile, ::extractFromPubspecText)
             ?: firstMatch(candidates, pathOf, read, ::isPackageJsonFile, ::extractFromPackageJsonText)
 
-    /** Android only: reads `android:label` off AndroidManifest.xml, resolving a
-     * `@string/...` reference against res/values/strings.xml when needed. */
     private suspend fun <T> detectAppName(
         candidates: List<T>,
         pathOf: (T) -> String,
@@ -139,9 +108,6 @@ object AppIdentityDetector {
         return null
     }
 
-    /** Reads the already-scanned local folder's own files looking for its package/app
-     * name. Only reads the small number of candidate files (gradle build scripts,
-     * manifests, strings.xml, pubspec.yaml, package.json) — never the whole project. */
     suspend fun detectLocal(context: Context, files: List<LocalFile>): AppIdentity? {
         val pathOf: (LocalFile) -> String = { it.relativePath }
         val read: suspend (LocalFile) -> String? = { file ->
@@ -152,10 +118,6 @@ object AppIdentityDetector {
         return AppIdentity(packageName = packageName, appName = appName, sourceFile = sourceFile)
     }
 
-    /** Same detection against a GitHub repository's remote file tree (path -> blob sha,
-     * as returned by [com.io.git.way.domain.repository.GitHubRepository.getRepositoryTree]).
-     * [readRemoteFile] fetches one blob's bytes by sha — only called for the handful of
-     * candidate paths, not the whole tree. */
     suspend fun detectRemote(
         remoteTree: Map<String, String>,
         readRemoteFile: suspend (blobSha: String) -> ByteArray?

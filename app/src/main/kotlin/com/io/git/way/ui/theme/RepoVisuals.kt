@@ -61,8 +61,6 @@ private val fallbackPalette = listOf(
     RepoVisual(LangMisc, Icons.Filled.Memory)
 )
 
-/** Resolves a stable [RepoVisual] for a repo — same language always maps to the same look,
- * and repos with no language still get a consistent (not random-per-recomposition) look. */
 fun repoVisualFor(name: String, language: String?): RepoVisual {
     val known = language?.lowercase()?.let { languageVisuals[it] }
     if (known != null) return known

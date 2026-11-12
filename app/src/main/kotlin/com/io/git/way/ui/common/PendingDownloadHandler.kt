@@ -33,12 +33,6 @@ import androidx.core.content.FileProvider
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 
-/**
- * Shared UI for a [DownloadResult] sitting in session state: offers Install (APKs),
- * Save to Downloads (SAF create-document), and Share (ACTION_SEND via FileProvider).
- * Screens that trigger downloads call this with the current pending download; it owns
- * the SAF launcher and the install/share intents.
- */
 @Composable
 fun PendingDownloadHandler(
     pending: DownloadResult?,

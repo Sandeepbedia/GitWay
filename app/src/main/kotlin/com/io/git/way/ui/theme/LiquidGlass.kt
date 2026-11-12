@@ -77,6 +77,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -107,21 +108,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/**
- * ---------------------------------------------------------------------------
- * Theme helpers
- * ---------------------------------------------------------------------------
- */
 
 private val MaterialTheme.isDarkSurface: Boolean
     @Composable
     get() = colorScheme.background.luminance() < 0.5f
 
-/**
- * ---------------------------------------------------------------------------
- * Liquid Glass Background
- * ---------------------------------------------------------------------------
- */
 
 @Composable
 fun LiquidGlassBackground(
@@ -156,11 +147,6 @@ fun LiquidGlassBackground(
     }
 }
 
-/**
- * ---------------------------------------------------------------------------
- * Glass Scaffold
- * ---------------------------------------------------------------------------
- */
 
 @Composable
 fun GlassScaffold(
@@ -233,11 +219,6 @@ fun GlassScaffold(
     }
 }
 
-/**
- * ---------------------------------------------------------------------------
- * Glass Treatment
- * ---------------------------------------------------------------------------
- */
 
 @Composable
 private fun glassTreatment(
@@ -269,11 +250,6 @@ private data class GlassTreatment(
     val content: Color
 )
 
-/**
- * ---------------------------------------------------------------------------
- * Glass Card
- * ---------------------------------------------------------------------------
- */
 
 @Composable
 fun GlassCard(
@@ -285,8 +261,28 @@ fun GlassCard(
 ) {
     val treatment = glassTreatment(selected)
 
+    // Subtle entrance for every glass card: fades, lifts a few dp and settles
+    // into place. Re-triggers whenever a card enters the composition (e.g.
+    // while scrolling a lazy list), which keeps long lists lively.
+    var appeared by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { appeared = true }
+    val entrance by animateFloatAsState(
+        targetValue = if (appeared) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = 260,
+            easing = FastOutSlowInEasing
+        ),
+        label = "glassCardEntrance"
+    )
+
     Column(
         modifier = modifier
+            .graphicsLayer {
+                alpha = entrance
+                translationY = (1f - entrance) * 14.dp.toPx()
+                scaleX = 0.985f + 0.015f * entrance
+                scaleY = 0.985f + 0.015f * entrance
+            }
             .shadow(
                 elevation = 2.dp,
                 shape = shape,
@@ -313,11 +309,6 @@ fun GlassCard(
     }
 }
 
-/**
- * ---------------------------------------------------------------------------
- * Clickable Glass Card
- * ---------------------------------------------------------------------------
- */
 
 @Composable
 fun GlassClickableCard(
@@ -330,8 +321,25 @@ fun GlassClickableCard(
 ) {
     val treatment = glassTreatment(selected)
 
+    var appeared by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { appeared = true }
+    val entrance by animateFloatAsState(
+        targetValue = if (appeared) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = 260,
+            easing = FastOutSlowInEasing
+        ),
+        label = "glassClickableCardEntrance"
+    )
+
     Column(
         modifier = modifier
+            .graphicsLayer {
+                alpha = entrance
+                translationY = (1f - entrance) * 14.dp.toPx()
+                scaleX = 0.985f + 0.015f * entrance
+                scaleY = 0.985f + 0.015f * entrance
+            }
             .shadow(
                 elevation = 2.dp,
                 shape = shape,
@@ -359,11 +367,6 @@ fun GlassClickableCard(
     }
 }
 
-/**
- * ---------------------------------------------------------------------------
- * Primary Button
- * ---------------------------------------------------------------------------
- */
 
 @Composable
 fun GlassPrimaryButton(
@@ -448,11 +451,6 @@ fun GlassPrimaryButton(
     }
 }
 
-/**
- * ---------------------------------------------------------------------------
- * Secondary Button
- * ---------------------------------------------------------------------------
- */
 
 @Composable
 fun GlassSecondaryButton(
@@ -518,11 +516,6 @@ fun GlassSecondaryButton(
     }
 }
 
-/**
- * ---------------------------------------------------------------------------
- * Glass Chip
- * ---------------------------------------------------------------------------
- */
 
 @Composable
 fun GlassChip(
@@ -577,11 +570,6 @@ fun GlassChip(
     }
 }
 
-/**
- * ---------------------------------------------------------------------------
- * Glass Icon Button
- * ---------------------------------------------------------------------------
- */
 
 @Composable
 fun GlassIconButton(
@@ -650,11 +638,6 @@ fun GlassIconButton(
     }
 }
 
-/**
- * ---------------------------------------------------------------------------
- * Glass FAB
- * ---------------------------------------------------------------------------
- */
 
 @Composable
 fun GlassFab(
@@ -712,11 +695,6 @@ fun GlassFab(
     }
 }
 
-/**
- * ---------------------------------------------------------------------------
- * Search Field
- * ---------------------------------------------------------------------------
- */
 
 @Composable
 fun GlassSearchField(
@@ -833,11 +811,6 @@ fun GlassSearchField(
     }
 }
 
-/**
- * ---------------------------------------------------------------------------
- * Skeleton Card
- * ---------------------------------------------------------------------------
- */
 
 @Composable
 fun GlassSkeletonCard(
@@ -921,11 +894,6 @@ fun GlassSkeletonCard(
     }
 }
 
-/**
- * ---------------------------------------------------------------------------
- * Bottom Navigation
- * ---------------------------------------------------------------------------
- */
 
 enum class BottomNavTab(
     val label: String,
@@ -945,14 +913,6 @@ enum class BottomNavTab(
     )
 }
 
-/**
- * ---------------------------------------------------------------------------
- * Bottom Navigation Metrics
- *
- * Normal icons intentionally stay close together.
- * Selected item expands only enough for icon + label.
- * ---------------------------------------------------------------------------
- */
 
 private val NAV_ICON_SIZE = 21.dp
 private val NAV_ITEM_HEIGHT = 48.dp
@@ -970,11 +930,6 @@ private val NAV_LABEL_STYLE = TextStyle(
     letterSpacing = 0.sp
 )
 
-/**
- * ---------------------------------------------------------------------------
- * Floating Bottom Nav
- * ---------------------------------------------------------------------------
- */
 
 @Composable
 fun GlassFloatingBottomNav(
@@ -1038,11 +993,6 @@ fun GlassFloatingBottomNav(
                         .fillMaxWidth()
                         .height(NAV_ITEM_HEIGHT),
 
-                    /**
-                     * This is intentional:
-                     * icons stay close instead of being pushed
-                     * to the extreme edges.
-                     */
                     horizontalArrangement = Arrangement.Center,
 
                     verticalAlignment = Alignment.CenterVertically
@@ -1058,8 +1008,6 @@ fun GlassFloatingBottomNav(
                         NavPill(
                             item = item,
                             isSelected = item == selected,
-                            // Every tab shows its label, so each pill is sized
-                            // to its own content — icon + label.
                             itemWidth = measuredNavPillWidth(item.label),
                             onClick = {
                                 onSelect(item)
@@ -1072,14 +1020,6 @@ fun GlassFloatingBottomNav(
     }
 }
 
-/**
- * ---------------------------------------------------------------------------
- * Measure Selected Pill
- * ---------------------------------------------------------------------------
- *
- * Width is content based, so "Repositories" and "Profile"
- * don't get an unnecessarily huge selected section.
- */
 
 @Composable
 private fun measuredNavPillWidth(
@@ -1113,21 +1053,6 @@ private fun measuredNavPillWidth(
     )
 }
 
-/**
- * ---------------------------------------------------------------------------
- * Individual Nav Pill
- * ---------------------------------------------------------------------------
- *
- * IMPORTANT:
- *
- * - Every tab = icon + label.
- * - Selected tab gets the accent border/background + accent text/icon.
- * - Unselected tabs stay muted.
- * - Border/background animate with the width.
- * - Icon remains close to label.
- * - Press scale gives tactile feedback.
- * - Selected icon gets a subtle spring pop.
- */
 
 @Composable
 private fun RowScope.NavPill(
@@ -1167,11 +1092,6 @@ private fun RowScope.NavPill(
     val isPressed by interactionSource
         .collectIsPressedAsState()
 
-    /**
-     * Press flash.
-     *
-     * Fast appearing highlight + slower fade.
-     */
     val pressLevel by animateFloatAsState(
         targetValue = if (isPressed) 1f else 0f,
         animationSpec = tween(
@@ -1181,9 +1101,6 @@ private fun RowScope.NavPill(
         label = "navPressLevel"
     )
 
-    /**
-     * Selected / inactive icon color — smooth morph on tap.
-     */
     val iconTint by animateColorAsState(
         targetValue =
             if (isSelected) {
@@ -1202,9 +1119,6 @@ private fun RowScope.NavPill(
         label = "navIconTint"
     )
 
-    /**
-     * Label color — accent when selected, muted otherwise, smooth morph.
-     */
     val labelColor by animateColorAsState(
         targetValue = if (isSelected) accent else inactive,
         animationSpec = tween(
@@ -1214,9 +1128,6 @@ private fun RowScope.NavPill(
         label = "navLabelColor"
     )
 
-    /**
-     * Selected icon bounce.
-     */
     val iconScale by animateFloatAsState(
         targetValue =
             when {
@@ -1231,9 +1142,6 @@ private fun RowScope.NavPill(
         label = "navIconScale"
     )
 
-    /**
-     * Label pop — text scales with the tap so the whole pill reacts.
-     */
     val labelScale by animateFloatAsState(
         targetValue =
             when {
@@ -1248,9 +1156,6 @@ private fun RowScope.NavPill(
         label = "navLabelScale"
     )
 
-    /**
-     * Pressed item slightly sinks.
-     */
     val pillScale by animateFloatAsState(
         targetValue =
             if (isPressed) 0.94f
@@ -1262,12 +1167,6 @@ private fun RowScope.NavPill(
         label = "navPillScale"
     )
 
-    /**
-     * Selected border alpha.
-     *
-     * This makes the border itself feel like it is
-     * appearing while the section expands.
-     */
     val selectedBorderAlpha by animateFloatAsState(
         targetValue =
             if (isSelected) 0.75f
@@ -1278,11 +1177,6 @@ private fun RowScope.NavPill(
         label = "selectedBorderAlpha"
     )
 
-    /**
-     * Selected background alpha.
-     *
-     * No permanent heavy background on inactive items.
-     */
     val selectedBackgroundAlpha by animateFloatAsState(
         targetValue =
             if (isSelected) 0.12f
@@ -1293,11 +1187,6 @@ private fun RowScope.NavPill(
         label = "selectedBackgroundAlpha"
     )
 
-    /**
-     * Border and background use exactly the same animated
-     * container dimensions, so the section visually extends
-     * together with the width.
-     */
     val pillShape = RoundedCornerShape(17.dp)
 
     Column(
@@ -1341,27 +1230,14 @@ private fun RowScope.NavPill(
         Row(
             modifier = Modifier.fillMaxSize(),
 
-            /**
-             * Keep icon + text compact.
-             */
             horizontalArrangement = Arrangement.Center,
 
             verticalAlignment = Alignment.CenterVertically
         ) {
-            /**
-             * Icon container.
-             *
-             * This stays the same size in both states,
-             * preventing the icon from jumping when label
-             * appears.
-             */
             Box(
                 modifier = Modifier.size(34.dp),
                 contentAlignment = Alignment.Center
             ) {
-                /**
-                 * Soft selected glow.
-                 */
                 Box(
                     modifier = Modifier
                         .size(34.dp)
@@ -1384,9 +1260,6 @@ private fun RowScope.NavPill(
                         )
                 )
 
-                /**
-                 * Actual icon.
-                 */
                 Box(
                     modifier = Modifier.graphicsLayer {
                         scaleX = iconScale
@@ -1412,10 +1285,6 @@ private fun RowScope.NavPill(
                 }
             }
 
-            /**
-             * Label — always visible, muted when unselected, accent when
-             * selected, with a springy scale pop on tap.
-             */
             Text(
                 text = item.label,
 

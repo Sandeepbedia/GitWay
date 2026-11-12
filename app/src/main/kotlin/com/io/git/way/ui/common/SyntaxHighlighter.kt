@@ -25,11 +25,6 @@ import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 
-/**
- * Minimal regex-based syntax highlighter for the Repository Browser's file viewer/editor
- * (not a real tokenizer — good enough to make code readable at a glance: keywords,
- * strings, comments, numbers, without pulling in a full highlighting library/dependency).
- */
 object SyntaxHighlighter {
 
     private val KEYWORDS = setOf(
@@ -89,8 +84,6 @@ object SyntaxHighlighter {
     }
 }
 
-/** Applies [SyntaxHighlighter] live inside an editable TextField — text length/offsets
- * never change (only colour spans are added), so the offset mapping is the identity. */
 class SyntaxHighlightTransformation : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText =
         TransformedText(SyntaxHighlighter.highlight(text.text), OffsetMapping.Identity)

@@ -51,11 +51,6 @@ import com.io.git.way.ui.theme.RepoPurple
 import com.io.git.way.ui.theme.RepoPurpleDark
 import com.io.git.way.ui.theme.RepoPurpleLight
 
-/** Shown when [com.io.git.way.domain.repository.GitHubRepository.checkForUpdate] finds
- * a newer GitHub release than the installed app. [onUpdate] should open the APK
- * download (or the release page, if no APK asset was attached); [onDismiss] just
- * closes it for this session — there's no "don't ask again", since a manual PAT-based
- * push tool is exactly the kind of app people want to know is current. */
 @Composable
 fun UpdateAvailableDialog(
     update: AppUpdateInfo,

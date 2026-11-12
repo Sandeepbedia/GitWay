@@ -19,6 +19,7 @@ package com.io.git.way.ui.screens.upload
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,7 +28,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -46,21 +51,39 @@ import com.io.git.way.ui.theme.GlassPrimaryButton
 import com.io.git.way.ui.theme.GlassScaffold
 import com.io.git.way.ui.theme.GlassSecondaryButton
 
-/** Screen 7: real-time upload status through every stage of the push, not just a stuck
- * "42/42" (422-fix PRD §11 Progress UI / §14 Better UI). */
 @Composable
 fun UploadProgressScreen(
     sessionViewModel: GitWaySessionViewModel,
+    onBack: () -> Unit = {},
     onUploadFinished: () -> Unit
 ) {
     val context = LocalContext.current
     val state = sessionViewModel.state
 
+    // Leaving this screen mid-upload cancels the job instead of letting it run
+    // invisibly in the background.
+    BackHandler {
+        if (state.isUploading) sessionViewModel.cancelUpload()
+        onBack()
+    }
+
     LaunchedEffect(state.commitSha) {
         if (state.commitSha != null) onUploadFinished()
     }
 
-    GlassScaffold(title = "Uploading") { padding ->
+    GlassScaffold(
+        title = "Uploading",
+        navigationIcon = {
+            IconButton(
+                onClick = {
+                    if (state.isUploading) sessionViewModel.cancelUpload()
+                    onBack()
+                }
+            ) {
+                Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+            }
+        }
+    ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp)) {
             GlassCard(modifier = Modifier.fillMaxWidth()) {
                 val phaseLabel = phaseLabel(state.uploadPhase)

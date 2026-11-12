@@ -84,9 +84,6 @@ fun ActionsScreen(
 
     val activeSection = ActionsSection.entries[sectionIndex]
 
-    /*
-     * Load Actions data whenever the selected repository changes.
-     */
     LaunchedEffect(state.selectedRepo?.fullName) {
         if (state.selectedRepo != null) {
             sessionViewModel.loadWorkflowRuns()
@@ -95,9 +92,6 @@ fun ActionsScreen(
         }
     }
 
-    /*
-     * Poll only while there is an active workflow run.
-     */
     val hasActiveRuns = state.workflowRuns.any { !it.isCompleted }
 
     LaunchedEffect(
@@ -269,9 +263,6 @@ fun ActionsScreen(
     )
 }
 
-/* -------------------------------------------------------------------------- */
-/* RUNS                                                                       */
-/* -------------------------------------------------------------------------- */
 
 @Composable
 private fun RunsSection(
@@ -441,9 +432,6 @@ private fun RunStatusIcon(
     )
 }
 
-/* -------------------------------------------------------------------------- */
-/* WORKFLOWS                                                                  */
-/* -------------------------------------------------------------------------- */
 
 @Composable
 private fun WorkflowsSection(
@@ -568,9 +556,6 @@ private fun WorkflowsSection(
     }
 }
 
-/* -------------------------------------------------------------------------- */
-/* ARTIFACTS                                                                  */
-/* -------------------------------------------------------------------------- */
 
 @Composable
 private fun ArtifactsSection(
@@ -673,9 +658,6 @@ private fun ArtifactsSection(
     }
 }
 
-/* -------------------------------------------------------------------------- */
-/* COMMON                                                                     */
-/* -------------------------------------------------------------------------- */
 
 @Composable
 private fun LoadingView() {
@@ -711,9 +693,6 @@ private fun CenteredMessage(
     }
 }
 
-/* -------------------------------------------------------------------------- */
-/* HELPERS                                                                    */
-/* -------------------------------------------------------------------------- */
 
 private fun ActionsSection.displayName(): String {
     return name

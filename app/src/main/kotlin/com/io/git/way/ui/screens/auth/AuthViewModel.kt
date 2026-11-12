@@ -30,8 +30,6 @@ data class AuthUiState(
     val token: String = "",
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
-    /** Classic-PAT scopes reported by GitHub after a successful connect; empty when
-     * GitHub didn't report any (fine-grained token) — see [authScopeWarning]. */
     val grantedScopes: Set<String> = emptySet(),
     /** Non-null once the token was validated (so the scope checklist can render). */
     val scopeCheckVisible: Boolean = false,
@@ -85,8 +83,6 @@ class AuthViewModel(
                         },
                         missingScopes = missing
                     )
-                    // Classic token missing required scopes: warn first, let the user
-                    // decide (Continue anyway). Fine-grained (unknown) tokens proceed.
                     if (missing.isEmpty()) onSuccess()
                 }
                 .onFailure { throwable ->

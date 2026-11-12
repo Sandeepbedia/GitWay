@@ -40,6 +40,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudOff
@@ -95,11 +96,10 @@ import com.io.git.way.ui.theme.RepoPurpleDark
 import com.io.git.way.ui.theme.RepoPurpleGradientEnd
 import com.io.git.way.ui.theme.RepoPurpleGradientStart
 
-/** Screen 4: local updated project folder selection via SAF, shown as a file-manager
- * style browsable list — icon, name, path and size per file (PRD1 §2 Folder Selection). */
 @Composable
 fun FolderSelectionScreen(
     sessionViewModel: GitWaySessionViewModel,
+    onBack: () -> Unit = {},
     onContinue: () -> Unit
 ) {
     val context = LocalContext.current
@@ -126,7 +126,14 @@ fun FolderSelectionScreen(
     }
     val totalSize = state.localFiles.sumOf { it.sizeBytes }
 
-    GlassScaffold(title = "Select Project Folder") { padding ->
+    GlassScaffold(
+        title = "Select Project Folder",
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+            }
+        }
+    ) { padding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 24.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -143,13 +150,6 @@ fun FolderSelectionScreen(
                 leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp)) }
             )
 
-            // Everything below — status/summary cards AND the file list — lives in one
-            // LazyColumn so the whole thing scrolls as a unit. Splitting the summary
-            // cards into a plain (non-scrolling) Column above a weighted LazyColumn was
-            // the previous layout, but that meant a tall summary (Smart Upload
-            // Protection details, the identity-mismatch warning, etc.) could push the
-            // file list down with no way to scroll back up to see the cards or down to
-            // see the rest of the files.
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -266,9 +266,6 @@ fun FolderSelectionScreen(
                 }
             }
 
-            // Smart continue: the label itself explains what's missing (no folder yet,
-            // still scanning, identity check running/failed, mismatch) so a disabled
-            // button never leaves the user guessing why.
             val continueLabel = when {
                 state.appIdentityMismatch -> "Wrong project folder"
                 state.identityCheckError != null -> "Match check failed"
@@ -290,11 +287,6 @@ fun FolderSelectionScreen(
     }
 }
 
-/**
- * The flow's primary action — purple-gradient pill with press-scale feedback and a
- * busy state. Visually a sibling of [GlassPrimaryButton], but adds the interactive
- * polish (press shrink, colored shadow, busy spinner) and a context-aware label.
- */
 @Composable
 private fun ContinueButton(
     label: String,
@@ -317,9 +309,6 @@ private fun ContinueButton(
         label = "continuePressScale"
     )
 
-    // Enabled: the primary purple gradient. Disabled: the same elevated-surface +
-    // purple-accent treatment as GlassSecondaryButton, so an inactive Continue still
-    // reads as part of the same family instead of a washed-out grey.
     val backdrop = if (enabled) {
         Brush.horizontalGradient(listOf(RepoPurpleGradientStart, RepoPurple, RepoPurpleGradientEnd))
     } else {
@@ -390,10 +379,6 @@ private fun ContinueButton(
     }
 }
 
-/** Repository / Project Match Protection — PRD "block wrong project upload". Shown the
- * moment a package mismatch is detected, before the user can even tap Continue.
- * Deliberately has no "upload anyway" escape hatch: the only ways forward are picking a
- * different folder here, or pressing back to pick a different repository. */
 @Composable
 private fun IdentityCheckErrorCard(message: String, onRetry: () -> Unit) {
     GlassCard(modifier = Modifier.fillMaxWidth()) {
@@ -542,10 +527,6 @@ private fun FileRow(file: LocalFile, onExclude: () -> Unit) {
     }
 }
 
-/** PRD "Smart Upload Protection" §14/§16 — Upload Summary + expandable Ignored/Blocked
- * (secrets included in Blocked) lists, right where the file list already lives so the
- * user sees exactly what will and won't be uploaded before tapping Continue. Every row
- * is individually overridable — Smart Upload Protection flags files, the user decides. */
 @Composable
 private fun ProtectionSummaryCard(
     report: ScanReport,

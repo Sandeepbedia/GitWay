@@ -18,10 +18,4 @@ package com.io.git.way.data.remote
 
 import okhttp3.Interceptor
 
-/**
- * Release build only. Deliberately returns null instead of adding an
- * HttpLoggingInterceptor — that class comes from a debugImplementation-only
- * dependency, so this variant of the file never references it at all. See
- * the real implementation in app/src/debug/.../DebugLogging.kt.
- */
 internal fun debugLoggingInterceptor(): Interceptor? = null

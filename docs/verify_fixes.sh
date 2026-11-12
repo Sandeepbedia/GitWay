@@ -61,6 +61,15 @@ want README.md       'AGP 9.0.0 · Gradle 9.8.0'              'updated tech-stac
 want README.md       'docs/screenshots/9.png'                  'regenerated screenshots table'
 want CONTRIBUTING.md 'Every new `.kt` file under'              'GPL header item in PR checklist'
 gone CONTRIBUTING.md 'cp keystore.properties.example'         'stale keystore command'
+want docs/ATTRIBUTION.md 'Devicons'                           'third-party icon credits'
+want README.md       'docs/ATTRIBUTION.md'                    'attribution linked from README'
+
+echo "== Release workflow =="
+# It never parsed on GitHub while `name:` sat behind a comment block; these markers
+# catch a revert back to that version.
+want .github/workflows/release.yml 'runs-on: ubuntu-24.04'   'pinned runner (ubuntu-latest migrates)'
+want .github/workflows/release.yml 'workflow_dispatch'        'manual trigger for testing'
+want .github/workflows/release.yml '"V*"'                    'capital-V tag filter (repo has V2.6.7)'
 
 echo
 if [ "$CHANGED" -eq 0 ]; then

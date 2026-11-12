@@ -37,18 +37,6 @@ import com.io.git.way.ui.theme.GlassBlobPink
 import com.io.git.way.ui.theme.GlassBlobPurple
 import com.io.git.way.ui.theme.GlassBlobTeal
 
-/**
- * File-manager style extension -> icon/colour lookup.
- *
- * The dedicated drawings in `res/raw` — one per language/tool, the same set a
- * desktop IDE's project tree uses — are ported wholesale from the PhoneIDE/LSP
- * file-tree icon pack, so Git Way's Project Explorer (PRD "Repository Explorer")
- * and the local Folder Selection screen both recognise the same ~180 file types
- * instead of falling back to a handful of tinted Material glyphs. Lookup is by
- * exact filename first (`Dockerfile`, `.gitignore`, `gradlew`) and only then by
- * extension, since the interesting files at a project root are mostly the ones
- * with no extension at all.
- */
 object FileTypeIcons {
 
     private val codeExtensions = setOf(
@@ -57,9 +45,6 @@ object FileTypeIcons {
     )
     private val dataExtensions = setOf("json", "xml", "yaml", "yml", "toml", "csv", "sql", "proto")
 
-    /** Every raster/vector image format Git Way recognises for icon/colour, the "Images"
-     * type filter, and the file-metadata label — one list so those three never drift out
-     * of sync with each other again. */
     private val imageExtensions = setOf(
         // Common raster formats
         "png", "jpg", "jpeg", "jpe", "jfif", "webp", "bmp", "dib",
@@ -85,9 +70,6 @@ object FileTypeIcons {
     private val pdfExtensions = setOf("pdf")
     private val configExtensions = setOf("properties", "cfg", "ini", "conf", "env", "lock", "pro")
 
-    /** Single source of truth for "is this file an image" — used by the icon/colour/label
-     * lookups below AND by [com.io.git.way.ui.common.GitWaySessionViewModel]'s Images type
-     * filter, so a format recognised here is never missed by the filter (or vice versa). */
     fun isImage(fileName: String): Boolean {
         val ext = fileName.substringAfterLast('.', "").lowercase()
         return ext in imageExtensions || ext in gifExtensions
@@ -167,22 +149,11 @@ object FileTypeIcons {
         }
     }
 
-    /**
-     * Wired custom SVG icon (res/raw) for [fileName], if a dedicated drawing exists —
-     * the full PhoneIDE/LSP icon pack (Kotlin, Java, Gradle, every mainstream language
-     * and web/tooling config, LICENSE, Docker, lockfiles, dotfiles, …). Returns null
-     * when nothing was drawn specifically for that file, so callers fall back to the
-     * generic Material icon from [iconFor]/[colorFor].
-     */
     @RawRes
     fun iconResFor(fileName: String): Int? {
         val lower = fileName.lowercase()
         byName[lower]?.let { return it }
 
-        // Compound and prefixed names have to be tested before the last-dot
-        // extension: `foo.gradle.kts` is a Gradle script, not a plain Kotlin
-        // script, `Card.blade.php` is a Laravel view rather than plain PHP, and
-        // `.env.local` is still an env file.
         when {
             lower.endsWith(".gradle.kts") -> return R.raw.gradle
             lower.endsWith(".blade.php") -> return R.raw.laravel
@@ -195,15 +166,9 @@ object FileTypeIcons {
 
         byExtension[lower.substringAfterLast('.', "")]?.let { return it }
 
-        // Anything still unmatched that begins with a dot is some tool's config,
-        // so it gets the generic dotfile drawing rather than no icon at all. A
-        // project root is mostly dotfiles, and "a config file I don't know" is
-        // more information than "a file".
         return if (lower.startsWith(".")) R.raw.dotfile else null
     }
 
-    /** Directory icon: a distinct drawing for the repository root, and open vs
-     * closed for everything else, so nesting is readable at a glance. */
     @RawRes
     fun folderRes(isRoot: Boolean, isExpanded: Boolean): Int = when {
         isRoot -> R.raw.folder_root
@@ -213,9 +178,6 @@ object FileTypeIcons {
 
     // ── lookup tables (ported from the PhoneIDE/LSP file-tree icon pack) ──────
 
-    /** Exact filenames — everything a real project actually contains at its root,
-     * where a plain extension lookup is useless (`gradlew`, `Makefile`, `LICENSE`,
-     * `Dockerfile`, `.gitignore`). */
     private val byName: Map<String, Int> = buildMap {
         // Android / Gradle
         put("gradlew", R.raw.gradlew)
@@ -325,11 +287,6 @@ object FileTypeIcons {
         listOf("license", "licence").forEach { base ->
             listOf("", ".md", ".txt").forEach { suffix -> put(base + suffix, R.raw.license) }
         }
-        // Config files whose stem, not extension, identifies the tool. Every one
-        // of these ships under several extensions depending on whether the project
-        // is ESM, CJS or TypeScript, so the stems are expanded rather than listed
-        // by hand — 6 lines instead of 60, and a new variant cannot be forgotten
-        // for one tool but remembered for another.
         mapOf(
             "vite.config" to R.raw.vite,
             "vitest.config" to R.raw.vite,

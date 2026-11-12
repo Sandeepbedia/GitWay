@@ -21,7 +21,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -40,11 +44,10 @@ import com.io.git.way.ui.theme.GlassCard
 import com.io.git.way.ui.theme.GlassPrimaryButton
 import com.io.git.way.ui.theme.GlassScaffold
 
-/** Screen 6: final summary + single Upload button, scoped to whatever the user selected
- * back on the Analysis screen (PRD2 §2 Confirmation Screen). */
 @Composable
 fun ConfirmationScreen(
     sessionViewModel: GitWaySessionViewModel,
+    onBack: () -> Unit = {},
     onConfirmUpload: () -> Unit
 ) {
     val context = LocalContext.current
@@ -53,7 +56,14 @@ fun ConfirmationScreen(
     val selectedTotal = state.selectedPaths.size
     val isBlocked = state.appIdentityMismatch || state.identityCheckError != null
 
-    GlassScaffold(title = "Confirm Upload") { padding ->
+    GlassScaffold(
+        title = "Confirm Upload",
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+            }
+        }
+    ) { padding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -108,7 +118,6 @@ fun ConfirmationScreen(
                 onValueChange = sessionViewModel::setCommitMessageDraft,
                 label = { Text("Commit message") },
                 placeholder = { Text(CommitMessageBuilder.summary(state.selectedChanges)) },
-                prefix = { Text("Git Way Sync: ", color = MaterialTheme.colorScheme.primary) },
                 supportingText = {
                     Text("Will appear on GitHub as: \"${CommitMessageBuilder.resolve(state.commitMessageDraft, state.selectedChanges)}\"")
                 },

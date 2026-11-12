@@ -1,14 +1,14 @@
 /*
- * GitWay — premium dark-mode color system.
+ * GitWay — ASUS OS 3.0 "ROG Red" color system.
  *
- * Dark mode follows the MIUI/HyperOS-inspired premium spec: a near-black
- * #0B0C0F base with layered surfaces (#15171C cards, #1D2026 elevated),
- * soft #292C33 borders and a purple hero accent — never pure black except
- * in AMOLED mode. Light mode keeps the Bravo neumorphic porcelain family
- * (#E7EBF0 background, white cards).
+ * Light mode: porcelain #F5F5F7 background, white cards, #E60035 ROG red.
+ * Dark mode: near-black #080808 base with layered surfaces (#101010, #1B1B1B,
+ * #252525) and the brighter #FF003C ROG red. There is deliberately no
+ * translucency — every surface token is opaque, matching ASUS OS "solid" style.
  *
- * All semantic names are kept so every screen picks up the new look
- * automatically — only the values changed.
+ * The AsusLight* / AsusDark* values below are the full ASUS OS 3.0 token table.
+ * The legacy semantic names (Hyper*, Repo*) are kept and re-pointed at those
+ * tokens, so every screen picks up the new look automatically.
  *
  * GitWay — an Android client for GitHub.
  *
@@ -29,83 +29,146 @@ package com.io.git.way.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// ── Accent hierarchy ─────────────────────────────────────────────────
-// Primary — Bravo hero purple (Home gradient)
-val HyperPrimary = Color(0xFF7F5CF0)
-val HyperPrimaryDark = Color(0xFF6A3DFF)      // pressed / emphasis on dark surfaces (pill bottom)
-val HyperPrimaryLight = Color(0xFFB18CFF)     // containers, tints (home gradient end)
-val HyperPrimaryDisabled = Color(0xFFCFC0FF)
+// ─────────────────────────────────────────────
+// ASUS OS 3.0 — Light
+// ─────────────────────────────────────────────
+val AsusLightBackground = Color(0xFFF5F5F7)
+val AsusLightSurface = Color(0xFFFFFFFF)
+val AsusLightCard = Color(0xFFFFFFFF)
+val AsusLightSecondaryCard = Color(0xFFF0F0F2)
+val AsusLightElevated = Color(0xFFEEEEF1)
+val AsusLightDialog = Color(0xFFFFFFFF)
+val AsusLightPrimary = Color(0xFFE60035)
+val AsusLightPrimaryPressed = Color(0xFFB8002B)
+val AsusLightPrimaryContainer = Color(0xFFFFE5EB)
+val AsusLightOnPrimary = Color(0xFFFFFFFF)
+val AsusLightOnPrimaryContainer = Color(0xFFB8002B)
+val AsusLightTertiary = Color(0xFFFF5722)
+val AsusLightTextPrimary = Color(0xFF171717)
+val AsusLightTextSecondary = Color(0xFF666666)
+val AsusLightTextTertiary = Color(0xFF888888)
+val AsusLightTextDisabled = Color(0xFFAAAAAA)
+val AsusLightBorder = Color(0xFFDDDDDD)
+val AsusLightDivider = Color(0xFFE8E8E8)
+val AsusLightInputBorder = Color(0xFFCCCCCC)
+val AsusLightSuccess = Color(0xFF008F3D)
+val AsusLightWarning = Color(0xFFB77900)
+val AsusLightError = Color(0xFFD92D20)
+val AsusLightErrorContainer = Color(0xFFFBE9EA)
+val AsusLightInfo = Color(0xFF1769AA)
+val AsusLightInverseSurface = Color(0xFF171717)
+val AsusLightScrim = Color(0xFF000000)
 
-// Secondary — teal, used for links, info states, secondary actions (Library gradient)
-val HyperCyan = Color(0xFF12C2A9)
-val HyperAuroraPurple = Color(0xFF4D6BFE)     // tertiary — tags, highlights (Settings gradient)
-val HyperAuroraPurpleLight = Color(0xFF6BC5FF)
-val HyperPink = Color(0xFFFF4E8E)             // Dashboard gradient
+// ─────────────────────────────────────────────
+// ASUS OS 3.0 — Dark
+// ─────────────────────────────────────────────
+val AsusDarkBackground = Color(0xFF080808)
+val AsusDarkSurface = Color(0xFF101010)
+val AsusDarkCard = Color(0xFF1B1B1B)
+val AsusDarkSecondaryCard = Color(0xFF202020)
+val AsusDarkElevated = Color(0xFF252525)
+val AsusDarkPopup = Color(0xFF292929)
+val AsusDarkDialog = Color(0xFF303030)
+val AsusDarkPrimary = Color(0xFFFF003C)
+val AsusDarkPrimaryPressed = Color(0xFFC0002E)
+val AsusDarkPrimaryContainer = Color(0xFF38101B)
+val AsusDarkOnPrimary = Color(0xFFFFFFFF)
+val AsusDarkOnPrimaryContainer = Color(0xFFFF476B)
+val AsusDarkTertiary = Color(0xFFFF5722)
+val AsusDarkTextPrimary = Color(0xFFFFFFFF)
+val AsusDarkTextSecondary = Color(0xFFBDBDBD)
+val AsusDarkTextTertiary = Color(0xFF888888)
+val AsusDarkTextDisabled = Color(0xFF555555)
+val AsusDarkBorder = Color(0xFF393939)
+val AsusDarkDivider = Color(0xFF292929)
+val AsusDarkInputBorder = Color(0xFF454545)
+val AsusDarkSuccess = Color(0xFF00C853)
+val AsusDarkWarning = Color(0xFFFFB300)
+val AsusDarkError = Color(0xFFFF453A)
+val AsusDarkErrorContainer = Color(0xFF38101B)
+val AsusDarkInfo = Color(0xFF2196F3)
+val AsusDarkInverseSurface = Color(0xFFFFFFFF)
+val AsusDarkScrim = Color(0xFF000000)
 
-val RepoSuccess = Color(0xFF32D583)
-val RepoWarning = Color(0xFFFFB020)
-val RepoDanger = Color(0xFFFF5B5B)
+// ─────────────────────────────────────────────
+// Semantic aliases — ASUS OS 3.0
+// ─────────────────────────────────────────────
+
+// Primary — ROG red. Light uses the deeper #E60035, dark the brighter #FF003C.
+val HyperPrimary = AsusLightPrimary
+val HyperPrimaryDark = AsusLightPrimaryPressed
+val HyperPrimaryLight = AsusDarkPrimary
+val HyperPrimaryDisabled = AsusLightTextDisabled
+
+// Secondary — ASUS info blue (links / informational states).
+val HyperCyan = AsusLightInfo
+val HyperAuroraPurple = AsusLightTertiary
+val HyperAuroraPurpleLight = AsusDarkTertiary
+val HyperPink = AsusDarkOnPrimaryContainer
+
+// Status
+val RepoSuccess = AsusDarkSuccess
+val RepoWarning = AsusDarkWarning
+val RepoDanger = AsusDarkError
 val RepoInfo = HyperCyan
 val RepoSecondary = HyperCyan
-val RepoSecondaryLight = Color(0xFF67E8C4)
-val RepoSecondaryDark = Color(0xFF0E8F7C)
+val RepoSecondaryLight = AsusDarkInfo
+val RepoSecondaryDark = AsusLightInfo
 
-// ── Dark mode — premium layered surfaces on a near-black base ──
-// #0B0C0F base with subtle depth gradient (pure black reserved for AMOLED).
-val RepoBgPrimary = Color(0xFF0B0C0F)
-val RepoBgGradientTop = Color(0xFF0E1014)
-val RepoBgGradientMid = Color(0xFF0B0C0F)
-val RepoBgGradientBottom = Color(0xFF08090C)
+// ── Layered dark surfaces — section < card < elevated < dialog ─────────────
+val RepoBgPrimary = AsusDarkBackground
+val RepoBgGradientTop = AsusDarkSurface
+val RepoBgGradientMid = AsusDarkBackground
+val RepoBgGradientBottom = AsusDarkBackground
 
-// section < card < elevated < dialog — layered surfaces instead of outlines
-val RepoSectionSurface = Color(0xFF0F1116)
-val RepoCardSurface = Color(0xFF15171C)
-val RepoElevatedSurface = Color(0xFF1D2026)
-val RepoDialogSurface = Color(0xFF23262E)
-val RepoBottomNavSurface = Color(0xF015171C)
-val RepoSearchBarSurface = Color(0xE615171C)
-val RepoFloatingButtonSurface = Color(0xFF1D2026)
+val RepoSectionSurface = AsusDarkSurface
+val RepoCardSurface = AsusDarkCard
+val RepoElevatedSurface = AsusDarkElevated
+val RepoDialogSurface = AsusDarkDialog
+val RepoBottomNavSurface = AsusDarkCard
+val RepoSearchBarSurface = AsusDarkSecondaryCard
+val RepoFloatingButtonSurface = AsusDarkElevated
 
-// ── Light mode — Bravo neumorphic porcelain with a faint cool-gray tone ─
-val RepoBgPrimaryLight = Color(0xFFE7EBF0)
-val RepoBgGradientTopLight = Color(0xFFF3F5F8)
-val RepoBgGradientBottomLight = Color(0xFFE4E8EE)
-val RepoSectionSurfaceLight = Color(0xFFE7EBF0)
-val RepoCardSurfaceLight = Color(0xFFFFFFFF)
-val RepoElevatedSurfaceLight = Color(0xFFDDE2E9)
-val RepoSearchBarSurfaceLight = Color(0xFFFFFFFF)
-val RepoBottomNavSurfaceLight = Color(0xF5FFFFFF)
+// ── Light surfaces — flat ASUS OS paper layers ──────────────────────────────
+val RepoBgPrimaryLight = AsusLightBackground
+val RepoBgGradientTopLight = AsusLightBackground
+val RepoBgGradientBottomLight = AsusLightSecondaryCard
+val RepoSectionSurfaceLight = AsusLightSecondaryCard
+val RepoCardSurfaceLight = AsusLightCard
+val RepoElevatedSurfaceLight = AsusLightElevated
+val RepoSearchBarSurfaceLight = AsusLightSurface
+val RepoBottomNavSurfaceLight = AsusLightSurface
 
 // AMOLED
 val AmoledBlack = Color(0xFF000000)
-val AmoledSurface = Color(0xFF0E0E10)
+val AmoledSurface = AsusDarkSurface
 
-// Neumorphic soft shadows (Bravo — light mode)
+// Borders
 val GlassHighlight = Color(0xFFFFFFFF)
-val GlassShadowDark = Color(0xFFA3B1C6)
-val RepoBorderNormal = Color(0xFF292C33)
+val GlassShadowDark = AsusLightBorder
+val RepoBorderNormal = AsusDarkBorder
 val RepoBorderGlass = Color(0x26FFFFFF)
-val RepoBorderSelected = HyperPrimary
-val RepoBorderNormalLight = Color(0x14A3B1C6)
-val RepoBorderSelectedLight = HyperPrimaryLight
+val RepoBorderSelected = AsusDarkPrimary
+val RepoBorderNormalLight = AsusLightBorder
+val RepoBorderSelectedLight = AsusLightPrimary
 
-// Accent gradients — restrained, used only for active controls.
+// Accent gradients — red only, used for active controls.
 val RepoPurple = HyperPrimary
 val RepoPurpleLight = HyperPrimaryLight
 val RepoPurpleDark = HyperPrimaryDark
-val RepoPurpleGradientStart = Color(0xFF9D6CFF)   // pill top
-val RepoPurpleGradientEnd = Color(0xFF6A3DFF)     // pill bottom
-val RepoPillGradientLight = Color(0xFFE9E2FF)
+val RepoPurpleGradientStart = AsusDarkOnPrimaryContainer
+val RepoPurpleGradientEnd = AsusDarkPrimaryPressed
+val RepoPillGradientLight = AsusLightPrimaryContainer
 
-val HyperPrimaryGradient = listOf(HyperPrimary, HyperPrimaryLight)
-val HyperAuroraGradient = listOf(HyperPrimary, HyperPink)
-val HyperDarkPremiumGradient = listOf(RepoBgPrimary, RepoCardSurface, RepoElevatedSurface)
+val HyperPrimaryGradient = listOf(AsusLightPrimary, AsusDarkPrimary)
+val HyperAuroraGradient = listOf(AsusLightPrimary, AsusLightTertiary)
+val HyperDarkPremiumGradient = listOf(AsusDarkBackground, AsusDarkCard, AsusDarkElevated)
 
 // Legacy names retained for source compatibility.
 val GlassBlobBlue = HyperPrimary
-val GlassBlobPurple = HyperAuroraPurple
+val GlassBlobPurple = AsusLightTertiary
 val GlassBlobTeal = HyperCyan
-val GlassBlobPink = HyperPink
+val GlassBlobPink = AsusDarkOnPrimaryContainer
 
 // Repository language colors — vivid, distinct, tuned for both surfaces.
 val LangKotlin = Color(0xFF7F52FF)
@@ -118,20 +181,20 @@ val LangRust = Color(0xFFDE7B3B)
 val LangGo = Color(0xFF00ACD7)
 
 // Text — dark mode
-val RepoTextPrimary = Color(0xFFF7F7F8)
-val RepoTextSecondary = Color(0xFFA6A9B0)
-val RepoTextMuted = Color(0xFF767B85)
-val RepoTextDisabled = Color(0xFF4A4E56)
-val RepoTextHint = Color(0xFF767B85)
+val RepoTextPrimary = AsusDarkTextPrimary
+val RepoTextSecondary = AsusDarkTextSecondary
+val RepoTextMuted = AsusDarkTextTertiary
+val RepoTextDisabled = AsusDarkTextDisabled
+val RepoTextHint = AsusDarkTextTertiary
 
 // Text — light mode
-val RepoTextPrimaryLight = Color(0xFF1A1D26)
-val RepoTextSecondaryLight = Color(0xFF4E5563)
-val RepoTextMutedLight = Color(0xFF8A92A1)
+val RepoTextPrimaryLight = AsusLightTextPrimary
+val RepoTextSecondaryLight = AsusLightTextSecondary
+val RepoTextMutedLight = AsusLightTextTertiary
 
 // Icons
-val RepoIconDefault = Color(0xFFF7F7F8)
-val RepoIconInactive = Color(0xFF767B85)
+val RepoIconDefault = AsusDarkTextPrimary
+val RepoIconInactive = AsusDarkTextTertiary
 val RepoIconAccent = HyperPrimary
 
 // Theme aliases

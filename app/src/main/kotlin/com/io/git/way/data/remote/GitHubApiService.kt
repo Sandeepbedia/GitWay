@@ -84,8 +84,6 @@ interface GitHubApiService {
         @Query("affiliation") affiliation: String = "owner,collaborator,organization_member"
     ): List<GitHubRepoDto>
 
-    /** Fresh single-repo lookup: used right before upload to re-check permissions,
-     * archived/disabled state, and the current default branch (422-fix PRD §2/§3). */
     @GET("repos/{owner}/{repo}")
     suspend fun getRepository(
         @Path("owner") owner: String,
@@ -123,10 +121,6 @@ interface GitHubApiService {
         @Body body: CreateBlobRequest
     ): GitBlobRefDto
 
-    // @Body is a raw RequestBody, not CreateTreeRequest, because this call needs its
-    // own Json config (explicitNulls = true) — see GitHubRepositoryImpl.treeJson —
-    // so a delete entry's `sha: null` is actually sent, not silently omitted like
-    // the app-wide Retrofit Json (explicitNulls = false) would do to it.
     @POST("repos/{owner}/{repo}/git/trees")
     suspend fun createTree(
         @Path("owner") owner: String,
@@ -157,13 +151,6 @@ interface GitHubApiService {
         @Body body: CreateRefRequest
     ): GitRefDto
 
-    /** Bootstraps a genuinely empty repository (zero commits). GitHub's Git Data API
-     * (createBlob/createTree/createCommit/getRef, everything above) returns
-     * "409 Git Repository is empty." for EVERY call — not just tree/ref lookups —
-     * until the repo has at least one commit; see GitHub's own Git Data API docs.
-     * The Contents API is the one endpoint that can create that first commit (and the
-     * branch ref along with it) on a repo with zero git objects. Used once, for exactly
-     * one file, before the normal blob/tree/commit flow runs for everything else. */
     @PUT("repos/{owner}/{repo}/contents/{path}")
     suspend fun createFileContent(
         @Path("owner") owner: String,
@@ -172,9 +159,6 @@ interface GitHubApiService {
         @Body body: CreateFileContentRequest
     ): CreateFileContentResponseDto
 
-    /** Reads a blob's raw content by sha — the sha is already known from the cached repo
-     * tree, so this powers the Repository Browser's file viewer/editor without a second
-     * Contents-API lookup. */
     @GET("repos/{owner}/{repo}/git/blobs/{sha}")
     suspend fun getBlob(
         @Path("owner") owner: String,
@@ -182,10 +166,6 @@ interface GitHubApiService {
         @Path("sha") sha: String
     ): GitBlobContentDto
 
-    /** Latest published (non-draft, non-prerelease) release — powers the in-app update
-     * checker. Public endpoint: works with or without an auth token. 404s if the repo
-     * has no releases yet, which the caller treats as "no update available" rather
-     * than an error. */
     @GET("repos/{owner}/{repo}/releases/latest")
     suspend fun getLatestRelease(
         @Path("owner") owner: String,
@@ -438,12 +418,6 @@ interface GitHubApiService {
         @Path("release_id") releaseId: Long
     ): List<GitHubReleaseAssetListDto>
 
-    /**
-     * Upload a release asset through GitHub's uploads host.
-     *
-     * The asset name is a query parameter, not a MultipartBody.Part. Retrofit
-     * rejects @Part("name") when the parameter type is MultipartBody.Part.
-     */
     @POST
     suspend fun uploadReleaseAsset(
         @Url url: String,

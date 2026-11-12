@@ -34,8 +34,6 @@ data class RepoListUiState(
     val isCreatingRepo: Boolean = false,
     val createRepoError: String? = null,
 
-    /** GitHub-wide search mode (toggled from the FAB menu): results come from the
-     * Search API instead of the local name filter. */
     val isGitHubSearch: Boolean = false,
     val searchResults: List<GitRepository> = emptyList(),
     val isSearching: Boolean = false,
@@ -161,8 +159,6 @@ class RepositoryListViewModel(
         uiState = uiState.copy(createRepoError = null)
     }
 
-    /** Creates a brand-new GitHub repository and prepends it to the list — [onCreated]
-     * fires only on success, so the caller can navigate straight into it. */
     fun createRepository(name: String, description: String, isPrivate: Boolean, onCreated: (GitRepository) -> Unit) {
         if (name.isBlank() || uiState.isCreatingRepo) return
         uiState = uiState.copy(isCreatingRepo = true, createRepoError = null)

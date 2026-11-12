@@ -57,8 +57,6 @@ import com.io.git.way.ui.theme.GlassScaffold
 import com.io.git.way.ui.theme.GlassSecondaryButton
 import com.io.git.way.ui.theme.RepoPurple
 
-/** The scopes Git Way actually needs. Classic PAT: tick all three. Fine-grained: give
- * the equivalent permissions (repository contents read/write, workflows, repo delete). */
 private val REQUIRED_SCOPES = listOf(
     "repo" to "Access to all repositories",
     "workflow" to "Workflow updates & runs",

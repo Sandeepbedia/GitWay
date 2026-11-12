@@ -22,7 +22,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -81,6 +83,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -107,6 +110,14 @@ import com.io.git.way.domain.model.GitRepository
 import com.io.git.way.ui.common.GitWayViewModelFactory
 import com.io.git.way.ui.common.formatRelativeTime
 import com.io.git.way.ui.theme.AppThemeMode
+import com.io.git.way.ui.theme.AsusDarkBorder
+import com.io.git.way.ui.theme.AsusDarkCard
+import com.io.git.way.ui.theme.AsusDarkElevated
+import com.io.git.way.ui.theme.AsusDarkPrimaryContainer
+import com.io.git.way.ui.theme.AsusLightCard
+import com.io.git.way.ui.theme.AsusLightDivider
+import com.io.git.way.ui.theme.AsusLightPrimaryContainer
+import com.io.git.way.ui.theme.AsusLightSecondaryCard
 import com.io.git.way.ui.theme.BottomNavTab
 import com.io.git.way.ui.theme.GlassFloatingBottomNav
 import com.io.git.way.ui.theme.GlassPrimaryButton
@@ -117,21 +128,16 @@ import com.io.git.way.ui.theme.RepoWarning
 import com.io.git.way.ui.theme.repoLanguageLabel
 import com.io.git.way.ui.theme.repoVisualFor
 
-/* -------------------------------------------------------------------------- */
-/* Bravo-inspired palette for the repository list (neumorphic purple accent)  */
-/* -------------------------------------------------------------------------- */
 
-private val MiuBlue = Color(0xFF7F5CF0)
+private val RepoRowSurfaceDark = AsusDarkCard
+private val RepoRowPressedDark = AsusDarkElevated
+private val RepoRowSelectedDark = AsusDarkPrimaryContainer
+private val RepoRowSurfaceLight = AsusLightCard
+private val RepoRowPressedLight = AsusLightSecondaryCard
+private val RepoRowSelectedLight = AsusLightPrimaryContainer
 
-private val MiuDarkRow = Color(0xFF15171C)
-private val MiuDarkPressed = Color(0xFF1D2026)
-private val MiuDarkSelected = Color(0xFF20242E)
-private val MiuLightRow = Color(0xFFFFFFFF)
-private val MiuLightPressed = Color(0xFFE7EBF0)
-private val MiuLightSelected = Color(0xFFE9E2FF)
-
-private val MiuBorderDark = Color(0x12FFFFFF)   // ~7% white hairline
-private val MiuBorderLight = Color(0x0F000000)  // ~6% black hairline
+private val RepoRowBorderDark = AsusDarkBorder
+private val RepoRowBorderLight = AsusLightDivider
 
 /* Language indicator dots use the standard GitHub language colors (PRD §7). */
 private val LangColorKotlin = Color(0xFF7F52FF)
@@ -170,16 +176,7 @@ private enum class RepoSorter(val label: String) {
     FORKS("Most forks")
 }
 
-/* -------------------------------------------------------------------------- */
-/* SCREEN                                                                     */
-/* -------------------------------------------------------------------------- */
 
-/**
- * Screen 3: "Your Repositories" — Bravo-inspired compact, information-dense
- * repository list (see Repository List Rearrangement PRD): neutral surfaces, a
- * top search field, filter chips, a sort sheet, pinned/recent sections, compact
- * 88dp rows with a small language dot, and a per-row overflow sheet.
- */
 @Composable
 fun RepositoryListScreen(
     onRepositorySelected: (GitRepository) -> Unit,
@@ -206,6 +203,12 @@ fun RepositoryListScreen(
     var showCreateRepoDialog by remember { mutableStateOf(false) }
     var entered by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { entered = true }
+
+    // Back closes the search layer first instead of leaving the app.
+    BackHandler(enabled = searchOpen) {
+        searchOpen = false
+        if (state.searchQuery.isNotBlank()) viewModel.onSearchQueryChange("")
+    }
 
     // Search covers name, owner and language (the model has no description field).
     val searched = remember(state.repositories, state.searchResults, state.isGitHubSearch, state.searchQuery) {
@@ -337,14 +340,14 @@ fun RepositoryListScreen(
                     Row(
                         modifier = Modifier
                             .clip(RoundedCornerShape(18.dp))
-                            .background(if (dark) MiuDarkRow else MiuLightPressed)
+                            .background(if (dark) RepoRowSurfaceDark else RepoRowPressedLight)
                             .clickable { showSortSheet = true }
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        Icon(Icons.Filled.Sort, contentDescription = null, tint = MiuBlue, modifier = Modifier.size(16.dp))
-                        Text("Sort", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = MiuBlue)
+                        Icon(Icons.Filled.Sort, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                        Text("Sort", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
                     }
                 }
 
@@ -356,7 +359,7 @@ fun RepositoryListScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     RepoFilter.entries.forEach { f ->
-                        MiuFilterChip(
+                        RepoFilterChip(
                             label = f.label,
                             selected = filter == f,
                             dark = dark,
@@ -371,7 +374,9 @@ fun RepositoryListScreen(
                     animationSpec = tween(280),
                     label = "screenEnter"
                 )
-                Box(
+                PullToRefreshBox(
+                    isRefreshing = state.isLoading && state.repositories.isNotEmpty(),
+                    onRefresh = { viewModel.loadRepositories() },
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
@@ -381,7 +386,7 @@ fun RepositoryListScreen(
                         }
                 ) {
                     when {
-                            state.isLoading -> LazyColumn(
+                            state.isLoading && state.repositories.isEmpty() -> LazyColumn(
                                 modifier = Modifier.fillMaxSize(),
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 110.dp)
@@ -503,13 +508,10 @@ fun RepositoryListScreen(
     }
 }
 
-/* -------------------------------------------------------------------------- */
-/* COMPONENTS                                                                 */
-/* -------------------------------------------------------------------------- */
 
 @Composable
-private fun MiuFilterChip(label: String, selected: Boolean, dark: Boolean, onClick: () -> Unit) {
-    val bg = if (selected) MiuBlue else if (dark) MiuDarkRow else MiuLightPressed
+private fun RepoFilterChip(label: String, selected: Boolean, dark: Boolean, onClick: () -> Unit) {
+    val bg = if (selected) MaterialTheme.colorScheme.primary else if (dark) RepoRowSurfaceDark else RepoRowPressedLight
     val fg = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
     Text(
         text = label,
@@ -550,9 +552,9 @@ private fun RepositoryRow(
     val pressed by interaction.collectIsPressedAsState()
     val bg by animateColorAsState(
         targetValue = when {
-            pressed -> if (dark) MiuDarkPressed else MiuLightPressed
-            isPinned -> if (dark) MiuDarkSelected else MiuLightSelected
-            else -> if (dark) MiuDarkRow else MiuLightRow
+            pressed -> if (dark) RepoRowPressedDark else RepoRowPressedLight
+            isPinned -> if (dark) RepoRowSelectedDark else RepoRowSelectedLight
+            else -> if (dark) RepoRowSurfaceDark else RepoRowSurfaceLight
         },
         animationSpec = tween(140),
         label = "repoRowBg"
@@ -562,6 +564,13 @@ private fun RepositoryRow(
         animationSpec = tween(140),
         label = "repoRowScale"
     )
+    var appeared by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { appeared = true }
+    val entrance by animateFloatAsState(
+        targetValue = if (appeared) 1f else 0f,
+        animationSpec = tween(240, easing = FastOutSlowInEasing),
+        label = "repoRowEntrance"
+    )
     val visual = repoVisualFor(repo.name, repo.language)
     val langColor = languageColor(repo.language)
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
@@ -570,10 +579,15 @@ private fun RepositoryRow(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .graphicsLayer {
+                alpha = entrance
+                translationY = (1f - entrance) * 12.dp.toPx()
+                scaleX = scale * (0.985f + 0.015f * entrance)
+                scaleY = scale * (0.985f + 0.015f * entrance)
+            }
             .clip(shape)
             .background(bg)
-            .border(1.dp, if (dark) MiuBorderDark else MiuBorderLight, shape)
+            .border(1.dp, if (dark) RepoRowBorderDark else RepoRowBorderLight, shape)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
     ) {
         Row(
@@ -685,8 +699,8 @@ private fun RepositorySkeleton(dark: Boolean) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(if (dark) MiuDarkRow else MiuLightRow)
-            .border(1.dp, if (dark) MiuBorderDark else MiuBorderLight, shape)
+            .background(if (dark) RepoRowSurfaceDark else RepoRowSurfaceLight)
+            .border(1.dp, if (dark) RepoRowBorderDark else RepoRowBorderLight, shape)
             .padding(start = 12.dp, end = 16.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -704,38 +718,42 @@ private fun RepositorySkeleton(dark: Boolean) {
 
 @Composable
 private fun RepositoryEmptyState(hasQuery: Boolean, onRefresh: () -> Unit, onCreate: () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 32.dp)) {
-            Box(
-                modifier = Modifier
-                    .size(72.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Filled.FolderOff,
-                    contentDescription = null,
-                    modifier = Modifier.size(34.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Text(
-                "No repositories yet",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(top = 16.dp)
-            )
-            Text(
-                if (hasQuery) "No repositories match your search." else "Connect your GitHub account or refresh to load repositories.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 6.dp, bottom = 20.dp)
-            )
-            GlassPrimaryButton(text = "Refresh", onClick = onRefresh, modifier = Modifier.width(180.dp))
-            if (!hasQuery) {
-                TextButton(onClick = onCreate, modifier = Modifier.padding(top = 8.dp)) { Text("New repository") }
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        item {
+            Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 32.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .size(72.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Filled.FolderOff,
+                            contentDescription = null,
+                            modifier = Modifier.size(34.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Text(
+                        "No repositories yet",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(top = 16.dp)
+                    )
+                    Text(
+                        if (hasQuery) "No repositories match your search." else "Connect your GitHub account or refresh to load repositories.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 6.dp, bottom = 20.dp)
+                    )
+                    GlassPrimaryButton(text = "Refresh", onClick = onRefresh, modifier = Modifier.width(180.dp))
+                    if (!hasQuery) {
+                        TextButton(onClick = onCreate, modifier = Modifier.padding(top = 8.dp)) { Text("New repository") }
+                    }
+                }
             }
         }
     }
@@ -743,41 +761,45 @@ private fun RepositoryEmptyState(hasQuery: Boolean, onRefresh: () -> Unit, onCre
 
 @Composable
 private fun RepositoryErrorState(message: String, onRetry: () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 32.dp)) {
-            Box(
-                modifier = Modifier
-                    .size(72.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.error.copy(alpha = 0.10f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Filled.CloudOff,
-                    contentDescription = null,
-                    modifier = Modifier.size(34.dp),
-                    tint = MaterialTheme.colorScheme.error
-                )
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        item {
+            Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 32.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .size(72.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.error.copy(alpha = 0.10f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Filled.CloudOff,
+                            contentDescription = null,
+                            modifier = Modifier.size(34.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                    Text(
+                        "Unable to load repositories",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(top = 16.dp)
+                    )
+                    Text(
+                        message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 6.dp, bottom = 20.dp)
+                    )
+                    GlassSecondaryButton(text = "Retry", onClick = onRetry, modifier = Modifier.width(160.dp))
+                }
             }
-            Text(
-                "Unable to load repositories",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(top = 16.dp)
-            )
-            Text(
-                message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 6.dp, bottom = 20.dp)
-            )
-            GlassSecondaryButton(text = "Retry", onClick = onRetry, modifier = Modifier.width(160.dp))
         }
     }
 }
 
-/** Sort options with a blue check on the active row (PRD §10). */
+/** Sort options with a ROG-red check on the active row (PRD §10). */
 @Composable
 private fun SortSheet(current: RepoSorter, onSelect: (RepoSorter) -> Unit, onDismiss: () -> Unit) {
     val sheetState = rememberModalBottomSheetState()
@@ -806,11 +828,11 @@ private fun SortSheet(current: RepoSorter, onSelect: (RepoSorter) -> Unit, onDis
                         text = option.label,
                         modifier = Modifier.weight(1f),
                         fontSize = 15.sp,
-                        color = if (selected) MiuBlue else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal
                     )
                     if (selected) {
-                        Icon(Icons.Filled.Check, contentDescription = null, tint = MiuBlue, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Filled.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                     }
                 }
             }
@@ -918,9 +940,6 @@ private fun SheetAction(
     }
 }
 
-/* -------------------------------------------------------------------------- */
-/* INTENTS                                                                     */
-/* -------------------------------------------------------------------------- */
 
 private fun repoUrl(repo: GitRepository) = "https://github.com/${repo.owner}/${repo.name}"
 
@@ -943,14 +962,7 @@ private fun Context.openRepoInBrowser(repo: GitRepository) {
     runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(repoUrl(repo)))) }
 }
 
-/* -------------------------------------------------------------------------- */
-/* CREATE REPOSITORY                                                          */
-/* -------------------------------------------------------------------------- */
 
-/** In-app "New repository" — replaces the old external "open github.com/new in a
- *  browser" shortcut with a real create flow through the GitHub API. `auto_init = true`
- *  on the backend call means the new repo always has a real first commit (a README), so
- *  it's immediately usable — no "empty repository" edge case to navigate into. */
 @Composable
 fun CreateRepositoryDialog(
     isCreating: Boolean,

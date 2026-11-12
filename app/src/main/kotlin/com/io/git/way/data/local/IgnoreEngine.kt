@@ -20,23 +20,11 @@ import com.io.git.way.domain.model.FileStatus
 import com.io.git.way.domain.model.LocalFile
 import com.io.git.way.domain.model.ScanIssue
 
-/**
- * Smart GitHub Upload Protection & Ignore Engine (see the matching PRD). Classifies every
- * locally scanned file as SAFE, IGNORED (build/tooling noise — silently skipped), or
- * BLOCKED (security-sensitive or dangerous-to-commit — always surfaced to the user with a
- * reason, §19 "No override for these by default").
- *
- * Priority order (PRD §12): internal security rules -> generated/binary rules -> hidden
- * files -> project .gitignore. Whichever rule matches first wins and short-circuits the
- * rest, mirroring how a real ignore engine would short-circuit on the first match.
- */
 object IgnoreEngine {
 
     /** PRD §10 — 50 MB default large-file limit. */
     const val DEFAULT_LARGE_FILE_BYTES = 50L * 1024 * 1024
 
-    /** PRD §4/§22 — generated/tooling folders, matched against any path segment
-     * (case-insensitive) so "Android/Build/" and "build/" both match. */
     private val IGNORED_DIR_NAMES = setOf(
         ".git", ".github", "build", ".gradle", ".idea", ".vscode",
         ".dart_tool", ".flutter-plugins", ".flutter-plugins-dependencies", ".pub",
@@ -46,8 +34,6 @@ object IgnoreEngine {
         "vendor", "__pycache__", ".terraform", ".next", ".nuxt", ".svelte-kit"
     )
 
-    /** PRD §5 minus the security-critical subset below — archives, compiled artifacts,
-     * editor/OS noise. Ignored quietly, not flagged as a security warning. */
     private val IGNORED_FILE_GLOBS = listOf(
         "*.iml", "*.zip", "*.rar", "*.7z", "*.tar", "*.gz",
         "*.class", "*.dex", "*.o", "*.obj", "*.tmp", "*.bak", "*.log",
@@ -77,8 +63,6 @@ object IgnoreEngine {
         val segments = file.relativePath.split("/")
         val name = file.displayName
 
-        // .github itself is an auto-ignored folder (repo metadata), but CI workflow
-        // definitions are real project files developers expect to push — carve them out.
         val isGithubWorkflow = segments.size >= 2 && segments[0] == ".github" && segments[1] == "workflows"
 
         if (!isGithubWorkflow && segments.dropLast(1).any { it.lowercase() in IGNORED_DIR_NAMES }) {
@@ -118,9 +102,6 @@ object IgnoreEngine {
         return null
     }
 
-    /** Parses a .gitignore's content into simple glob patterns. This is a pragmatic subset
-     * of real git pathspec semantics (no negation, no double-star) — comments/blank lines
-     * dropped, leading/trailing slashes trimmed since matching runs per path segment. */
     fun parseGitignore(content: String): List<String> =
         content.lineSequence()
             .map { it.trim() }

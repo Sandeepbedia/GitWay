@@ -30,6 +30,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -139,7 +140,6 @@ import com.io.git.way.ui.theme.GlassBlobTeal
 import com.io.git.way.ui.theme.GlassCard
 import com.io.git.way.ui.theme.GlassChip
 import com.io.git.way.ui.theme.GlassFloatingBottomNav
-import com.io.git.way.ui.theme.GlassSecondaryButton
 import com.io.git.way.ui.theme.LiquidGlassBackground
 
 import kotlinx.coroutines.launch
@@ -284,7 +284,7 @@ fun ProfileScreen(
                         bottom = 110.dp
                     ),
 
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
 
                     item {
@@ -309,6 +309,27 @@ fun ProfileScreen(
                                 repositories = state.overviewRepositories
                             )
                         }
+                    }
+
+                    item {
+                        SectionLabel("Quick Actions")
+                    }
+
+                    item {
+                        QuickActionsCard(
+                            onNewRepo = {
+                                showCreateRepoDialog = true
+                            },
+                            onRefresh = {
+                                repoViewModel.loadRepositories()
+
+                                Toast.makeText(
+                                    context,
+                                    "Refreshing repositories…",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        )
                     }
 
                     item {
@@ -345,23 +366,28 @@ fun ProfileScreen(
                     }
 
                     item {
-                        SectionLabel("Quick Actions")
+                        SectionLabel("Appearance")
                     }
 
                     item {
-                        QuickActionsCard(
-                            onNewRepo = {
-                                showCreateRepoDialog = true
-                            },
-                            onRefresh = {
-                                repoViewModel.loadRepositories()
+                        AppearanceCard(
+                            themeMode = themeMode,
+                            onThemeModeChange = onThemeModeChange
+                        )
+                    }
 
-                                Toast.makeText(
-                                    context,
-                                    "Refreshing repositories…",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            }
+                    item {
+                        SectionLabel("Security")
+                    }
+
+                    item {
+                        SecurityCard(
+                            lockEnabled = lockEnabled,
+                            biometricAvailable =
+                                biometricLockManager
+                                    .isBiometricAvailable(),
+                            errorMessage = biometricError,
+                            onToggle = ::toggleBiometricLock
                         )
                     }
 
@@ -430,32 +456,6 @@ fun ProfileScreen(
 
                     item {
                         DeveloperCard()
-                    }
-
-                    item {
-                        SectionLabel("Appearance")
-                    }
-
-                    item {
-                        AppearanceCard(
-                            themeMode = themeMode,
-                            onThemeModeChange = onThemeModeChange
-                        )
-                    }
-
-                    item {
-                        SectionLabel("Security")
-                    }
-
-                    item {
-                        SecurityCard(
-                            lockEnabled = lockEnabled,
-                            biometricAvailable =
-                                biometricLockManager
-                                    .isBiometricAvailable(),
-                            errorMessage = biometricError,
-                            onToggle = ::toggleBiometricLock
-                        )
                     }
 
                     item {
@@ -775,10 +775,14 @@ private fun AccountSwitcherCard(
                             )
                         }
                         if (accounts.size > 1) {
-                            IconButton(onClick = { onRemoveAccount(username) }) {
+                            IconButton(
+                                onClick = { onRemoveAccount(username) },
+                                modifier = Modifier.size(36.dp)
+                            ) {
                                 Icon(
                                     Icons.Filled.Logout,
-                                    contentDescription = "Remove account"
+                                    contentDescription = "Remove account",
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                         }
@@ -786,17 +790,11 @@ private fun AccountSwitcherCard(
                 }
             }
 
-            GlassSecondaryButton(
-                text = "Add another account",
+            CompactProfileButton(
+                text = "Add account",
                 onClick = onAddAccount,
-                leadingIcon = {
-                    Icon(
-                        Icons.Filled.Add,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                },
-                modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
+                leadingIcon = Icons.Filled.Add,
+                modifier = Modifier.padding(top = 6.dp)
             )
         }
     }
@@ -805,11 +803,92 @@ private fun AccountSwitcherCard(
 @Composable
 private fun SectionLabel(text: String) {
 
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleMedium,
-        modifier = Modifier.padding(top = 4.dp)
-    )
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(top = 8.dp)
+    ) {
+        Box(
+            Modifier
+                .size(3.dp, 14.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(MaterialTheme.colorScheme.primary)
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 8.dp)
+        )
+    }
+}
+
+
+/** Small inline action for the profile page — the 54dp full-width buttons felt too heavy here. */
+@Composable
+private fun CompactProfileButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    leadingIcon: ImageVector? = null,
+    danger: Boolean = false
+) {
+    val accent =
+        if (danger) {
+            MaterialTheme.colorScheme.error
+        } else {
+            MaterialTheme.colorScheme.primary
+        }
+
+    val fill =
+        if (danger) {
+            MaterialTheme.colorScheme.error.copy(alpha = 0.08f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+        }
+
+    val shape = RoundedCornerShape(12.dp)
+
+    Row(
+        modifier = modifier
+            .height(38.dp)
+            .clip(shape)
+            .background(fill)
+            .border(
+                width = 1.dp,
+                color = accent.copy(alpha = 0.32f),
+                shape = shape
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp),
+
+        horizontalArrangement =
+            Arrangement.spacedBy(
+                space = 6.dp,
+                alignment = Alignment.CenterHorizontally
+            ),
+
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+
+        leadingIcon?.let { icon ->
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(15.dp)
+            )
+        }
+
+        Text(
+            text = text,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = accent,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
 }
 
 
@@ -874,34 +953,35 @@ private fun QuickActionTile(
         label = "quickActionBg"
     )
 
-    Column(
+    Row(
         modifier = modifier
-            .height(76.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .height(52.dp)
+            .clip(RoundedCornerShape(12.dp))
             .background(bg)
             .clickable(
                 interactionSource = interaction,
                 indication = null,
                 onClick = onClick
-            ),
+            )
+            .padding(horizontal = 10.dp),
 
-        horizontalAlignment = Alignment.CenterHorizontally,
+        horizontalArrangement = Arrangement.Center,
 
-        verticalArrangement = Arrangement.Center
+        verticalAlignment = Alignment.CenterVertically
     ) {
 
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(22.dp)
+            modifier = Modifier.size(18.dp)
         )
 
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.width(7.dp))
 
         Text(
             text = label,
-            fontSize = 13.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -1416,8 +1496,6 @@ private fun AchievementsRow(
     user: GitUser,
     repositories: List<GitRepository>
 ) {
-    // These are live values from GitHub, not threshold/dummy badges.
-    // The repository list is the same data loaded by the Profile screen.
     val totalStars = repositories.sumOf { it.stargazersCount }
     val totalForks = repositories.sumOf { it.forksCount }
     val languageCount = repositories.mapNotNull { it.language }.distinct().size
@@ -1516,28 +1594,16 @@ private fun DeveloperCard() {
                 .padding(top = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            GlassSecondaryButton(
+            CompactProfileButton(
                 text = "GitHub",
                 onClick = { open("https://github.com/Sandeepbedia") },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Filled.OpenInNew,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                },
+                leadingIcon = Icons.Filled.OpenInNew,
                 modifier = Modifier.weight(1f)
             )
-            GlassSecondaryButton(
+            CompactProfileButton(
                 text = "Telegram",
                 onClick = { open("https://t.me/Infinity_384") },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Filled.OpenInNew,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                },
+                leadingIcon = Icons.Filled.OpenInNew,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -1586,7 +1652,8 @@ private fun ConnectedAccountCard(
             if (user != null) {
 
                 IconButton(
-                    onClick = onOpenGitHub
+                    onClick = onOpenGitHub,
+                    modifier = Modifier.size(36.dp)
                 ) {
 
                     Icon(
@@ -1922,7 +1989,7 @@ private fun AboutCard() {
                 )
         )
 
-        GlassSecondaryButton(
+        CompactProfileButton(
             text = "View source on GitHub",
             onClick = {
 
@@ -1938,15 +2005,7 @@ private fun AboutCard() {
                     )
                 }
             },
-            leadingIcon = {
-
-                Icon(
-                    imageVector =
-                        Icons.Filled.OpenInNew,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
+            leadingIcon = Icons.Filled.OpenInNew
         )
     }
 }
@@ -2000,17 +2059,11 @@ private fun DangerZoneCard(
                 )
         )
 
-        GlassSecondaryButton(
+        CompactProfileButton(
             text = "Disconnect GitHub account",
             onClick = onDisconnect,
-            leadingIcon = {
-
-                Icon(
-                    imageVector = Icons.Filled.Logout,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
+            leadingIcon = Icons.Filled.Logout,
+            danger = true
         )
     }
 }

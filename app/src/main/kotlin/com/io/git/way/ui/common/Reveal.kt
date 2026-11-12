@@ -36,18 +36,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.delay
 
-/**
- * Git Way's shared entrance animation (ported from the PhoneIDE/LSP project-tree
- * reveal system): a row or section rises/slides in, fades in and settles from a
- * slightly smaller scale, each one a beat after the one before it.
- *
- * Everything is painted in a graphics layer, so it costs no recomposition and no
- * relayout — it cannot move a tap target out from under a finger, only draw it.
- *
- * Usage: `val reveal = rememberReveal()` once per screen/panel, then
- * `Modifier.revealIn(reveal, key = "row-path", order = index)` on each thing that
- * should enter.
- */
 class RevealController internal constructor(
     internal val trigger: Any,
     internal val reduceMotion: Boolean,
@@ -56,9 +44,6 @@ class RevealController internal constructor(
     internal val played = HashSet<Any>()
 }
 
-/**
- * @param trigger changing it replays every entrance; the first composition always plays once.
- */
 @Composable
 fun rememberReveal(trigger: Any = Unit): RevealController {
     val context = LocalContext.current
@@ -80,8 +65,6 @@ data class RevealStyle(
         /** Cards and sections on a full screen. */
         val Section = RevealStyle()
 
-        /** Rows in a list or tree: shorter travel, quicker, tighter stagger — used for
-         * the Repository Explorer's file-tree rows. */
         val Row = RevealStyle(riseDp = 0f, slideXDp = -18f, startScale = 1f, durationMs = 380, staggerMs = 22L, maxStaggered = 14)
 
         /** Items in a popup menu. */
@@ -95,13 +78,6 @@ data class RevealStyle(
 /** Soft landing: quick off the mark, long gentle settle — motion that arrives and then rests. */
 private val RevealEasing = CubicBezierEasing(0.22f, 1.0f, 0.36f, 1.0f)
 
-/**
- * Apply the entrance to this element.
- *
- * @param key identifies the element for [RevealController.played]; must be stable.
- * @param order position in the stagger (0 = first).
- * @param enabled false leaves the element untouched — used for list rows beyond the first screenful.
- */
 @Composable
 fun Modifier.revealIn(
     controller: RevealController,
@@ -111,8 +87,6 @@ fun Modifier.revealIn(
     enabled: Boolean = true,
 ): Modifier {
     val skip = !enabled || controller.reduceMotion
-    // Hidden from the very first frame unless this element already played — no flash of the
-    // finished layout before the entrance begins, and a replay resets in the frame it triggers.
     val progress = remember(controller) {
         Animatable(if (skip || key in controller.played) 1f else 0f)
     }
@@ -140,11 +114,6 @@ fun Modifier.revealIn(
     }
 }
 
-/**
- * Counter that goes up when the app comes back from the background after a real absence, so a
- * screen can replay its entrance on reopen. Short trips — a permission dialog, the system file
- * picker, the notification shade — leave it alone: replaying then would blink the screen.
- */
 @Composable
 fun rememberReopenEpoch(replayAfterMs: Long = 5_000L): Int {
     var epoch by remember { mutableIntStateOf(0) }

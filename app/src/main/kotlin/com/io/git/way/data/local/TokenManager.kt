@@ -22,13 +22,6 @@ import androidx.security.crypto.MasterKey
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
-/**
- * Secure multi-account GitHub PAT storage.
- *
- * Tokens are encrypted at rest. The active account is switched by changing which
- * encrypted token is exposed to the API interceptor; no token is ever stored in
- * normal SharedPreferences or logs.
- */
 class TokenManager(context: Context) {
 
     private val _activeAccountFlow = MutableStateFlow<String?>(null)
@@ -65,10 +58,6 @@ class TokenManager(context: Context) {
 
     fun hasToken(): Boolean = !getToken().isNullOrBlank()
 
-    /**
-     * Saves an account and makes it active.
-     * The username is used only as an account identifier; the PAT stays encrypted.
-     */
     fun saveAccount(username: String, token: String, avatarUrl: String? = null) {
         val normalized = username.trim()
         if (normalized.isBlank() || token.isBlank()) return
@@ -111,10 +100,6 @@ class TokenManager(context: Context) {
         return true
     }
 
-    /**
-     * Removes one account. If it was active, another account becomes active
-     * automatically when available; otherwise the active token is cleared.
-     */
     fun removeAccount(username: String): Boolean {
         val normalized = username.trim()
         val accounts = prefs.getStringSet(KEY_ACCOUNTS, emptySet()).orEmpty().toMutableSet()

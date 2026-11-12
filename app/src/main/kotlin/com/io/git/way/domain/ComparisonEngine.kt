@@ -29,31 +29,11 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicInteger
 
-/**
- * Result of a comparison: the actual Added/Modified/Removed changes, plus how many
- * remote-only paths were excluded from [ChangeType.REMOVED] — either built-in
- * repository scaffolding (README, LICENSE, .github/, etc. — see
- * [RepositoryScaffoldFiles]) or paths the person manually marked "don't track".
- */
 data class DiffResult(
     val changes: List<FileChange>,
     val ignoredScaffoldFiles: List<String>
 )
 
-/**
- * Compares the locally scanned file list against the GitHub repository's current tree
- * and classifies every path into Added / Modified / Removed (PRD1 §3.3).
- *
- * Local blob-SHA computation only runs for paths that exist on both sides (PRD1 §3.5) —
- * files that are clearly Added are never hashed. Hashing runs with limited concurrency
- * since it dominates comparison time for large trees.
- *
- * Removed detection only ever applies to the app's own project files — repository
- * scaffolding GitHub or a maintainer added directly on github.com (README, LICENSE,
- * .gitignore, .github/ workflows, etc.) is never part of the local folder in the first
- * place, so it's excluded before it can be mistaken for a deletion. See
- * [RepositoryScaffoldFiles].
- */
 object ComparisonEngine {
 
     private const val MAX_CONCURRENT_HASHES = 6
@@ -90,9 +70,6 @@ object ComparisonEngine {
                     async {
                         semaphore.withPermit {
                             val file = localByPath.getValue(path)
-                            // Redacted/generated files (Smart Upload Protection) hash the
-                            // overridden bytes that will actually be uploaded, not the
-                            // real on-disk content, so the diff matches what's pushed.
                             val override = contentOverrides[path]
                             val localSha = if (override != null) {
                                 GitBlobHasher.hashBytes(override)

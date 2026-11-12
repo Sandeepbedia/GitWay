@@ -18,10 +18,9 @@ package com.io.git.way.ui.screens.browser
 
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,7 +30,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -50,6 +48,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -65,9 +65,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material.icons.Icons
@@ -88,7 +87,6 @@ import androidx.compose.material.icons.filled.FileCopy
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOff
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Merge
@@ -123,6 +121,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -133,12 +132,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.ImageLoader
 import coil.compose.rememberAsyncImagePainter
@@ -173,21 +170,16 @@ import com.io.git.way.ui.theme.GlassCard
 import com.io.git.way.ui.theme.GlassScaffold
 import com.io.git.way.ui.theme.GlassSecondaryButton
 
-/** Files whose accidental deletion can break the build — get the stronger warning dialog
- * (PRD "Repository Explorer" §24 Delete Protection) instead of the plain confirmation. */
 private val CRITICAL_FILE_NAMES = setOf(
     "AndroidManifest.xml", "build.gradle.kts", "build.gradle",
     "settings.gradle.kts", "settings.gradle", "proguard-rules.pro"
 )
 
-/**
- * GitWay Project Explorer: a GitHub-aware Android project/file explorer over the
- * selected repository. Indented, expandable tree (no drill-down navigation — folders
- * open in place), current-path bar, Android project detection, type-aware icons with
- * metadata, sort/filter, multi-select, and a read/edit viewer with syntax highlighting.
- * Every write (create/paste/rename/duplicate/edit/delete) lands as its own small commit
- * via the same tested sync pipeline used for the main upload flow.
- */
+// Geometry shared by the tree rows and their thread lines.
+private const val TREE_START_DP = 16
+private const val TREE_INDENT_DP = 20
+private const val TREE_ICON_HALF_DP = 12
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun RepositoryBrowserScreen(
@@ -215,8 +207,6 @@ fun RepositoryBrowserScreen(
     var browserQuery by remember { mutableStateOf("") }
     var explorerZoom by remember { mutableStateOf(1f) }
     val explorerHorizontalScroll = rememberScrollState()
-    // Whether the ABBravo/root row itself is expanded — previously the root row had no
-    // collapse state at all, so it never behaved like the other folders in the tree.
     var rootExpanded by remember { mutableStateOf(true) }
     var showBranchPicker by remember { mutableStateOf(false) }
     var showCreateBranchDialog by remember { mutableStateOf(false) }
@@ -224,9 +214,26 @@ fun RepositoryBrowserScreen(
     var showRepoSettings by remember { mutableStateOf(false) }
     var showDeleteRepoDialog by remember { mutableStateOf(false) }
 
-    // SAF picker for manual uploads — files land in the folder the user is browsing
-    // (or a specific folder when opened from a row's quick action, which sets the
-    // create target first).
+    // System back unwinds in-app layers one at a time (editor → file viewer →
+    // selection → search) before it pops the whole browser destination.
+    BackHandler(
+        enabled = state.viewingFile != null ||
+            state.selectedBrowserPaths.isNotEmpty() ||
+            browserQuery.isNotBlank()
+    ) {
+        when {
+            state.viewingFile != null -> {
+                if (state.isEditingFile) {
+                    sessionViewModel.cancelEditingFile()
+                } else {
+                    sessionViewModel.closeFileViewer()
+                }
+            }
+            state.selectedBrowserPaths.isNotEmpty() -> sessionViewModel.clearBrowserSelection()
+            else -> browserQuery = ""
+        }
+    }
+
     val uploadFilesLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->
@@ -242,8 +249,6 @@ fun RepositoryBrowserScreen(
         }
     }
 
-    // The file viewer/editor replaces the tree in place, so back/close behaviour stays
-    // intuitive without introducing a second nav-graph destination.
     if (state.viewingFile != null) {
         FileViewerScreen(sessionViewModel = sessionViewModel)
         return
@@ -413,10 +418,6 @@ fun RepositoryBrowserScreen(
                 }
             }
 
-            // New File / New Folder / Upload used to live here as a global bar, detached
-            // from any folder context. They now live on the ABBravo/root row itself (see
-            // RepositoryRootRow below), same as every other folder row — one consistent
-            // place for "act on this folder" actions instead of two.
             if (state.pasteError != null) {
                 Text(state.pasteError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 4.dp))
             }
@@ -456,11 +457,14 @@ fun RepositoryBrowserScreen(
                 }
             }
 
-            Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                // Ranked, fuzzy search (ported from the PhoneIDE/LSP project tree): typing
-                // "Main" surfaces MainActivity.kt before a hundred generated files that merely
-                // contain "main", and an extension shorthand (`*.kt`, `.kt`, `kt:`) narrows the
-                // scope the way a developer actually types it, without any query syntax to learn.
+            PullToRefreshBox(
+                isRefreshing = state.isBrowserLoading && state.remoteTreeCache.isNotEmpty(),
+                onRefresh = {
+                    sessionViewModel.loadBrowserRoot(collapseFolders = true)
+                    sessionViewModel.loadBranches()
+                },
+                modifier = Modifier.fillMaxWidth().weight(1f)
+            ) {
                 val searchResults = remember(browserQuery, state.remoteTreeCache) {
                     if (browserQuery.isBlank()) {
                         emptyList()
@@ -486,7 +490,7 @@ fun RepositoryBrowserScreen(
                 }
 
                 when {
-                    state.isBrowserLoading -> ExplorerSkeleton()
+                    state.isBrowserLoading && state.remoteTreeCache.isEmpty() -> ExplorerSkeleton()
 
                     state.browserError != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -521,15 +525,10 @@ fun RepositoryBrowserScreen(
                     )
 
                     else -> {
-                        // The explorer canvas intentionally has a wider virtual page than
-                        // the phone viewport. Long folder/file names can therefore be
-                        // reached with horizontal scrolling instead of being ellipsized.
-                        // Two-finger pinch changes the explorer scale without changing the
-                        // repository data or navigation state.
-                        // The explorer itself is a horizontally scrollable canvas.
-                        // Its virtual width grows with the longest visible path/name, so
-                        // the COMPLETE panel (icons, indentation, names and action badges)
-                        // moves together instead of only the filename area scrolling.
+                        val displayDepths = remember(state.browserEntries) {
+                            listOf(0) + state.browserEntries.map { it.depth + 1 }
+                        }
+                        val treeGuides = remember(displayDepths) { TreeGuides.masks(displayDepths) }
                         val longestExplorerText = state.browserEntries
                             .maxOfOrNull { entry ->
                                 val depth = entry.entry.path.count { it == '/' }
@@ -574,19 +573,9 @@ fun RepositoryBrowserScreen(
                                     }
                                 }
                         ) {
-                            // Rows ease into place the same way the PhoneIDE/LSP project
-                            // tree does: the first screenful slides in from the left, one
-                            // after another, and a folder expanded later fans its new
-                            // children in starting from wherever they land in the list —
-                            // not restarting the stagger from the top every time.
                             val treeListState = rememberLazyListState()
                             val treeReveal = rememberReveal()
                             val firstRowAtOpen = remember { treeListState.firstVisibleItemIndex }
-                            // Paths the tree held as of the last recomposition, so a folder
-                            // that was *just expanded* (brand-new rows, animate) can be told
-                            // apart from the user merely scrolling to a row that was already
-                            // there (no animation). Seeded with what's on screen already so
-                            // the very first composition doesn't treat everything as "new".
                             var knownRowPaths by remember(treeReveal) {
                                 mutableStateOf<Set<String>>(
                                     state.browserEntries.mapTo(mutableSetOf()) { it.entry.path }
@@ -597,18 +586,10 @@ fun RepositoryBrowserScreen(
                             }
                             LaunchedEffect(state.browserEntries) {
                                 val newPaths = state.browserEntries.mapTo(mutableSetOf()) { it.entry.path }
-                                // A row that just dropped out (its folder collapsed) replays
-                                // its entrance the next time that folder reopens, instead of
-                                // staying marked "already played" forever.
                                 for (goneRowPath in knownRowPaths - newPaths) treeReveal.played.remove(goneRowPath)
                                 knownRowPaths = newPaths
                             }
                             LazyColumn(
-                                // Was spacedBy(1.dp): that 1dp gap between every row broke
-                                // the vertical guide lines at each row boundary — barely
-                                // visible at 1x zoom but an obvious cut once zoomed in,
-                                // since the gap doesn't scale with the rest of the row.
-                                // Rows sit flush now so every guide column is continuous.
                                 state = treeListState,
                                 modifier = Modifier.width(contentWidth)
                             ) {
@@ -616,7 +597,6 @@ fun RepositoryBrowserScreen(
                                     RepositoryRootRow(
                                         repositoryName = repo?.name ?: "Repository",
                                         itemCount = state.browserEntries.size,
-                                        isExpanded = rootExpanded,
                                         zoomScale = explorerZoom,
                                         onToggleExpanded = { rootExpanded = !rootExpanded },
                                         onNewFile = { sessionViewModel.setCreateTarget(""); showNewFileDialog = true },
@@ -629,25 +609,11 @@ fun RepositoryBrowserScreen(
                                 }
                                 if (rootExpanded) {
                                 itemsIndexed(state.browserEntries, key = { _, row -> row.entry.path }) { index, row ->
-                                    // EVERY row animates when it comes on screen — no cut-off
-                                    // by depth or by how far down the list it is. Rows in the
-                                    // first screenful fan in one after another from the top of
-                                    // the explorer; a row further down (a long list, a deeply
-                                    // expanded folder) plays the same slide-in the moment it
-                                    // scrolls into view. Each row plays once per path
-                                    // (RevealController.played), so scrolling back and forth
-                                    // does not replay it.
                                     val justRevealed = row.entry.path !in knownRowPaths
-                                    // Decided once, when the row first enters composition, and
-                                    // then held: knownRowPaths is refreshed a frame after an
-                                    // expand, and reading it live would change the stagger
-                                    // mid-entrance.
                                     val entranceOrder = remember(row.entry.path) {
                                         if (justRevealed && firstNewRowIndex >= 0) index - firstNewRowIndex
                                         else (index - firstRowAtOpen).coerceAtLeast(0)
                                     }
-                                    // A row that leaves the screen forgets it has played, so it
-                                    // slides in again every time it scrolls back into view.
                                     DisposableEffect(row.entry.path) {
                                         onDispose { treeReveal.played.remove(row.entry.path) }
                                     }
@@ -660,6 +626,8 @@ fun RepositoryBrowserScreen(
                                         row = row,
                                         selectionMode = selectionMode,
                                         zoomScale = explorerZoom,
+                                        guideMask = treeGuides[index + 1],
+                                        depth = row.depth + 1,
                                 selected = row.entry.path in state.selectedBrowserPaths,
                                 onClick = {
                                     when {
@@ -677,7 +645,7 @@ fun RepositoryBrowserScreen(
                                     sessionViewModel.setCreateTarget(row.entry.path)
                                     uploadFilesLauncher.launch(arrayOf("*/*"))
                                 },
-                                onRefresh = { sessionViewModel.loadBrowserRoot() },
+                                onRefresh = { sessionViewModel.loadBrowserRoot(collapseFolders = true) },
                                 onCopyPath = { clipboard.setText(AnnotatedString(row.entry.path)) },
                                 onCopyName = { clipboard.setText(AnnotatedString(row.entry.name)) },
                                 onViewOnGitHub = {
@@ -848,8 +816,6 @@ fun RepositoryBrowserScreen(
     )
 }
 
-/** PRD §21 Loading — a handful of placeholder rows instead of a bare spinner, so the
- * tree's shape doesn't visually "pop in" once it loads. */
 @Composable
 private fun ExplorerSkeleton() {
     val shimmer = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f)
@@ -869,30 +835,32 @@ private fun ExplorerSkeleton() {
     }
 }
 
-/** PRD §22 Empty State. */
+/** PRD §22 Empty State. Wrapped in a LazyColumn so pull-to-refresh still works here. */
 @Composable
 private fun EmptyFolderState(onNewFile: () -> Unit, onUpload: () -> Unit) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Filled.FolderOff, contentDescription = null, modifier = Modifier.size(36.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("Folder is empty", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 10.dp))
-            Text(
-                "Create a file or upload something here.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 2.dp, bottom = 14.dp)
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                GlassSecondaryButton(text = "New File", onClick = onNewFile)
-                GlassSecondaryButton(text = "Upload", onClick = onUpload)
+    LazyColumn(Modifier.fillMaxSize()) {
+        item {
+            Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Filled.FolderOff, contentDescription = null, modifier = Modifier.size(36.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Folder is empty", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 10.dp))
+                    Text(
+                        "Create a file or upload something here.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 2.dp, bottom = 14.dp)
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GlassSecondaryButton(text = "New File", onClick = onNewFile)
+                        GlassSecondaryButton(text = "Upload", onClick = onUpload)
+                    }
+                }
             }
         }
     }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
-/** One flat search-result row — shown instead of the tree while the search field has
- * text, since a match might be nested inside a folder the user hasn't expanded. */
 @Composable
 private fun SearchResultRow(path: String, onClick: () -> Unit) {
     val name = path.substringAfterLast('/')
@@ -922,27 +890,14 @@ private fun SearchResultRow(path: String, onClick: () -> Unit) {
 private fun RepositoryRootRow(
     repositoryName: String,
     itemCount: Int,
-    isExpanded: Boolean = true,
     zoomScale: Float = 1f,
     onToggleExpanded: () -> Unit = {},
     onNewFile: () -> Unit = {},
     onNewFolder: () -> Unit = {},
     onUploadInto: () -> Unit = {}
 ) {
-    // Same styling constants as TreeIndentGuides, so the root's drop connects
-    // seamlessly into the first child's guide column instead of leaving a gap —
-    // RepositoryRootRow used to draw no guide line at all.
-    val guideColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.34f)
-    // The root guide column is wider because the root chevron lives inside it.
-    // This makes the vertical guide originate from the chevron itself and line up
-    // exactly with every depth-0 child row below it.
-    val rootGuideWidth = 28.dp
-    val strokeWidth = 1.5.dp
     val hasChildren = itemCount > 0
 
-    // Root now scales with the same pinch-to-zoom gesture as every other row
-    // (TreeRowItem) instead of staying fixed at 1x while the rest of the tree
-    // grows/shrinks around it.
     val uiScale = zoomScale.coerceIn(0.75f, 1.8f)
     val rowHeight = 52.dp * uiScale
 
@@ -951,53 +906,14 @@ private fun RepositoryRootRow(
             .fillMaxWidth()
             .height(rowHeight)
             .clip(RoundedCornerShape(10.dp))
-            // The root now toggles open/closed exactly like every other folder row —
-            // previously it had no click target and always rendered its children.
             .clickable(enabled = hasChildren, onClick = onToggleExpanded)
-            .padding(horizontal = 2.dp),
+            .padding(start = TREE_START_DP.dp * uiScale, end = 16.dp * uiScale),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .width(rootGuideWidth * uiScale)
-                .fillMaxHeight()
-        ) {
-            val rotation by animateFloatAsState(
-                targetValue = if (isExpanded) 90f else 0f,
-                label = "root-chevron"
-            )
-            // The chevron is centered on the exact same x-coordinate used by the
-            // depth-0 child guide column. The vertical line therefore comes directly
-            // out of the arrow instead of sitting to its left.
-            Canvas(Modifier.fillMaxSize()) {
-                val x = size.width / 2f
-                val midY = size.height / 2f
-                val stroke = strokeWidth.toPx()
-                if (hasChildren && isExpanded) {
-                    drawLine(
-                        color = guideColor,
-                        start = Offset(x, midY),
-                        end = Offset(x, size.height),
-                        strokeWidth = stroke,
-                        cap = StrokeCap.Round
-                    )
-                }
-            }
-            Icon(
-                Icons.Filled.KeyboardArrowRight,
-                contentDescription = if (isExpanded) "Collapse repository root" else "Expand repository root",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(20.dp * uiScale)
-                    .graphicsLayer { rotationZ = rotation }
-            )
-        }
-        Spacer(Modifier.width(2.dp * uiScale))
         SvgRawIcon(
             resId = com.io.git.way.R.raw.folder_root,
             contentDescription = "Repository root",
-            modifier = Modifier.size(28.dp * uiScale)
+            modifier = Modifier.size(24.dp * uiScale)
         )
         Text(
             repositoryName,
@@ -1008,19 +924,8 @@ private fun RepositoryRootRow(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             softWrap = false,
-            // Was .weight(1f): on this very wide, horizontally-scrollable canvas that
-            // stretched the name across the entire virtual row width and pushed the
-            // New File / New Folder / Upload icons far off the right edge — invisible
-            // unless you scrolled all the way over. Every other folder row sizes its
-            // name to its content and puts the icons right after it; the root row now
-            // matches that so its icons actually show up next to "ABBravo" like they do
-            // for .github, app, gradle, and every other folder.
             modifier = Modifier.padding(start = 10.dp * uiScale).widthIn(min = 40.dp * uiScale)
         )
-        // Same quick actions as folder rows — the root is just another folder target.
-        // These are the only New File / New Folder / Upload controls now: the old
-        // always-visible bar above the tree was removed so root-level actions live in
-        // exactly one place, same as every other folder.
         IconButton(onClick = onNewFile, modifier = Modifier.size(28.dp * uiScale)) {
             Icon(
                 Icons.Filled.NoteAdd,
@@ -1057,12 +962,6 @@ private fun RepositoryRootRow(
     }
 }
 
-/**
- * Process-wide [ImageLoader] with the SVG decoder registered, built once instead of
- * per icon: a file tree renders dozens of rows, and each `ImageLoader` carries its own
- * memory/disk cache — creating one per row threw away the decoded bitmap immediately
- * and re-parsed the same SVG on every scroll.
- */
 private object SvgTreeIconLoader {
     @Volatile
     private var instance: ImageLoader? = null
@@ -1075,9 +974,6 @@ private object SvgTreeIconLoader {
     }
 }
 
-/** Generic renderer for any wired res/raw SVG icon (folders, file types, ...). Shared
- * with [com.io.git.way.ui.screens.folder.FolderSelectionScreen] so the local-folder
- * file list and the remote Project Explorer tree use the exact same icon set. */
 @Composable
 fun SvgRawIcon(
     resId: Int,
@@ -1116,6 +1012,8 @@ private fun TreeRowItem(
     row: TreeRow,
     selectionMode: Boolean,
     zoomScale: Float = 1f,
+    guideMask: Long,
+    depth: Int,
     selected: Boolean,
     onClick: () -> Unit,
     onDelete: () -> Unit,
@@ -1138,8 +1036,9 @@ private fun TreeRowItem(
     } else {
         Color.Transparent
     }
+    val guideColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.34f)
 
-    // Fixed height keeps every guide column aligned to the same vertical rhythm.
+    // Fixed height keeps every guide row aligned to the same vertical rhythm.
     val uiScale = zoomScale.coerceIn(0.75f, 1.8f)
     val rowHeight = 50.dp * uiScale
 
@@ -1151,49 +1050,33 @@ private fun TreeRowItem(
                 .height(rowHeight)
                 .clip(RoundedCornerShape(10.dp))
                 .background(rowBackground)
+                .drawBehind { drawTreeThreads(guideMask, depth, guideColor, uiScale) }
                 .combinedClickable(onClick = onClick, onLongClick = { showMenu = true })
-                .padding(horizontal = 2.dp),
+                .padding(
+                    start = (TREE_START_DP + depth * TREE_INDENT_DP).dp * uiScale,
+                    end = 2.dp
+                ),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxHeight(),
-                verticalAlignment = Alignment.CenterVertically
+            if (selectionMode && !entry.isFolder) {
+                Icon(
+                    if (selected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                    contentDescription = if (selected) "Selected" else "Not selected",
+                    tint = if (selected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp * uiScale)
+                )
+                Spacer(Modifier.width(6.dp))
+            }
+
+            Box(
+                modifier = Modifier.size(24.dp * uiScale),
+                contentAlignment = Alignment.Center
             ) {
-                TreeIndentGuides(row, if (entry.isFolder) 0.dp else 24.dp)
-
-                if (entry.isFolder) {
-                    val rotation by animateFloatAsState(
-                        targetValue = if (row.isExpanded) 90f else 0f,
-                        label = "tree-chevron"
-                    )
-                    Icon(
-                        Icons.Filled.KeyboardArrowRight,
-                        contentDescription = if (row.isExpanded) "Collapse folder" else "Expand folder",
-                        modifier = Modifier
-                            .size(20.dp)
-                            .graphicsLayer { rotationZ = rotation },
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.width(2.dp))
-                } else if (selectionMode) {
-                    Icon(
-                        if (selected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
-                        contentDescription = if (selected) "Selected" else "Not selected",
-                        tint = if (selected) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp * uiScale)
-                    )
-                    Spacer(Modifier.width(4.dp))
-                } else {
-                    // Keep files aligned with folder names without showing a fake expand arrow.
-                    Spacer(Modifier.width(22.dp))
-                }
-
                 if (entry.isFolder) {
                     SvgFolderIcon(
                         open = row.isExpanded,
-                        modifier = Modifier.size(25.dp * uiScale)
+                        modifier = Modifier.size(24.dp * uiScale)
                     )
                 } else {
                     val iconRes = FileTypeIcons.iconResFor(entry.name)
@@ -1201,68 +1084,68 @@ private fun TreeRowItem(
                         SvgRawIcon(
                             resId = iconRes,
                             contentDescription = null,
-                            modifier = Modifier.size(21.dp * uiScale)
+                            modifier = Modifier.size(20.dp * uiScale)
                         )
                     } else {
                         Icon(
                             FileTypeIcons.iconFor(entry.name),
                             contentDescription = null,
                             tint = iconTint,
-                            modifier = Modifier.size(21.dp * uiScale)
+                            modifier = Modifier.size(20.dp * uiScale)
                         )
                     }
                 }
-
-                Text(
-                    entry.name,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp * uiScale, lineHeight = 20.sp * uiScale),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    softWrap = false,
-                    modifier = Modifier
-                        .padding(start = 9.dp * uiScale)
-                        .widthIn(min = 40.dp * uiScale)
-                )
-
-                if (entry.isFolder && !selectionMode) {
-                    Spacer(Modifier.width(4.dp))
-                    IconButton(
-                        onClick = onNewFile,
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Icon(
-                            Icons.Filled.NoteAdd,
-                            contentDescription = "New file",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                    IconButton(
-                        onClick = onNewFolder,
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Icon(
-                            Icons.Filled.CreateNewFolder,
-                            contentDescription = "New folder",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                    IconButton(
-                        onClick = onUploadInto,
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Icon(
-                            Icons.Filled.UploadFile,
-                            contentDescription = "Upload files here",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-
-                Spacer(Modifier.width(12.dp))
             }
+
+            Text(
+                entry.name,
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp * uiScale, lineHeight = 20.sp * uiScale),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                softWrap = false,
+                modifier = Modifier
+                    .padding(start = 9.dp * uiScale)
+                    .widthIn(min = 40.dp * uiScale)
+            )
+
+            if (entry.isFolder && !selectionMode) {
+                Spacer(Modifier.width(4.dp))
+                IconButton(
+                    onClick = onNewFile,
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        Icons.Filled.NoteAdd,
+                        contentDescription = "New file",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+                IconButton(
+                    onClick = onNewFolder,
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        Icons.Filled.CreateNewFolder,
+                        contentDescription = "New folder",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+                IconButton(
+                    onClick = onUploadInto,
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        Icons.Filled.UploadFile,
+                        contentDescription = "Upload files here",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+
+            Spacer(Modifier.width(12.dp))
 
             if (!entry.isFolder && !selectionMode) {
                 val badge = FileTypeIcons.badgeFor(entry.name)
@@ -1351,162 +1234,41 @@ private fun TreeRowItem(
     }
 }
 
-/** Continuous VS Code-style tree guides.
- *
- * Each depth gets one fixed 18dp column. Ancestor columns remain vertical when that
- * ancestor has another sibling below; the current row gets an elbow into its icon/name.
- */
-@Composable
-private fun TreeIndentGuides(row: TreeRow, nameExtension: Dp = 0.dp) {
-    val guideColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.34f)
-    // Depth 0 uses the same 28dp column as the repository-root chevron.
-    // Deeper levels then advance by 18dp, preserving the tree rhythm.
-    val rootGuideWidth = 28.dp
-    val indentUnit = 18.dp
-    val strokeWidth = 1.5.dp
-    val corner = 5.dp
-    // Folder rows have a chevron immediately after the guide column, so the
-    // horizontal elbow must reach that chevron. Files keep their caller-provided
-    // extension because they use a spacer instead of a chevron.
-    val connectorExtension = if (row.entry.isFolder) 10.dp else nameExtension
-    val extensionPx = with(LocalDensity.current) { connectorExtension.toPx() }
-    val expandedFolder = row.entry.isFolder && row.isExpanded && row.directChildCount > 0
-
-    if (row.depth <= 0) {
-        val hasNextRootSibling = row.ancestorLines.getOrElse(0) { false }
-        Box(
-            modifier = Modifier
-                .width(rootGuideWidth)
-                .fillMaxHeight()
-        ) {
-            Canvas(Modifier.fillMaxSize()) {
-                val x = size.width / 2f
-                val midY = size.height / 2f
-                val stroke = strokeWidth.toPx()
-                val radius = corner.toPx()
-
-                // The depth-0 guide starts at the previous row, turns into this
-                // row's chevron, and continues below only when another root sibling
-                // follows. This is the same x-coordinate used by the repository root.
-                val elbow = Path().apply {
-                    moveTo(x, 0f)
-                    lineTo(x, midY - radius)
-                    quadraticBezierTo(x, midY, x + radius, midY)
-                    lineTo(size.width + extensionPx, midY)
-                }
-                drawPath(
-                    elbow,
-                    color = guideColor,
-                    style = Stroke(width = stroke, cap = StrokeCap.Round)
-                )
-
-                if (hasNextRootSibling) {
-                    drawLine(
-                        color = guideColor,
-                        start = Offset(x, midY),
-                        end = Offset(x, size.height),
-                        strokeWidth = stroke,
-                        cap = StrokeCap.Round
-                    )
-                }
-            }
+/** Thread lines of one tree row: vertical lines of the ancestors, plus a rounded elbow (last child) or a branch. */
+private fun DrawScope.drawTreeThreads(mask: Long, depth: Int, color: Color, scale: Float) {
+    if (depth < 1) return
+    // Every tree dimension scales with the explorer zoom so the thread never
+    // drifts away from the icon it belongs to.
+    val start = TREE_START_DP.dp.toPx() * scale
+    val unit = TREE_INDENT_DP.dp.toPx() * scale
+    val iconHalf = TREE_ICON_HALF_DP.dp.toPx() * scale
+    val stroke = (1.dp.toPx() * scale).coerceAtLeast(1f)
+    val radius = 8.dp.toPx() * scale
+    fun x(level: Int) = start + (level - 1) * unit + iconHalf
+    for (level in 1 until depth) {
+        if (TreeGuides.continues(mask, level)) {
+            drawLine(color, Offset(x(level), 0f), Offset(x(level), size.height), stroke)
         }
-        return
     }
-
-    Row(
-        // Was a hard-coded 50.dp, which ignored explorer zoom entirely: at any zoom level
-        // other than 1x the actual row was taller/shorter than this, so the guide lines
-        // drawn here stopped short of (or overshot) the real row boundary and looked cut
-        // off between rows once zoomed in. Filling the parent's actual height keeps this
-        // in sync with the real (zoom-scaled) row height.
-        modifier = Modifier.fillMaxHeight(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // ancestorLines has depth+1 entries.
-        // The last entry is the current row's own sibling-continuation flag.
-        // It is used only by this row's elbow column; descendant pass-through
-        // columns use the ancestor mapping calculated below.
-        val ownContinues = row.ancestorLines.getOrElse(row.depth) { false }
-
-        for (level in 0 until row.depth) {
-            // Guide-column mapping:
-            // level 0 is the root-level ancestor line.
-            // Every deeper column belongs to the child-chain of the ancestor one
-            // level above it, so its continuation flag is stored at level + 1.
-            // Using `level` for every column caused the line to stop/restart when
-            // a folder such as assets had its own expanded children.
-            val continuationIndex = if (level == 0) 0 else level + 1
-            val continues = row.ancestorLines.getOrElse(continuationIndex) { false }
-            val columnWidth = if (level == 0) rootGuideWidth else indentUnit
-
-            Box(
-                modifier = Modifier
-                    .width(columnWidth)
-                    .fillMaxHeight()
-            ) {
-                Canvas(Modifier.fillMaxSize()) {
-                    val x = size.width / 2f
-                    val midY = size.height / 2f
-                    val stroke = strokeWidth.toPx()
-                    val radius = corner.toPx()
-
-                    if (level < row.depth - 1) {
-                        if (continues) {
-                            drawLine(
-                                color = guideColor,
-                                start = Offset(x, 0f),
-                                end = Offset(x, size.height),
-                                strokeWidth = stroke,
-                                cap = StrokeCap.Round
-                            )
-                        }
-                    } else {
-                        val elbow = Path().apply {
-                            moveTo(x, 0f)
-                            lineTo(x, midY - radius)
-                            quadraticBezierTo(x, midY, x + radius, midY)
-                            if (expandedFolder) {
-                                // The first child starts in the next guide column.
-                                // Its center is exactly half an indentUnit after this
-                                // column, so the parent drop and child guide share one x.
-                                val childGuideX = size.width + indentUnit.toPx() / 2f
-                                lineTo(childGuideX, midY)
-                            } else {
-                                lineTo(size.width + extensionPx, midY)
-                            }
-                        }
-
-                        drawPath(
-                            elbow,
-                            color = guideColor,
-                            style = Stroke(width = stroke, cap = StrokeCap.Round)
-                        )
-
-                        if (expandedFolder) {
-                            val dropX = size.width + indentUnit.toPx() / 2f
-                            drawLine(
-                                color = guideColor,
-                                start = Offset(dropX, midY),
-                                end = Offset(dropX, size.height),
-                                strokeWidth = stroke,
-                                cap = StrokeCap.Round
-                            )
-                        }
-
-                        if (ownContinues) {
-                            drawLine(
-                                color = guideColor,
-                                start = Offset(x, midY),
-                                end = Offset(x, size.height),
-                                strokeWidth = stroke,
-                                cap = StrokeCap.Round
-                            )
-                        }
-                    }
-                }
-            }
-        }
+    val ex = x(depth)
+    val mid = size.height / 2f
+    val iconStart = start + depth * unit
+    if (TreeGuides.continues(mask, depth)) {
+        drawLine(color, Offset(ex, 0f), Offset(ex, size.height), stroke)
+        drawLine(color, Offset(ex, mid), Offset(iconStart, mid), stroke)
+    } else {
+        // Last child: the thread bends into the row with a rounded corner.
+        drawLine(color, Offset(ex, 0f), Offset(ex, mid - radius), stroke)
+        drawArc(
+            color = color,
+            startAngle = 90f,
+            sweepAngle = 90f,
+            useCenter = false,
+            topLeft = Offset(ex, mid - 2 * radius),
+            size = Size(2 * radius, 2 * radius),
+            style = Stroke(width = stroke)
+        )
+        drawLine(color, Offset(ex + radius, mid), Offset(iconStart, mid), stroke)
     }
 }
 
@@ -1624,9 +1386,6 @@ private fun SortFilterDialog(
     )
 }
 
-/** Lists every branch GitHub knows about for this repo, radio-select style — whichever
- * one is picked becomes the target for every read/write in this repo session (the tree
- * view, the commit history, and every push) until changed again or the repo is reopened. */
 @Composable
 private fun BranchPickerDialog(
     branches: List<String>,
@@ -1679,8 +1438,6 @@ private fun BranchPickerDialog(
     )
 }
 
-/** Forks a brand-new branch off whichever one is currently active — a real ref pointing
- * at that branch's current tip, never an empty one. */
 @Composable
 private fun CreateBranchDialog(
     sourceBranch: String,
@@ -1730,9 +1487,6 @@ private fun CreateBranchDialog(
     )
 }
 
-/** Read-only commit log for whichever branch is currently active. Git Way only ever
- *  writes new commits through the tested sync pipeline elsewhere in the app — this is
- *  purely "what's already there", each row opening straight to that commit on GitHub. */
 @Composable
 private fun CommitHistoryDialog(
     commits: List<CommitSummary>,
@@ -1781,8 +1535,6 @@ private fun CommitHistoryDialog(
     )
 }
 
-/** Per-file unified diff of a single commit — green/red highlighted lines from the
- *  raw patch text GitHub returns. */
 @Composable
 private fun CommitDiffDialog(
     files: List<com.io.git.way.domain.model.CommitDiffFile>,
@@ -1887,9 +1639,6 @@ private fun RepositorySettingsDialog(
     )
 }
 
-/** Confirmation dialog for permanently deleting the repo, reached from the top-bar
- * actions menu. Requires typing the repo name, same safeguard as the old settings
- * dialog's danger zone. */
 @Composable
 private fun DeleteRepositoryDialog(
     repo: GitRepository,
@@ -1941,10 +1690,6 @@ private fun DeleteRepositoryDialog(
     )
 }
 
-/** Read/edit view for a single file, shown in place of the tree — syntax-highlighted and
- * properly scrollable in both read and edit modes. Markdown files (README.md and friends)
- * also get a rendered Preview mode — headings, bold/italic, links, and images resolved
- * against this repo — alongside the raw source, toggled with a segmented control. */
 @Composable
 private fun FileViewerScreen(sessionViewModel: GitWaySessionViewModel) {
     val state = sessionViewModel.state
@@ -2043,8 +1788,6 @@ private fun FileViewerScreen(sessionViewModel: GitWaySessionViewModel) {
     }
 }
 
-/** Pinch-to-zoom + pan image preview — plain [android.graphics.BitmapFactory] decode of
- * whatever bytes were already fetched for the viewer, no extra network round trip. */
 @Composable
 private fun ZoomableImage(bytes: ByteArray, contentDescription: String, modifier: Modifier = Modifier) {
     val bitmap = remember(bytes) {
@@ -2087,12 +1830,6 @@ private fun ZoomableImage(bytes: ByteArray, contentDescription: String, modifier
     }
 }
 
-/** A minimal code editor: a line-number gutter kept in sync with the content via a
- * shared vertical scroll state, syntax highlighting, and pinch-to-zoom font scaling
- * (two-finger gesture — the same interaction as [ZoomableImage]). [readOnly] renders
- * plain highlighted [Text] for the viewer; otherwise a borderless [BasicTextField] so
- * the gutter and the text share identical line metrics (an [OutlinedTextField]'s
- * internal padding doesn't line up with an external gutter the same way). */
 @Composable
 private fun CodeEditor(
     value: String,
@@ -2211,9 +1948,6 @@ private fun NewEntryDialog(
     )
 }
 
-/** Lets the user tick exactly which CI workflow template(s) to add — each option shows
- * its full YAML so nothing is a surprise before it lands as a commit. Manual opt-in only:
- * there's no "add all" shortcut and no default selection. */
 @Composable
 private fun WorkflowPickerDialog(
     isAdding: Boolean,

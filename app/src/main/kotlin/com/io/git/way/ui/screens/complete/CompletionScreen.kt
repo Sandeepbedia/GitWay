@@ -18,6 +18,7 @@ package com.io.git.way.ui.screens.complete
 
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -63,6 +64,13 @@ fun CompletionScreen(
     val pushedBranch = state.selectedBranch
     val showCreatePr = repo != null && pushedBranch != null && pushedBranch != repo.defaultBranch
     var showCreatePrDialog by remember { mutableStateOf(false) }
+
+    // After a finished upload, back belongs on the repository list — not on the
+    // upload-progress screen sitting behind this one.
+    BackHandler {
+        sessionViewModel.resetForNewRepository()
+        onDone()
+    }
 
     GlassScaffold(title = "Done") { padding ->
         Column(

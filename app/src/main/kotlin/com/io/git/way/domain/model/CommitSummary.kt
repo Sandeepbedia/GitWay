@@ -16,8 +16,6 @@
  */
 package com.io.git.way.domain.model
 
-/** One entry in a repository's commit history (read-only — Git Way still only ever
- * writes new commits via [com.io.git.way.domain.repository.GitHubRepository.syncChanges]). */
 data class CommitSummary(
     val sha: String,
     val message: String,

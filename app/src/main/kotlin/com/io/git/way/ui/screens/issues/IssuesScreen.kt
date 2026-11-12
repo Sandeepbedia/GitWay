@@ -61,10 +61,6 @@ import com.io.git.way.ui.theme.GlassChip
 import com.io.git.way.ui.theme.GlassIconButton
 import com.io.git.way.ui.theme.GlassScaffold
 
-/**
- * Issues of the selected repository: open/closed filters, create dialog, detail view
- * with comments, close/reopen, and commenting.
- */
 @Composable
 fun IssuesScreen(
     sessionViewModel: GitWaySessionViewModel,

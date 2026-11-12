@@ -145,10 +145,6 @@ data class TreeEntryInput(
     val sha: String? = null
 )
 
-/** Body for the Contents API "create file" call used only to bootstrap a genuinely
- * empty repository (see [com.io.git.way.data.remote.GitHubApiService.createFileContent]).
- * `branch` must be sent explicitly — omitting it makes GitHub guess the default branch,
- * which is unreliable for a repo that has no commits/refs yet. */
 @Serializable
 data class CreateFileContentRequest(
     val message: String,
@@ -167,19 +163,6 @@ data class CreateFileContentResponseDto(
     val commit: ContentsCommitDto
 )
 
-/**
- * The app-wide Json config uses `encodeDefaults = true` (needed so [CreateCommitRequest]'s
- * `parents` is always sent, even as `[]`, to explicitly signal "root commit, no parent" —
- * omitting it would make GitHub infer a parent from the branch's current commit instead).
- * But that same setting would also force `base_tree` to serialize as an explicit JSON
- * `null` whenever it's unset, and GitHub's Git Data API does NOT treat an explicit
- * `"base_tree": null` the same as the key being absent — on a brand-new/empty repository
- * (no git objects at all yet) sending that explicit null makes /git/trees fail with
- * "409 Git Repository is empty." instead of creating a fresh root tree. Per GitHub's own
- * docs, base_tree must simply be omitted to build a tree with no base. @EncodeDefault(NEVER)
- * overrides the file-wide setting for just this one property: still omitted when null
- * (the default), still sent normally whenever a real tree sha is provided.
- */
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class CreateTreeRequest(
@@ -213,9 +196,6 @@ data class CreateRefRequest(
     val sha: String
 )
 
-/** Response of GET git/blobs/{sha} — used to read a file's current content for the
- * Repository Browser's viewer/editor/copy-paste features (blob sha already known from
- * the cached repo tree, so no extra Contents-API round trip is needed). */
 @Serializable
 data class GitBlobContentDto(
     val sha: String,
@@ -224,8 +204,6 @@ data class GitBlobContentDto(
     val size: Long = 0
 )
 
-/** GET repos/{owner}/{repo}/releases/latest — used by the in-app update checker. Only
- * the fields the update dialog actually needs are modeled; unknown fields are ignored. */
 @Serializable
 data class GitHubReleaseDto(
     @SerialName("tag_name") val tagName: String,

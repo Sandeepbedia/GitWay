@@ -18,12 +18,6 @@ package com.io.git.way.data.local
 
 import android.content.Context
 
-/**
- * Persists exact file paths the person has manually marked "don't track this for
- * removal" from the Removed section — the escape hatch for any repo-decoration file
- * [com.io.git.way.domain.RepositoryScaffoldFiles]'s built-in heuristic doesn't already
- * catch. Plain (unencrypted) SharedPreferences: these are just file paths, not secrets.
- */
 class IgnoreListManager(context: Context) {
 
     private val prefs = context.applicationContext

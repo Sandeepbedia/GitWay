@@ -22,11 +22,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.security.MessageDigest
 
-/**
- * Computes the Git blob SHA-1 of a local file the same way `git hash-object` does:
- * sha1("blob {size}\0{content}"). Comparing this against GitHub's tree blob sha is the
- * cheap way to detect "Modified" without downloading remote file content (PRD1 §3.2).
- */
 object GitBlobHasher {
 
     suspend fun hash(context: Context, uri: Uri): String = withContext(Dispatchers.IO) {
@@ -34,8 +29,6 @@ object GitBlobHasher {
         hashBytes(bytes)
     }
 
-    /** Same algorithm as [hash] but for bytes already in memory — used for Smart Upload
-     * Protection's redacted/generated files, which don't have real on-disk content to read. */
     fun hashBytes(bytes: ByteArray): String {
         val header = "blob ${bytes.size}\u0000".toByteArray(Charsets.UTF_8)
         val digest = MessageDigest.getInstance("SHA-1")

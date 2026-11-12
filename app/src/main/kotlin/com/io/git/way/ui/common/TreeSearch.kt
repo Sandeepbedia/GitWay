@@ -16,19 +16,6 @@
  */
 package com.io.git.way.ui.common
 
-/**
- * Ranked file-name search, ported from the PhoneIDE/LSP project tree's
- * `FileSearch.kt` and `TREE_REVEAL_ROWS` search box — adapted here to score
- * remote repository paths (plain strings from [com.io.git.way.domain.model.RemoteTreeEntry])
- * instead of `java.io.File`.
- *
- * The box accepts one piece of shorthand rather than a query language: a token of
- * the form `*.kt`, `.kt` or `kt:` is lifted out as an extension constraint and the
- * rest is matched against the name. That covers the thing people actually type
- * ("just the Kotlin files") without asking anyone to learn a syntax, and it is
- * unambiguous — a real filename token cannot start with `*.` or `.` followed only
- * by letters.
- */
 data class TreeSearchQuery(
     val raw: String,
     /** Lowercased name fragment, with any extension token removed. */
@@ -68,24 +55,8 @@ data class TreeSearchQuery(
     }
 }
 
-/**
- * Where a query matched a name, and how well.
- *
- * [ranges] are indices into the original name so a result row can embolden exactly
- * the characters that matched — without it a fuzzy result looks arbitrary, which is
- * the usual reason people distrust fuzzy finders.
- */
 data class TreeNameMatch(val score: Int, val ranges: List<IntRange>)
 
-/**
- * Score [name] against [needle], or null when it does not match at all.
- *
- * Five tiers, best first, so `Main` puts `Main.kt` above `MainActivity.kt` above
- * `RemainderTest.kt`. The last tier is a subsequence match — `mvm` finds
- * `MainViewModel.kt` — which is what makes a finder usable when you remember a
- * type's shape but not its spelling. It scores far below the literal tiers so it
- * can never outrank a real substring hit.
- */
 fun matchTreeName(name: String, needle: String): TreeNameMatch? {
     if (needle.isEmpty()) return TreeNameMatch(SCORE_NO_QUERY, emptyList())
     val lower = name.lowercase()
@@ -98,8 +69,6 @@ fun matchTreeName(name: String, needle: String): TreeNameMatch? {
 
     val contains = lower.indexOf(needle)
     if (contains >= 0) {
-        // A hit that starts at a word boundary reads as intentional; one in the
-        // middle of a word is usually incidental, so they are separate tiers.
         val boundary = contains == 0 || isTreeBoundary(name, contains)
         return TreeNameMatch(
             score = if (boundary) SCORE_WORD_START else SCORE_CONTAINS,
@@ -110,13 +79,6 @@ fun matchTreeName(name: String, needle: String): TreeNameMatch? {
     return fuzzyTreeMatch(name, lower, needle)
 }
 
-/**
- * Subsequence match: every needle character appears in order.
- *
- * Consecutive hits and hits on a word boundary are worth more, which is what makes
- * `mvm` prefer `MainViewModel` over `myvaluemap`. Bounded by the name length, so
- * this is linear and safe to run over a few thousand entries per keystroke.
- */
 private fun fuzzyTreeMatch(name: String, lower: String, needle: String): TreeNameMatch? {
     val ranges = mutableListOf<IntRange>()
     var bonus = 0
@@ -128,8 +90,6 @@ private fun fuzzyTreeMatch(name: String, lower: String, needle: String): TreeNam
         if (at < 0) return null
         if (at == previousIndex + 1) {
             bonus += FUZZY_ADJACENT_BONUS
-            // Extend the previous range instead of adding a second one, so a run of
-            // adjacent hits highlights as one span.
             ranges[ranges.lastIndex] = ranges.last().first..at
         } else {
             if (at == 0 || isTreeBoundary(name, at)) bonus += FUZZY_BOUNDARY_BONUS
@@ -149,13 +109,6 @@ private fun isTreeBoundary(name: String, index: Int): Boolean {
     return previous.isLowerCase() && name[index].isUpperCase()
 }
 
-/**
- * Order for search results.
- *
- * Score first, then the shorter name, then the shorter path. The two tie-breakers
- * matter more than they look: a repo has `strings.xml` in six resource folders,
- * and without them the winner would be whichever directory the listing reached first.
- */
 fun compareTreeResults(a: Triple<Int, String, String>, b: Triple<Int, String, String>): Int {
     val byScore = b.first.compareTo(a.first)
     if (byScore != 0) return byScore

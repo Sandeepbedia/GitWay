@@ -23,37 +23,21 @@ data class BrowserEntry(
     val isFolder: Boolean
 )
 
-/** One visible row in the VS Code/Acode-style tree explorer.
- * Each real directory remains a separate row so guide lines can connect parent,
- * child and sibling rows without package-chain compaction. */
 
 data class TreeRow(
     val entry: BrowserEntry,
     val depth: Int,
     val isExpanded: Boolean = false,
     val directChildCount: Int = 0,
-    /** One flag per indent column (size == [depth] + 1): index i (< size-1) says whether
-     * the ancestor at that level still has more siblings after it (so its guide line
-     * should keep running past this row); the last index says whether THIS row itself
-     * has more siblings after it (so its own column's line should extend below its elbow
-     * for the next sibling to connect into). This includes depth 0: a root-level folder's
-     * flag propagates into every row of its expanded subtree, so the guide column keeps
-     * running the full height of that subtree whenever the folder has more root-level
-     * siblings below it (e.g. "app" -> "gradle" -> "scripts"), instead of stopping right
-     * after the root row. */
     val ancestorLines: List<Boolean> = emptyList()
 )
 
-/** PRD "Repository Explorer" §19 Sort/View — folders always sort ahead of files within
- * whichever mode is picked; NAME_DESC/TYPE only reorder within that. */
 enum class BrowserSortMode(val label: String) {
     NAME_ASC("Name (A–Z)"),
     NAME_DESC("Name (Z–A)"),
     TYPE("Type")
 }
 
-/** PRD §12 Search filters / §19 Sort — narrows the tree to one file-type family.
- * Folders are always shown regardless of the active filter so the tree stays navigable. */
 enum class BrowserTypeFilter(val label: String) {
     ALL("All"),
     KOTLIN("Kotlin"),

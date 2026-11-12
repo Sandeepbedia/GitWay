@@ -34,8 +34,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
-/** Prefilled new-PR dialog used after a push to a non-default branch
- * (CompletionScreen). Head/base are fixed by the flow. */
 @Composable
 fun CreatePullRequestDialog(
     defaultTitle: String,

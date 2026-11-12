@@ -17,6 +17,11 @@
 package com.io.git.way.navigation
 
 import androidx.activity.ComponentActivity
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -42,15 +47,6 @@ import com.io.git.way.ui.screens.splash.SplashScreen
 import com.io.git.way.ui.screens.upload.UploadProgressScreen
 import com.io.git.way.ui.theme.AppThemeMode
 
-/**
- * Wires up the screen flow described in the PRDs:
- * Splash -> Token -> Repository List -> Folder Selection -> Analysis -> Confirmation -> Upload -> Completion.
- * Splash routes straight past Token when a valid token is already stored.
- *
- * [GitWaySessionViewModel] is scoped to the hosting Activity (not to any single back stack
- * entry) so the selected repo, scanned files, diff, and in-flight upload all survive
- * navigation and configuration changes across this whole flow (PRD2 §4).
- */
 @Composable
 fun GitWayNavGraph(
     navController: NavHostController,
@@ -62,7 +58,34 @@ fun GitWayNavGraph(
     val activity = LocalContext.current as ComponentActivity
     val sessionViewModel: GitWaySessionViewModel = viewModel(factory = viewModelFactory, viewModelStoreOwner = activity)
 
-    NavHost(navController = navController, startDestination = Routes.Splash.route) {
+    NavHost(
+        navController = navController,
+        startDestination = Routes.Splash.route,
+        enterTransition = {
+            slideInHorizontally(
+                animationSpec = tween(320),
+                initialOffsetX = { fullWidth -> fullWidth / 6 }
+            ) + fadeIn(animationSpec = tween(260))
+        },
+        exitTransition = {
+            slideOutHorizontally(
+                animationSpec = tween(320),
+                targetOffsetX = { fullWidth -> -fullWidth / 10 }
+            ) + fadeOut(animationSpec = tween(200))
+        },
+        popEnterTransition = {
+            slideInHorizontally(
+                animationSpec = tween(320),
+                initialOffsetX = { fullWidth -> -fullWidth / 10 }
+            ) + fadeIn(animationSpec = tween(260))
+        },
+        popExitTransition = {
+            slideOutHorizontally(
+                animationSpec = tween(320),
+                targetOffsetX = { fullWidth -> fullWidth / 6 }
+            ) + fadeOut(animationSpec = tween(200))
+        }
+    ) {
         composable(Routes.Splash.route) {
             SplashScreen(
                 onFinished = {
@@ -157,24 +180,28 @@ fun GitWayNavGraph(
         composable(Routes.FolderSelection.route) {
             FolderSelectionScreen(
                 sessionViewModel = sessionViewModel,
+                onBack = { navController.popBackStack() },
                 onContinue = { navController.navigate(Routes.Analysis.route) }
             )
         }
         composable(Routes.Analysis.route) {
             AnalysisScreen(
                 sessionViewModel = sessionViewModel,
+                onBack = { navController.popBackStack() },
                 onContinue = { navController.navigate(Routes.Confirmation.route) }
             )
         }
         composable(Routes.Confirmation.route) {
             ConfirmationScreen(
                 sessionViewModel = sessionViewModel,
+                onBack = { navController.popBackStack() },
                 onConfirmUpload = { navController.navigate(Routes.UploadProgress.route) }
             )
         }
         composable(Routes.UploadProgress.route) {
             UploadProgressScreen(
                 sessionViewModel = sessionViewModel,
+                onBack = { navController.popBackStack() },
                 onUploadFinished = {
                     navController.navigate(Routes.Completion.route) {
                         popUpTo(Routes.Splash.route) { inclusive = false }

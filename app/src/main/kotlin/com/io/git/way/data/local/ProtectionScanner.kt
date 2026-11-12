@@ -29,22 +29,12 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
-/**
- * Runs the full Smart Upload Protection pipeline (PRD "Smart GitHub Upload Protection &
- * Ignore Engine" §2 Upload Workflow — Apply Ignore Rules -> Secret Detection ->
- * Large File Detection -> Generate Upload Summary) over a freshly scanned local project
- * folder. [ScanReport.safeFiles] is the only thing that ever reaches the diff/upload
- * pipeline by default — ignored, blocked, and secret-flagged files never leave the
- * device unless the user explicitly overrides that (see [GitWaySessionViewModel]).
- */
 object ProtectionScanner {
 
     private const val MAX_CONCURRENT_SECRET_SCANS = 6
     private const val CONFIG_GUIDE_PATH = "jks_config.txt"
 
     suspend fun scan(context: Context, files: List<LocalFile>): ScanReport = withContext(Dispatchers.Default) {
-        // §12 Git Ignore Support: merge the project's own root .gitignore with the
-        // internal rules (nested .gitignore files are out of scope for this pass).
         val gitignorePatterns = files.firstOrNull { it.relativePath == ".gitignore" }?.let { gitignoreFile ->
             runCatching { FolderScanner.readBytes(context, gitignoreFile.documentUri).toString(Charsets.UTF_8) }
                 .getOrNull()
@@ -62,10 +52,6 @@ object ProtectionScanner {
             }
         }
 
-        // Credential-shaped text files (key.properties, secrets.properties, .env*) get a
-        // chance to be redacted instead of hard-blocked — real values swapped for
-        // YOUR_..._HERE placeholders. Binary keystores (.jks/.keystore/.p12/.pem/.cer)
-        // are never touched here and stay in [blocked].
         val contentOverrides = mutableMapOf<String, ByteArray>()
         val sanitized = mutableListOf<ScanIssue>()
         val stillBlocked = mutableListOf<ScanIssue>()
@@ -86,8 +72,6 @@ object ProtectionScanner {
             }
         }
 
-        // §6 Secret Detection Engine: only runs on files that are otherwise safe and look
-        // like scannable text, with limited read concurrency since this touches content.
         val semaphore = Semaphore(MAX_CONCURRENT_SECRET_SCANS)
         val secretResults = coroutineScope {
             safe.map { file ->
@@ -111,8 +95,6 @@ object ProtectionScanner {
         val secrets = mutableListOf<ScanIssue>()
         val stillSafe = mutableListOf<LocalFile>()
         for ((file, label) in secretResults) {
-            // A file we just redacted is never re-flagged as a secret for its own
-            // placeholder text (e.g. matching "password=" as a bare word).
             if (label != null && file.relativePath !in contentOverrides) {
                 secrets += ScanIssue(file, FileStatus.BLOCKED, "Secret detected: $label")
             } else {
@@ -120,9 +102,6 @@ object ProtectionScanner {
             }
         }
 
-        // If anything was redacted, generate a root-level setup guide so any developer
-        // knows what was swapped out and how to plug their own values back in — unless
-        // the project already ships its own jks_config.txt.
         if (sanitized.isNotEmpty() && files.none { it.relativePath == CONFIG_GUIDE_PATH }) {
             val guideContent = buildConfigGuide(sanitized.map { it.relativePath })
             val guideBytes = guideContent.toByteArray(Charsets.UTF_8)

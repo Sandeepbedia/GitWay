@@ -61,10 +61,6 @@ import com.io.git.way.ui.theme.GlassChip
 import com.io.git.way.ui.theme.GlassScaffold
 import com.io.git.way.ui.theme.GlassSecondaryButton
 
-/**
- * Pull requests of the selected repository: open/closed/all filters, PR details with
- * per-file patches, merge, and close/reopen.
- */
 @Composable
 fun PullRequestsScreen(
     sessionViewModel: GitWaySessionViewModel,

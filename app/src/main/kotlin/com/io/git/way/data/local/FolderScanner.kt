@@ -23,11 +23,6 @@ import com.io.git.way.domain.model.LocalFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/**
- * Recursively walks a SAF tree Uri into a flat list of [LocalFile] (PRD1 §2.2).
- * Only metadata is read here — file bytes are read later, lazily, only for files that
- * end up Added or Modified (PRD1 §2.4).
- */
 object FolderScanner {
 
     /** Noise directories skipped by default (PRD1 §2.2, not user-facing yet). */
@@ -40,8 +35,6 @@ object FolderScanner {
         result
     }
 
-    /** Reads a scanned file's raw bytes — shared by the upload pipeline, the Smart Upload
-     * Protection scan's .gitignore parsing, and its secret-detection pass. */
     suspend fun readBytes(context: Context, uri: Uri): ByteArray = withContext(Dispatchers.IO) {
         context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: ByteArray(0)
     }

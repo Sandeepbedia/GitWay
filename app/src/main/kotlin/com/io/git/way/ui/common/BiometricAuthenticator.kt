@@ -23,12 +23,6 @@ import androidx.fragment.app.FragmentActivity
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 
-/**
- * Shows the system biometric prompt and suspends until the user succeeds or backs out —
- * used by the Profile "Security > Fingerprint Lock" toggle and the app-launch lock
- * screen. Requires a [FragmentActivity] (what [com.io.git.way.MainActivity] now is)
- * since [BiometricPrompt] is built on the Fragment lifecycle, not plain Activities.
- */
 suspend fun FragmentActivity.authenticateWithBiometrics(
     title: String,
     subtitle: String
@@ -43,14 +37,10 @@ suspend fun FragmentActivity.authenticateWithBiometrics(
             }
 
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                // User cancelled, hit "use PIN" and backed out, hardware error, etc. —
-                // any of these just means "not unlocked", not a crash-worthy failure.
                 if (continuation.isActive) continuation.resume(false)
             }
 
             override fun onAuthenticationFailed() {
-                // A single non-matching fingerprint/face — the system prompt itself
-                // handles the retry UI, nothing to do here.
             }
         }
     )
@@ -58,10 +48,6 @@ suspend fun FragmentActivity.authenticateWithBiometrics(
     val promptInfo = BiometricPrompt.PromptInfo.Builder()
         .setTitle(title)
         .setSubtitle(subtitle)
-        // Strong biometrics first; DEVICE_CREDENTIAL (PIN/pattern/password) as the
-        // fallback so the user is never permanently locked out when biometrics fail,
-        // get cancelled, or hit hardware lockout. When DEVICE_CREDENTIAL is allowed the
-        // system renders its own "Use device password" button, so no negative button.
         .setAllowedAuthenticators(
             BiometricManager.Authenticators.BIOMETRIC_STRONG or
                 BiometricManager.Authenticators.DEVICE_CREDENTIAL

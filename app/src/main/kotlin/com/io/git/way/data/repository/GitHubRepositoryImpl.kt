@@ -88,21 +88,6 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicInteger
 
-/**
- * Default [GitHubRepository]. Validates a token by calling GET /user; only persists
- * it (via [TokenManager]) once GitHub confirms it's valid, and wipes it again on failure
- * so an invalid token never lingers in encrypted storage.
- *
- * Also implements the Git Data API comparison + sync flow: [getRepositoryTree] feeds the
- * diff engine, [syncChanges] lands every Added/Modified/Removed path in one commit.
- *
- * Reworked under the "GitHub Push HTTP 422 Fix" PRD. The old version's only defense
- * against a 422 was a single hard-coded guess message and a fast-forward retry inside
- * the final ref update — any 422 from createBlob/createTree/createCommit (bad path,
- * stale base_tree, no push permission, archived repo, etc.) fell straight through to
- * the UI as Retrofit's raw "HTTP 422" with no explanation. Every call below now goes
- * through [githubCall]/[githubCallWithRetry], which parse GitHub's actual JSON error body.
- */
 class GitHubRepositoryImpl(
     private val tokenManager: TokenManager,
     private val apiService: GitHubApiService
@@ -118,40 +103,17 @@ class GitHubRepositoryImpl(
 
     private companion object {
         const val TAG = "GitWayUpload"
-        // Lowered from 6: firing that many concurrent createBlob writes at once is exactly
-        // what trips GitHub's *secondary* rate limit (its abuse-detection layer, separate
-        // from the primary quota) on large uploads — the more files, the more likely a
-        // batch of 6 lands close enough together to get flagged mid-upload.
         const val MAX_CONCURRENT_BLOBS = 3
         const val MAX_TRANSIENT_RETRIES = 3
-        // Secondary rate limits are meant to be waited out, not failed immediately — this
-        // gets its own (higher) retry budget with real delays, see githubCallWithRetry.
         const val MAX_SECONDARY_RATE_LIMIT_RETRIES = 6
         const val MAX_RACE_RETRIES = 4
-        // Post-push verification (§13): a handful of quick retries to absorb a brief
-        // read-after-write lag on GitHub's side, not a real mismatch.
         const val MAX_VERIFY_RETRIES = 4
     }
 
     private val errorJson = Json { ignoreUnknownKeys = true }
 
-    // The Retrofit-wide Json (see RetrofitProvider) sets explicitNulls = false so
-    // partial PATCH bodies never send e.g. "name": null. But GitHub's Git Trees API
-    // uses that exact shape — an entry with sha explicitly set to null — to mean
-    // "delete this path from the tree" (https://docs.github.com/rest/git/trees).
-    // With explicitNulls = false, a delete entry's null sha was silently OMITTED,
-    // leaving the entry with neither `sha` nor `content`, which is exactly what
-    // GitHub's "Must supply either tree.sha or tree.content" error is complaining
-    // about. This instance is only used for encoding [CreateTreeRequest] bodies —
-    // baseTree still correctly omits itself when null via @EncodeDefault(NEVER),
-    // which happens independently of explicitNulls.
     private val treeJson = Json { ignoreUnknownKeys = true; encodeDefaults = true; explicitNulls = true }
 
-    /** The Contents API path segment needs each directory/file name percent-encoded
-     * (spaces, unicode, etc.) but the "/" separators themselves must survive — this
-     * endpoint is declared with `@Path(..., encoded = true)` specifically so Retrofit
-     * doesn't also escape those slashes into "%2F", which would turn a nested path like
-     * "src/main/MainActivity.kt" into a single invalid path segment. */
     private fun String.encodedForContentsPath(): String =
         split("/").joinToString("/") { segment ->
             java.net.URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
@@ -161,8 +123,6 @@ class GitHubRepositoryImpl(
         withContext(Dispatchers.IO) {
             val previousToken = tokenManager.getToken()
             try {
-                // Temporarily expose the candidate token so the existing Retrofit client
-                // validates it. On success it becomes a named encrypted account.
                 tokenManager.saveToken(token)
                 val response = apiService.getAuthenticatedUser()
                 if (!response.isSuccessful) throw HttpException(response)
@@ -274,13 +234,6 @@ class GitHubRepositoryImpl(
         withContext(Dispatchers.IO) {
             runCatching {
                 try {
-                    // Deliberately NOT wrapped in githubCall()/githubCallWithRetry() — both
-                    // of those catch HttpException and rethrow it as a plain IOException,
-                    // which meant the catch block right below could never actually see a
-                    // 404/409 to special-case. That bug made a brand-new/empty repository's
-                    // real "Git Repository is empty." GitHub error leak straight to the UI
-                    // as a hard failure (with no way to continue) instead of being treated
-                    // as "no remote files yet".
                     val treeResponse = apiService.getTree(repo.owner, repo.name, branch ?: repo.defaultBranch, recursive = 1)
                     treeResponse.tree
                         .filter { it.type == "blob" }
@@ -303,15 +256,8 @@ class GitHubRepositoryImpl(
         runCatching {
             onProgress(UploadPhase.VALIDATING, 0, changes.size, "")
             val validatedDefaultBranch = validateRepositoryForUpload(repo).getOrThrow()
-            // targetBranch (e.g. from the Repository Browser's branch picker) always wins
-            // over the repo's default — validateRepositoryForUpload still ran above for
-            // its permission/archived/disabled checks, which apply regardless of branch.
             val branch = targetBranch?.takeIf { it.isNotBlank() } ?: validatedDefaultBranch
 
-            // §7 Normalize File Paths: fail fast, before any blob is created, rather than
-            // letting GitHub bounce a bad path back as an opaque 422 mid-upload. The
-            // original path is kept alongside the normalized one so file reads still
-            // resolve correctly even if normalization altered the path.
             data class NormalizedChange(val original: FileChange, val cleanPath: String)
             val normalized = changes.map { change ->
                 val cleanPath = try {
@@ -330,14 +276,6 @@ class GitHubRepositoryImpl(
             onProgress(UploadPhase.CREATING_BLOBS, 0, total, "")
             Log.d(TAG, "Sync start: repo=${repo.owner}/${repo.name} branch=$branch total=$total (${toUpload.size} upload, ${toDelete.size} delete)")
 
-            // Bootstrap a genuinely empty repository (zero commits). GitHub's Git Data
-            // API — createBlob included, not just createTree/getRef — returns
-            // "409 Git Repository is empty." for every call until the repo has at least
-            // one commit. getRepositoryTree() already treats that 409 as "no remote
-            // files", which is correct for the diff, but it doesn't make createBlob work
-            // below. The Contents API is the one endpoint that can create that first
-            // commit (and the branch ref with it), so it's used once here, for exactly
-            // one file, before anything touches the normal blob/tree/commit flow.
             val branchAlreadyExists = runCatching {
                 githubCallWithRetry { apiService.getRef(repo.owner, repo.name, branch) }
             }.isSuccess
@@ -364,8 +302,6 @@ class GitHubRepositoryImpl(
                 toUpload
             }
 
-            // §8 Skip Duplicate Files: unchanged files never reach here — ComparisonEngine
-            // only emits ADDED/MODIFIED for paths whose hash actually differs.
             val semaphore = Semaphore(MAX_CONCURRENT_BLOBS)
             val blobEntries: List<TreeEntryInput> = coroutineScope {
                 remainingUpload.map { change ->
@@ -394,8 +330,6 @@ class GitHubRepositoryImpl(
                 Log.d(TAG, "Deleting ${deleteEntries.size} path(s): ${deleteEntries.joinToString { it.path }}")
             }
 
-            // §10 Atomic Upload: one tree + commit + ref update lands everything at once.
-            // Nothing is written to the branch until this succeeds.
             val commitSha = finalizeCommit(
                 owner = repo.owner,
                 repoName = repo.name,
@@ -406,11 +340,6 @@ class GitHubRepositoryImpl(
                 onProgress = onProgress
             )
 
-            // §13 Success Validation: confirm the branch head really did move to our commit
-            // before telling the user it worked. Retried with backoff — GitHub's ref update
-            // itself already succeeded (updateRef/createRef didn't throw), but the very next
-            // GET can occasionally read a moment before that write is visible, which used to
-            // surface as a false "doesn't match" failure on a push that actually worked.
             onProgress(UploadPhase.VERIFYING, total, total, "")
             var verifiedSha: String? = null
             var lastSeenSha: String? = null
@@ -437,14 +366,6 @@ class GitHubRepositoryImpl(
         }
     }
 
-    /**
-     * Runs the create-tree -> create-commit -> update/create-ref sequence. Refreshes the
-     * ref and base tree SHA from scratch on every attempt (§5/§6 "never reuse a cached
-     * SHA") and retries the whole sequence if the ref update hits a 409 or 422
-     * "not a fast-forward" (branch moved elsewhere, or GitHub's own read-replica lag
-     * served a stale ref right after repo/ref creation) — §9 Retry Strategy's one
-     * explicit exception to "never retry a 422".
-     */
     private suspend fun finalizeCommit(
         owner: String,
         repoName: String,
@@ -471,8 +392,6 @@ class GitHubRepositoryImpl(
                 baseTreeSha = commit.tree.sha
                 parents = listOf(ref.objectRef.sha)
             } else {
-                // §4 Handle Empty Repository: no commits yet, so no base tree / parent —
-                // and Update Reference is never called for this case (createRef is used below).
                 baseTreeSha = null
                 parents = emptyList()
             }
@@ -507,13 +426,6 @@ class GitHubRepositoryImpl(
             onProgress(UploadPhase.UPDATING_BRANCH, total, total, "")
 
             try {
-                // Deliberately NOT wrapped in githubCallWithRetry() here — same bug as
-                // getRepositoryTree above: that wrapper catches HttpException and rethrows
-                // it as IOException, so the catch block below (which needs the real
-                // HttpException to check e.code() for the 409/422-fast-forward race
-                // condition) could never fire. That silently disabled the fast-forward
-                // retry this whole method exists for — every ref-update conflict was
-                // surfacing as an immediate failure instead of retrying.
                 if (branchExists) {
                     apiService.updateRef(owner, repoName, branch, UpdateRefRequest(sha = newCommit.sha))
                 } else {
@@ -522,14 +434,9 @@ class GitHubRepositoryImpl(
                 notifyRemoteDataChanged()
                 return newCommit.sha
             } catch (e: HttpException) {
-                // errorBody() can only be read once, so capture it up front and reuse it
-                // for both the fast-forward check and the friendly message below.
                 val bodyText = runCatching { e.response()?.errorBody()?.string() }.getOrNull()
                 val isRaceCondition = e.code() == 409 ||
                     (e.code() == 422 && bodyText?.contains("fast forward", ignoreCase = true) == true)
-                // Transient server errors get the same retry-from-step-1 treatment as a
-                // race condition (this loop's own backoff replaces the retry that
-                // githubCallWithRetry used to provide before it was removed above).
                 val isTransient = e.code() in intArrayOf(500, 502, 503, 504)
                 if ((isRaceCondition || isTransient) && attempt < MAX_RACE_RETRIES - 1) {
                     lastError = e
@@ -543,10 +450,6 @@ class GitHubRepositoryImpl(
         throw lastError ?: IOException("Failed to update branch ref after retries.")
     }
 
-    /** Wraps a raw API call so every HttpException carries GitHub's real error body
-     * instead of a bare status code (§1 Improve Error Handling), plus a quota-aware
-     * message for 403 rate limits. Does NOT retry — see [githubCallWithRetry] for the
-     * transient-error variant used on the hot upload path. */
     private suspend fun <T> githubCall(block: suspend () -> T): T {
         try {
             return block()
@@ -555,11 +458,6 @@ class GitHubRepositoryImpl(
         }
     }
 
-    /**
-     * §9 Retry Strategy: automatically retries network/socket timeouts and HTTP
-     * 500/502/503/504 with backoff. Never retries 401/403/404/422 — those are shown to
-     * the user immediately with GitHub's exact reason instead.
-     */
     private suspend fun <T> githubCallWithRetry(block: suspend () -> T): T {
         var lastError: Throwable? = null
         var transientAttempt = 0
@@ -569,13 +467,6 @@ class GitHubRepositoryImpl(
                 return block()
             } catch (e: HttpException) {
                 if (e.code() == 403) {
-                    // A 403 here is almost always GitHub's *secondary* rate limit (abuse
-                    // detection triggered by many concurrent/rapid write requests — exactly
-                    // what a big project upload does), not the primary quota exhaustion
-                    // handled below in toFriendlyMessage. GitHub asks for that one to be
-                    // waited out and retried, not failed immediately — it flags this with a
-                    // Retry-After header and/or "secondary rate limit"/"abuse" text in the
-                    // body, unlike a real permissions 403 which has neither.
                     val body = runCatching { e.response()?.errorBody()?.string() }.getOrNull()
                     val retryAfterSeconds = e.response()?.headers()?.get("Retry-After")?.toLongOrNull()
                     val isSecondaryRateLimit = retryAfterSeconds != null ||
@@ -624,15 +515,6 @@ class GitHubRepositoryImpl(
         throw lastError ?: IOException("Request failed after retries.")
     }
 
-    /**
-     * Parses GitHub's actual JSON error body ("message" + "errors[]") instead of
-     * returning a bare "HTTP 422" (§1 Improve Error Handling). Falls back to a raw
-     * body snippet, then to Retrofit's default message, only if parsing fails.
-     *
-     * [preReadBody] lets a caller that already consumed `errorBody()` (e.g. to check
-     * for "fast forward" in [finalizeCommit]) pass that text back in — `errorBody()`'s
-     * stream can only be read once, so a second `.string()` call here would throw.
-     */
     private fun HttpException.toFriendlyMessage(preReadBody: String? = null): String {
         if (code() == 403) {
             val headers = response()?.headers()
@@ -642,13 +524,6 @@ class GitHubRepositoryImpl(
                 return "GitHub API rate limit reached. Resets at ${formatResetTime(reset)}."
             }
 
-            // GitHub rejects ANY write under .github/workflows/ from a token that lacks
-            // the separate "workflow" OAuth scope — even when the same token works fine
-            // for every other path in the repo. This is exactly what silently broke
-            // "Add CI workflow" (and made it look like dot-folders in general were
-            // broken): every other file create/edit/delete used a token with only
-            // "repo" scope and worked, so the one operation that touches
-            // .github/workflows/ was the only thing that ever failed.
             val body403 = preReadBody ?: runCatching { response()?.errorBody()?.string() }.getOrNull()
             if (body403 != null && body403.contains("workflow", ignoreCase = true) &&
                 (body403.contains("scope", ignoreCase = true) || body403.contains("OAuth", ignoreCase = true))
@@ -937,8 +812,6 @@ class GitHubRepositoryImpl(
     override suspend fun cancelWorkflowRun(repo: GitRepositoryModel, runId: Long): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
-                // Deliberately NOT wrapped in githubCallWithRetry: GitHub answers 409
-                // for "run already completed" — which is a success case here, not an error.
                 val response = try {
                     apiService.cancelWorkflowRun(repo.owner, repo.name, runId)
                 } catch (e: HttpException) {
@@ -1263,9 +1136,6 @@ class GitHubRepositoryImpl(
         bytes: ByteArray
     ): Result<ReleaseAsset> = withContext(Dispatchers.IO) {
         runCatching {
-            // GitHub release assets use uploads.github.com and accept the APK
-            // as the raw request body. The filename belongs in ?name=, not in
-            // a MultipartBody.Part annotation.
             val body = bytes.toRequestBody("application/vnd.android.package-archive".toMediaType())
             val uploadUrl = "https://uploads.github.com/repos/${repo.owner}/${repo.name}/releases/$releaseId/assets"
             githubCallWithRetry {

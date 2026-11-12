@@ -16,9 +16,6 @@
  */
 package com.io.git.way.domain.model
 
-/** The authenticated GitHub account — resolved after token validation, and re-fetchable
- * any time via [com.io.git.way.domain.repository.GitHubRepository.getCurrentUser] for
- * screens (Overview, Profile) that need it without re-validating the token. */
 data class GitUser(
     val username: String,
     val avatarUrl: String?,
@@ -33,8 +30,6 @@ data class GitUser(
     val createdAt: String = ""
 )
 
-/** GitHub API core rate limit — surfaced on the Overview dashboard so a heavy user can
- * see when they're approaching the hourly cap instead of hitting an opaque 403. */
 data class ApiRateLimit(
     val limit: Int,
     val remaining: Int,

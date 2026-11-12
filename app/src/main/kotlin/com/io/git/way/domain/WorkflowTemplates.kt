@@ -16,10 +16,6 @@
  */
 package com.io.git.way.domain
 
-/** One selectable GitHub Actions workflow the user can choose to add to a repository
- * that doesn't have any CI configured yet — shown with its full YAML so the user can
- * read exactly what it does before adding it (PRD: "CI Workflow Suggestions", user
- * manually opts in per template, nothing is ever added automatically). */
 data class WorkflowTemplate(
     val id: String,
     val title: String,
@@ -91,8 +87,6 @@ object WorkflowTemplates {
 
     val all = listOf(androidCi, gradleWrapperValidation)
 
-    /** True if the repo tree (any path -> sha map from [com.io.git.way.domain.repository.GitHubRepository.getRepositoryTree])
-     * has no workflow files at all under `.github/workflows/`. */
     fun hasNoWorkflows(remotePaths: Set<String>): Boolean =
         remotePaths.none { it.startsWith(".github/workflows/") }
 }

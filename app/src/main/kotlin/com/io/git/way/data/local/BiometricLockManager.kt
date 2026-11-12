@@ -21,12 +21,6 @@ import androidx.biometric.BiometricManager
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
-/**
- * Stores whether the user has turned on biometric app-lock (Profile "Security" — PRD
- * "Fingerprint Lock"), and reports whether this device can even support it. Reuses the
- * same EncryptedSharedPreferences approach as [TokenManager] since this preference
- * gates access to the token/repos, not because the boolean itself is sensitive.
- */
 class BiometricLockManager(context: Context) {
 
     private val appContext = context.applicationContext
@@ -45,9 +39,6 @@ class BiometricLockManager(context: Context) {
         )
     }
 
-    /** Whether this device has usable biometric hardware with at least one enrolled
-     * fingerprint/face — the toggle in Settings should be disabled (with an explanation)
-     * rather than silently failing later if this is false. */
     fun isBiometricAvailable(): Boolean {
         val manager = BiometricManager.from(appContext)
         return manager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) ==

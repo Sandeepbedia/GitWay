@@ -74,8 +74,6 @@ import java.io.IOException
 data class GitWaySessionState(
     val selectedRepo: GitRepository? = null,
 
-    /** Account-wide data for the Overview dashboard — deliberately independent of
-     * [selectedRepo] since Overview is reachable before any repo has ever been picked. */
     val currentUser: GitUser? = null,
     val isLoadingUser: Boolean = false,
     val userError: String? = null,
@@ -89,40 +87,20 @@ data class GitWaySessionState(
     val isScanning: Boolean = false,
     val scanError: String? = null,
 
-    /** Repository / Project Match Protection: package/applicationId detected from the
-     * local folder and from the selected repo's remote tree, checked right after the
-     * folder is scanned — before any diff or upload. Null on either side just means
-     * "couldn't detect a package name there" (non-Android project, unusual layout),
-     * which is never itself treated as a mismatch. */
     val isCheckingAppIdentity: Boolean = false,
     val localAppIdentity: AppIdentity? = null,
     val remoteAppIdentity: AppIdentity? = null,
-    /** Set only when the remote half of the check genuinely couldn't run (network error,
-     * timeout) — as opposed to running cleanly and finding no identity to compare. This
-     * keeps Continue/Upload blocked on a connectivity hiccup instead of silently treating
-     * "couldn't check" the same as "checked, no mismatch". */
     val identityCheckError: String? = null,
 
-    /** Smart Upload Protection result for the current [localFiles] — [localFiles] is
-     * already filtered down to [ScanReport.safeFiles], this is kept for the summary UI
-     * (counts, ignored/blocked/secret lists). Null before a folder has been scanned. */
     val scanReport: ScanReport? = null,
-    /** Per-path user overrides of the Smart Upload Protection verdict — true = force
-     * include even though flagged, false = force exclude even though it looked safe.
-     * Absent = trust the scan's own verdict. The user gets the final say (PRD §16). */
     val fileInclusionOverrides: Map<String, Boolean> = emptyMap(),
 
     val isComparing: Boolean = false,
     val compareProgress: Pair<Int, Int>? = null,
     val compareError: String? = null,
     val fileChanges: List<FileChange> = emptyList(),
-    /** Repository scaffolding (README, LICENSE, .github/, etc.) that exists on GitHub
-     * but was correctly excluded from Removed detection — see [RepositoryScaffoldFiles]. */
     val ignoredScaffoldFiles: List<String> = emptyList(),
 
-    /** Which changes the user has chosen to actually push — defaults to "all selected"
-     * as soon as a comparison finishes, but can be narrowed manually per file or per
-     * section (Added/Modified/Removed) via the Analysis screen's checkboxes. */
     val selectedPaths: Set<String> = emptySet(),
 
     val isUploading: Boolean = false,
@@ -132,17 +110,9 @@ data class GitWaySessionState(
     val uploadError: String? = null,
     val commitSha: String? = null,
 
-    /** User-editable commit message on the Confirmation screen. Blank means "use the
-     * auto-generated default" ([com.io.git.way.domain.CommitMessageBuilder.summary]) —
-     * [lastCommitMessage] is the actual, resolved text used for the most recent
-     * successful push, shown on the Completion screen so the user sees exactly what
-     * they (or the default) wrote, not just a generic success message. */
     val commitMessageDraft: String = "",
     val lastCommitMessage: String? = null,
 
-    // ===== Repository Browser (VS Code-style tree explorer + manual file/folder create) =====
-    /** Last-tapped folder — the target for "New file/folder" and "Paste", not a navigation
-     * location; the whole tree stays visible at once (VS Code Explorer style, not drill-down). */
     val browserPath: String = "",
     /** Flattened, indentation-ready rows for the currently expanded parts of the tree. */
     val browserEntries: List<TreeRow> = emptyList(),
@@ -150,14 +120,7 @@ data class GitWaySessionState(
     val isBrowserLoading: Boolean = false,
     val browserError: String? = null,
     val remoteTreeCache: Map<String, String> = emptyMap(),
-    /** File sizes for the currently loaded repo tree, keyed by path — populated
-     * alongside [remoteTreeCache] for the Explorer's metadata subtitle (PRD §7). Not
-     * every entry is guaranteed a size (GitHub can omit it), so this is best-effort. */
     val remoteFileSizes: Map<String, Long> = emptyMap(),
-    /** Bytes for paths written THIS session (create/rename/duplicate/edit) whose real blob
-     * sha isn't known yet — [remoteTreeCache] holds a "" placeholder for them until the next
-     * full reload. Consulted before falling back to a sha-based GitHub fetch so those files
-     * can immediately be opened, renamed, or duplicated again without a "try reloading" error. */
     val pendingFileBytes: Map<String, ByteArray> = emptyMap(),
     val isCreatingEntry: Boolean = false,
     val createEntryError: String? = null,
@@ -175,21 +138,12 @@ data class GitWaySessionState(
     val isDuplicatingEntry: Boolean = false,
     val duplicateError: String? = null,
 
-    /** §16 Android Project Intelligence — best-effort summary card at the root of the
-     * Explorer, detected from the repo's own build files. Null until detected, and stays
-     * null (no card shown) for a non-Android repository. */
     val androidProjectInfo: AndroidProjectInfo? = null,
 
-    /** Manual-opt-in "add a CI workflow" suggestion (PRD: "CI Workflow Suggestions") — the
-     * banner is shown whenever the loaded repo tree has nothing under `.github/workflows/`
-     * and hasn't been dismissed yet this session; nothing is ever added automatically. */
     val workflowSuggestionDismissed: Boolean = false,
     val isAddingWorkflows: Boolean = false,
     val addWorkflowsError: String? = null,
 
-    /** Repository Management: branches. `selectedBranch == null` means "the repo's own
-     * default branch" — every push (main upload flow AND every Repository Browser write)
-     * targets whichever this resolves to at the time. */
     val availableBranches: List<String> = emptyList(),
     val selectedBranch: String? = null,
     val isLoadingBranches: Boolean = false,
@@ -197,34 +151,21 @@ data class GitWaySessionState(
     val isCreatingBranch: Boolean = false,
     val createBranchError: String? = null,
 
-    /** Repository Management: read-only commit history for [selectedBranch] (or the
-     * default branch). Loaded on demand — not fetched just for opening a repo. */
     val commitHistory: List<CommitSummary> = emptyList(),
     val isLoadingCommitHistory: Boolean = false,
     val commitHistoryError: String? = null,
 
-    /** Repository Management: rename / re-describe / re-visibility / delete the repo
-     * itself (as opposed to its files, which the rest of this state already covers). */
     val isUpdatingRepoSettings: Boolean = false,
     val repoSettingsError: String? = null,
     val isDeletingRepo: Boolean = false,
     val deleteRepoError: String? = null,
 
-    /** Multi-select in the browser (long-press to start, tap to toggle). Only files are
-     * selectable — folders aren't copyable/deletable as a single selection unit yet, use
-     * the per-row delete action for a whole folder instead. */
     val selectedBrowserPaths: Set<String> = emptySet(),
     /** Files copied via the selection toolbar, ready to paste into another folder. */
     val clipboard: List<BrowserEntry> = emptyList(),
     val isPasting: Boolean = false,
     val pasteError: String? = null,
 
-    /** Read/edit viewer for a single file, opened by tapping it outside select mode.
-     * Exactly one of [viewingContent] / [viewingImageBytes] is set once loading finishes
-     * — text files decode to [viewingContent], recognised image formats stay as raw
-     * bytes in [viewingImageBytes] for actual on-screen preview instead of a "binary
-     * file" message. Anything else (that isn't valid UTF-8 and isn't an image) leaves
-     * both null with [viewerError] explaining there's nothing to preview. */
     val viewingFile: BrowserEntry? = null,
     val viewingContent: String? = null,
     val viewingImageBytes: ByteArray? = null,
@@ -250,8 +191,6 @@ data class GitWaySessionState(
     val artifactsError: String? = null,
     val downloadingArtifactName: String? = null,
     val downloadError: String? = null,
-    /** A completed download (artifact zip / APK / logs / repo zip / release asset)
-     * waiting for the screen to decide: install, save to Downloads, or share. */
     val pendingDownload: DownloadResult? = null,
 
     // ===== Pull requests =====
@@ -280,9 +219,6 @@ data class GitWaySessionState(
     val isPostingComment: Boolean = false,
     val issueActionError: String? = null,
 
-    // ===== Star / fork =====
-    /** fullName set of repos the token user has starred — loaded lazily by the repo
-     * list screen so the star toggle can render its true state. */
     val starredRepos: Set<String> = emptySet(),
     val isLoadingStarred: Boolean = false,
     val isTogglingStar: String? = null,
@@ -324,15 +260,6 @@ data class GitWaySessionState(
     val selectedModifiedCount get() = selectedChanges.count { it.type == ChangeType.MODIFIED }
     val selectedRemovedCount get() = selectedChanges.count { it.type == ChangeType.REMOVED }
 
-    /** True only when BOTH sides yielded a detected package name AND they disagree —
-     * this is the hard-block condition. A repo with no Android project yet (first
-     * push) or a folder whose package couldn't be detected never trips this. */
-    /** PRD "Validation Rules": Package Name, Application ID (both captured in
-     * [AppIdentity.packageName] — Android's applicationId/namespace and a repo's
-     * `package` attribute are the same signal at different project ages), and App Name
-     * each independently block on a disagreement. Only compares a field when BOTH sides
-     * actually yielded a value for it — a repo with no Android project yet (first push)
-     * or a folder/field that couldn't be detected never trips this. */
     val appIdentityMismatch: Boolean
         get() {
             val localPackage = localAppIdentity?.packageName
@@ -346,8 +273,6 @@ data class GitWaySessionState(
             return packageMismatch || appNameMismatch
         }
 
-    /** Shown only once the tree has actually loaded (an empty map before that would
-     * false-positive as "no workflows") and only until the user dismisses it or adds one. */
     val showWorkflowSuggestion: Boolean
         get() = !workflowSuggestionDismissed &&
             !isBrowserLoading &&
@@ -355,12 +280,6 @@ data class GitWaySessionState(
             WorkflowTemplates.hasNoWorkflows(remoteTreeCache.keys)
 }
 
-/**
- * Holds everything that needs to survive across the Folder Selection -> Analysis ->
- * Confirmation -> Upload Progress -> Completion flow (PRD1 + PRD2). Scoped to the Activity
- * so rotation/config change doesn't lose an in-flight scan, comparison, or upload
- * (PRD2 §4 "must survive process death / configuration change").
- */
 class GitWaySessionViewModel(
     private val gitHubRepository: GitHubRepository
 ) : ViewModel() {
@@ -369,8 +288,6 @@ class GitWaySessionViewModel(
         private set
 
     init {
-        // Account changes invalidate every account-scoped object held by this
-        // activity-scoped ViewModel. No Activity restart is needed.
         viewModelScope.launch {
             gitHubRepository.activeAccountFlow.collect { account ->
                 if (account != null) {
@@ -379,8 +296,6 @@ class GitWaySessionViewModel(
                 }
             }
         }
-        // Remote writes (especially project uploads) invalidate the in-memory
-        // repository/tree snapshots immediately.
         viewModelScope.launch {
             gitHubRepository.remoteDataChanged.collect {
                 state.selectedRepo?.let { loadBrowserRoot() }
@@ -390,9 +305,6 @@ class GitWaySessionViewModel(
     }
 
     fun selectRepository(repo: GitRepository) {
-        // Full reset except the account-wide Overview data (user/repos/rate-limit) —
-        // that's independent of which repo is selected and shouldn't need re-fetching
-        // every time the user switches repos.
         state = GitWaySessionState(
             selectedRepo = repo,
             currentUser = state.currentUser,
@@ -401,10 +313,6 @@ class GitWaySessionViewModel(
         )
     }
 
-    /** Loads (or refreshes) everything the Overview dashboard shows: the account
-     * profile, every repo the token can see, and the current API rate-limit usage.
-     * Safe to call every time Overview appears — each piece only shows its own loading
-     * state, so a slow rate-limit call never blocks the profile card from appearing. */
     fun loadOverviewData() {
         if (state.currentUser == null && !state.isLoadingUser) {
             state = state.copy(isLoadingUser = true, userError = null)
@@ -437,13 +345,7 @@ class GitWaySessionViewModel(
         loadOverviewData()
     }
 
-    /** Clears the saved token (Profile "Danger Zone > Disconnect") — the caller is
-     * responsible for navigating back to the Token screen afterwards, same pattern as
-     * [com.io.git.way.ui.screens.repos.RepositoryListViewModel.disconnect]. */
     fun switchAccount(username: String) {
-        // The Profile screen performs the encrypted account switch before calling this
-        // method. Reset all account-scoped UI/cache state so no data from the previous
-        // GitHub identity remains visible while the new account is loading.
         state = GitWaySessionState()
         loadOverviewData()
     }
@@ -464,8 +366,6 @@ class GitWaySessionViewModel(
                     )
                 }
             } catch (e: SecurityException) {
-                // Permission grant can fail if the URI no longer supports persistence;
-                // scanning below will surface the real problem if read access is actually gone.
             }
 
             try {
@@ -482,9 +382,6 @@ class GitWaySessionViewModel(
                     return@launch
                 }
 
-                // Smart Upload Protection (see matching PRD): ignore rules, secret
-                // detection, and large-file blocking all run before anything reaches the
-                // diff engine — localFiles below is exactly ScanReport.safeFiles.
                 val report = ProtectionScanner.scan(context, files)
                 state = state.copy(
                     isScanning = false,
@@ -496,10 +393,6 @@ class GitWaySessionViewModel(
                     } else null
                 )
 
-                // Repository / Project Match Protection: runs right away, before the
-                // user can tap Continue, so a wrong-folder-for-this-repo mistake is
-                // caught here instead of surfacing later as a confusing diff or a
-                // broken upload.
                 if (report.safeFiles.isNotEmpty()) {
                     checkAppIdentity(context, repo = state.selectedRepo, localFiles = report.safeFiles)
                 }
@@ -518,20 +411,6 @@ class GitWaySessionViewModel(
         state = state.copy(scanError = null)
     }
 
-    /** Repository / Project Match Protection (advance warning, before Continue is even
-     * tappable): detects the local folder's and the selected repo's app
-     * package/applicationId/project name and flags a mismatch immediately, rather than
-     * waiting until the diff or the upload itself.
-     *
-     * Best-effort ONLY in the sense that a repo/folder with no recognisable identifier on
-     * either side never blocks — there's genuinely nothing to compare. A network error or
-     * timeout while trying to fetch the repo's tree is a completely different case and is
-     * NOT treated as "no mismatch": it sets [GitWaySessionState.identityCheckError] and
-     * keeps Continue/Upload blocked until the check actually succeeds (or the folder/repo
-     * is changed) — silently waving an upload through just because a connectivity hiccup
-     * happened during the safety check would defeat the entire point of this feature.
-     * Also caches the fetched remote tree so [runComparison] doesn't have to fetch it a
-     * second time right after. */
     private fun checkAppIdentity(context: Context, repo: GitRepository?, localFiles: List<LocalFile>) {
         if (repo == null) return
         identityCheckJob?.cancel()
@@ -547,8 +426,6 @@ class GitWaySessionViewModel(
 
             val treeResult = withTimeoutOrNull(25_000L) { gitHubRepository.getRepositoryTree(repo) }
             if (treeResult == null) {
-                // Timed out — could not verify. Block, with a clear retry path, rather
-                // than proceeding as if there were no mismatch.
                 state = state.copy(
                     isCheckingAppIdentity = false,
                     localAppIdentity = local,
@@ -561,14 +438,8 @@ class GitWaySessionViewModel(
             treeResult
                 .onSuccess { remoteTree ->
                     val remote = if (remoteTree.isEmpty()) {
-                        // Empty/new default branch — nothing pushed yet, so there's
-                        // nothing to disagree with. Not a mismatch, and the single most
-                        // common case: a repository created just for this upload.
                         null
                     } else {
-                        // Detection itself failing (no recognisable file on the remote
-                        // side) is a normal, expected outcome — not a connectivity error —
-                        // so it correctly stays fail-open (remote = null, no block).
                         runCatching {
                             AppIdentityDetector.detectRemote(remoteTree) { sha ->
                                 gitHubRepository.getFileContent(repo, sha).getOrNull()
@@ -584,8 +455,6 @@ class GitWaySessionViewModel(
                     )
                 }
                 .onFailure { throwable ->
-                    // A real failure (network/auth/API error) — block with a retry
-                    // option instead of quietly clearing the mismatch check.
                     state = state.copy(
                         isCheckingAppIdentity = false,
                         localAppIdentity = local,
@@ -596,16 +465,10 @@ class GitWaySessionViewModel(
         }
     }
 
-    /** Retries [checkAppIdentity] with the current repo/folder — shown next to
-     * [GitWaySessionState.identityCheckError] on the Folder Selection screen. */
     fun retryIdentityCheck(context: Context) {
         checkAppIdentity(context, repo = state.selectedRepo, localFiles = state.localFiles)
     }
 
-    /** Lets the user override a single file's Smart Upload Protection verdict — force an
-     * ignored/blocked file in, or force a safe-looking file out. [include] null clears the
-     * override and goes back to trusting the scan. Recomputes [GitWaySessionState.localFiles]
-     * immediately so it stays the single source of truth the diff/upload pipeline reads. */
     fun setFileInclusionOverride(path: String, include: Boolean?) {
         val report = state.scanReport ?: return
         val newOverrides = if (include == null) {
@@ -634,19 +497,11 @@ class GitWaySessionViewModel(
     fun runComparison(context: Context) {
         val repo = state.selectedRepo ?: return
         if (state.localFiles.isEmpty()) return
-        // Safety net — the Folder screen already keeps Continue disabled on a
-        // mismatch, but never let a comparison run against a wrong repo/folder pair
-        // even if this is reached some other way.
         if (state.appIdentityMismatch) return
 
         viewModelScope.launch {
             state = state.copy(isComparing = true, compareError = null, compareProgress = null, fileChanges = emptyList())
 
-            // Deliberately NOT reusing state.remoteTreeCache here, even though
-            // checkAppIdentity() may have just fetched one: reusing a tree from an
-            // earlier repo/folder pairing is exactly how a file that's genuinely still
-            // on GitHub can look locally like it was "already removed" — the diff must
-            // always be computed fresh against GitHub's actual current state.
             val treeResult = gitHubRepository.getRepositoryTree(repo)
 
             treeResult
@@ -668,8 +523,6 @@ class GitWaySessionViewModel(
                             ignoredScaffoldFiles = diff.ignoredScaffoldFiles,
                             remoteTreeCache = remoteMap,
                             compareProgress = null,
-                            // Everything starts selected — the user can then manually
-                            // uncheck items or use "Select all" / "Clear" per section.
                             selectedPaths = diff.changes.map { it.filePath }.toSet()
                         )
                     } catch (e: Exception) {
@@ -716,9 +569,6 @@ class GitWaySessionViewModel(
         state = state.copy(selectedPaths = emptySet())
     }
 
-    /** "Don't track this file" — persists [path] so it's never flagged Removed again in
-     * any future comparison (see [IgnoreListManager]), and immediately drops it out of
-     * the current diff without needing to re-run the whole comparison against GitHub. */
     fun ignoreFileForever(context: Context, path: String) {
         IgnoreListManager(context).add(path)
         state = state.copy(
@@ -728,8 +578,6 @@ class GitWaySessionViewModel(
         )
     }
 
-    /** Commit message the user typed on the Confirmation screen — blank is fine, the
-     * default is substituted at upload time (see [uploadChanges]). */
     fun setCommitMessageDraft(message: String) {
         state = state.copy(commitMessageDraft = message)
     }
@@ -742,11 +590,6 @@ class GitWaySessionViewModel(
         val changesToUpload = state.selectedChanges
         if (changesToUpload.isEmpty() || state.isUploading) return
 
-        // Repository / Project Match Protection — final safety net. The Folder and
-        // Confirmation screens already keep the user from reaching this point on a
-        // mismatch or an unresolved check error, but nothing ever pushes to GitHub while
-        // either is flagged — a connectivity hiccup during the check must never silently
-        // downgrade to "assume it's fine".
         if (state.identityCheckError != null) {
             state = state.copy(uploadError = "Blocked: ${state.identityCheckError}")
             return
@@ -769,8 +612,6 @@ class GitWaySessionViewModel(
             return
         }
 
-        // §2 Validate Repository Before Upload: fail fast on no connection rather than
-        // letting blob creation start and die partway through.
         if (!NetworkUtils.isOnline(context)) {
             state = state.copy(uploadError = "No internet connection. Please reconnect and try again.")
             return
@@ -785,11 +626,6 @@ class GitWaySessionViewModel(
             }
         }
 
-        // Always "Git Way Sync: <body>" — <body> is the user's own custom text if they
-        // typed one, otherwise the "N added, M modified, K removed" summary already
-        // previewed on the Confirmation screen. Resolved once, here, so what's sent to
-        // GitHub and what ends up in [lastCommitMessage] for the Completion screen are
-        // guaranteed to be the exact same string.
         val resolvedMessage = CommitMessageBuilder.resolve(state.commitMessageDraft, changesToUpload)
 
         uploadJob = viewModelScope.launch {
@@ -823,17 +659,9 @@ class GitWaySessionViewModel(
                         commitSha = sha,
                         commitMessageDraft = ""
                     )
-                    // GitHub now contains the new commit. Re-fetch the remote tree
-                    // immediately so the Explorer reflects it without an app restart.
                     loadBrowserRoot()
                     refreshOverviewData()
                 }.onFailure { throwable ->
-                    // Deliberately NOT resetting uploadPhase to IDLE here: the phase it
-                    // was in when this failed (e.g. "Updating branch") is exactly what
-                    // tells the user how far it got before dying — resetting it made the
-                    // failure screen show "Starting..." next to "16/16 files", which
-                    // reads as if nothing happened when really everything up to that
-                    // stage had already succeeded.
                     state = state.copy(
                         isUploading = false,
                         uploadError = throwable.message ?: "Upload failed."
@@ -850,8 +678,6 @@ class GitWaySessionViewModel(
         }
     }
 
-    /** §14 Cancel button. Safe at any point before UPDATING_BRANCH finishes — the repo's
-     * branch is only ever touched by the final ref update. */
     fun cancelUpload() {
         uploadJob?.cancel()
     }
@@ -863,12 +689,26 @@ class GitWaySessionViewModel(
 
     // ===== Repository Browser (VS Code-style tree explorer) =====
 
-    /** Loads the repo's full file tree once and shows the root, collapsed. Cheap to call
-     * again (pull-to-refresh) — it always re-fetches from GitHub rather than trusting the
-     * cache, but keeps whatever folders were already expanded. */
-    fun loadBrowserRoot() {
+    /**
+     * Reloads the repository tree.
+     *
+     * @param collapseFolders when true (pull-to-refresh) every expanded folder is
+     * closed immediately, so the explorer comes back in its fully collapsed state.
+     */
+    fun loadBrowserRoot(collapseFolders: Boolean = false) {
         val repo = state.selectedRepo ?: return
-        state = state.copy(isBrowserLoading = true, browserError = null)
+
+        val collapsedState = if (collapseFolders) {
+            state.copy(
+                expandedFolders = emptySet(),
+                browserPath = "",
+                browserEntries = buildVisibleRows(state.remoteTreeCache.keys, emptySet())
+            )
+        } else {
+            state
+        }
+
+        state = collapsedState.copy(isBrowserLoading = true, browserError = null)
         viewModelScope.launch {
             gitHubRepository.getRepositoryTreeDetailed(repo, branch = state.selectedBranch)
                 .onSuccess { detailed ->
@@ -892,11 +732,6 @@ class GitWaySessionViewModel(
         }
     }
 
-    /** §16 Android Project Intelligence: reuses [AppIdentityDetector] for the package,
-     * then separately inspects the same gradle file for SDK versions. Runs after
-     * [loadBrowserRoot] and updates the card in place — never blocks the tree itself
-     * from showing, and silently leaves [GitWaySessionState.androidProjectInfo] null if
-     * nothing recognisable is found (non-Android repos, unusual build setups). */
     private fun detectAndroidProjectInfo(repo: GitRepository, tree: Map<String, String>) {
         if (tree.isEmpty()) return
         viewModelScope.launch {
@@ -942,13 +777,6 @@ class GitWaySessionViewModel(
         state = state.copy(renameError = null)
     }
 
-    /** Renames a file or an entire folder (every path under it) as one commit — read the
-     * old content(s) by blob sha, write them at the new path(s), delete the old path(s). */
-    /** Resolves a repo file's current bytes: prefers [GitWaySessionState.pendingFileBytes]
-     * (content this session already wrote for [path], whose real sha isn't known yet), and
-     * only falls back to a sha-based GitHub fetch for paths that came from the last full
-     * tree load. This is what lets rename/duplicate/open work immediately on something you
-     * just created, renamed, or edited, instead of demanding a reload first. */
     private suspend fun resolveBytes(repo: GitRepository, path: String): Result<ByteArray> {
         state.pendingFileBytes[path]?.let { return Result.success(it) }
         val sha = state.remoteTreeCache[path]
@@ -1006,7 +834,7 @@ class GitWaySessionViewModel(
             gitHubRepository.syncChanges(
                 repo = repo,
                 changes = changes,
-                commitMessage = "Git Way: rename ${entry.path} to $newPath",
+                commitMessage = "Rename ${entry.path} to $newPath",
                 targetBranch = state.selectedBranch,
                 readFileBytes = { path -> byteCache.getValue(path) },
                 onProgress = { _, _, _, _ -> }
@@ -1031,8 +859,6 @@ class GitWaySessionViewModel(
         state = state.copy(duplicateError = null)
     }
 
-    /** Duplicates a single file in the same folder with an auto-generated "(copy)" name
-     * — same one-commit pattern as [pasteClipboardHere], just source == destination folder. */
     fun duplicateEntry(entry: BrowserEntry) {
         val repo = state.selectedRepo ?: return
         if (entry.isFolder || state.isDuplicatingEntry) return
@@ -1054,7 +880,7 @@ class GitWaySessionViewModel(
             gitHubRepository.syncChanges(
                 repo = repo,
                 changes = listOf(FileChange(fileName = newName, filePath = newPath, type = ChangeType.ADDED)),
-                commitMessage = "Git Way: duplicate ${entry.path} to $newPath",
+                commitMessage = "Duplicate ${entry.path} to $newPath",
                 targetBranch = state.selectedBranch,
                 readFileBytes = { bytes },
                 onProgress = { _, _, _, _ -> }
@@ -1072,9 +898,6 @@ class GitWaySessionViewModel(
         }
     }
 
-    /** PRD §18 multi-select toolbar "Add to .gitignore": appends every selected path to
-     * the repo's root .gitignore (creating it if it doesn't exist yet) as one commit —
-     * doesn't remove the files themselves, just stops them being tracked going forward. */
     fun addSelectedToGitignore() {
         val repo = state.selectedRepo ?: return
         val paths = state.selectedBrowserPaths
@@ -1114,7 +937,7 @@ class GitWaySessionViewModel(
                         type = if (existingSha != null) ChangeType.MODIFIED else ChangeType.ADDED
                     )
                 ),
-                commitMessage = "Git Way: add ${newLines.size} path(s) to .gitignore",
+                commitMessage = "Add ${newLines.size} path(s) to .gitignore",
                 targetBranch = state.selectedBranch,
                 readFileBytes = { bytes },
                 onProgress = { _, _, _, _ -> }
@@ -1133,20 +956,6 @@ class GitWaySessionViewModel(
         }
     }
 
-    /** Expands or collapses a folder in place (VS Code Explorer style — the whole tree
-     * stays on screen, no drill-down navigation). The tapped folder also becomes the
-     * target for the next "New file/folder" or "Paste". */
-    /**
-     * Expand a collapsed folder, or collapse an expanded one (ported from the
-     * PhoneIDE/LSP project tree's `FileTreeState.toggle`).
-     *
-     * Expanding follows a chain: while the folder being opened holds nothing but a
-     * single sub-folder, that sub-folder is opened too, and so on. Tapping `app` in
-     * `app/src/main/java/com/io/…` therefore lands on the first folder that actually
-     * has something to show — files, or several folders — instead of making the user
-     * tap through one-child levels one at a time. Collapsing closes the same chain,
-     * so the tree returns to exactly the state it had before the tap.
-     */
     fun toggleFolderExpanded(entry: BrowserEntry) {
         if (!entry.isFolder) return
         val expanded = state.expandedFolders
@@ -1163,12 +972,6 @@ class GitWaySessionViewModel(
         )
     }
 
-    /**
-     * The folders below [folderPath] reached by repeatedly stepping into an only
-     * child that is itself a folder. Ends at the first one whose contents are a
-     * file, several entries, or nothing — that last folder is included, so it is
-     * the one left open. Bounded so a pathological repo layout can't loop.
-     */
     private fun singleChildChain(folderPath: String): List<String> {
         val chain = mutableListOf<String>()
         var current = folderPath
@@ -1183,9 +986,6 @@ class GitWaySessionViewModel(
         return chain
     }
 
-    /** Sets which folder "New file"/"New folder"/"Paste" target next, without touching
-     * expansion state — used by a row's inline quick-action icons so tapping "+file" on
-     * a folder doesn't also collapse/expand it. */
     fun setCreateTarget(path: String) {
         state = state.copy(browserPath = path)
     }
@@ -1194,14 +994,6 @@ class GitWaySessionViewModel(
         state = state.copy(createEntryError = null)
     }
 
-    /**
-     * Uploads device files picked via SAF into [GitWaySessionState.browserPath] (the
-     * folder the user is browsing, or root) as one atomic commit — the same tested
-     * [GitHubRepository.syncChanges] pipeline used by createFile/createFolder. A file
-     * that already exists at the target path becomes a MODIFIED change (overwrite),
-     * everything else lands as ADDED. The user explicitly picked these files, so the
-     * Smart Upload Protection blocking pass is deliberately not applied here.
-     */
     fun uploadPickedFiles(context: Context, uris: List<Uri>) {
         val repo = state.selectedRepo ?: return
         if (uris.isEmpty() || state.isUploadingFiles) return
@@ -1239,7 +1031,7 @@ class GitWaySessionViewModel(
             gitHubRepository.syncChanges(
                 repo = repo,
                 changes = changes,
-                commitMessage = "Git Way: upload ${changes.size} file(s) to ${targetDir.ifEmpty { "root" }}",
+                commitMessage = "Upload ${changes.size} file(s) to ${targetDir.ifEmpty { "root" }}",
                 targetBranch = state.selectedBranch,
                 readFileBytes = { path -> bytesByPath[path] ?: ByteArray(0) },
                 onProgress = { _, _, _, _ -> }
@@ -1271,8 +1063,6 @@ class GitWaySessionViewModel(
         state = state.copy(uploadFilesError = null)
     }
 
-    /** Display name + bytes for one SAF-picked file; null when unreadable (permission
-     * revoked, cloud item not available offline, etc). */
     private fun readPickedFile(context: Context, uri: Uri): Pair<String, ByteArray>? = runCatching {
         val name = context.contentResolver
             .query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
@@ -1283,10 +1073,6 @@ class GitWaySessionViewModel(
         name to bytes
     }.getOrNull()
 
-    /** Creates an empty text file inside [GitWaySessionState.browserPath] (the last-tapped
-     * folder, or root) as a single, immediate commit — reuses the same tested
-     * [GitHubRepository.syncChanges] pipeline (validation, retries, atomic tree/commit/ref,
-     * post-push verification) as the main sync flow. */
     fun createFile(fileName: String, content: String = "") {
         val repo = state.selectedRepo ?: return
         val name = fileName.trim()
@@ -1304,7 +1090,7 @@ class GitWaySessionViewModel(
             gitHubRepository.syncChanges(
                 repo = repo,
                 changes = listOf(FileChange(fileName = name, filePath = fullPath, type = ChangeType.ADDED)),
-                commitMessage = "Git Way: create $fullPath",
+                commitMessage = "Create $fullPath",
                 targetBranch = state.selectedBranch,
                 readFileBytes = { bytes },
                 onProgress = { _, _, _, _ -> }
@@ -1324,10 +1110,6 @@ class GitWaySessionViewModel(
         }
     }
 
-    /** Git has no real folder objects — an empty folder is created by committing a hidden
-     * ".gitkeep" placeholder inside it, the standard convention. The placeholder itself is
-     * filtered out of [buildVisibleRows] so the folder just looks empty until a real file
-     * is added. */
     fun createFolder(folderName: String) {
         val repo = state.selectedRepo ?: return
         val name = folderName.trim()
@@ -1346,7 +1128,7 @@ class GitWaySessionViewModel(
             gitHubRepository.syncChanges(
                 repo = repo,
                 changes = listOf(FileChange(fileName = ".gitkeep", filePath = placeholderPath, type = ChangeType.ADDED)),
-                commitMessage = "Git Way: create folder $folderPath",
+                commitMessage = "Create folder $folderPath",
                 targetBranch = state.selectedBranch,
                 readFileBytes = { ByteArray(0) },
                 onProgress = { _, _, _, _ -> }
@@ -1370,17 +1152,10 @@ class GitWaySessionViewModel(
         state = state.copy(deleteEntryError = null)
     }
 
-    /** User closed the "no CI workflow" banner without adding anything — stays dismissed
-     * for the rest of this repo session (reappears next time the repo is opened fresh). */
     fun dismissWorkflowSuggestion() {
         state = state.copy(workflowSuggestionDismissed = true)
     }
 
-    /** Adds every template the user checked in the picker as ONE commit — reuses the same
-     * tested sync pipeline as every other write in the app. Nothing here is automatic:
-     * this only ever runs from the picker's own "Add" button, after the user has read
-     * each template's YAML and ticked the ones they actually want (PRD "CI Workflow
-     * Suggestions" — manual opt-in per file, never added silently). */
     fun addWorkflowFiles(templates: List<WorkflowTemplate>) {
         val repo = state.selectedRepo ?: return
         if (templates.isEmpty() || state.isAddingWorkflows) return
@@ -1394,9 +1169,9 @@ class GitWaySessionViewModel(
                 repo = repo,
                 changes = changes,
                 commitMessage = if (templates.size == 1) {
-                    "Git Way: add ${templates.first().path}"
+                    "Add ${templates.first().path}"
                 } else {
-                    "Git Way: add ${templates.size} GitHub Actions workflows"
+                    "Add ${templates.size} GitHub Actions workflows"
                 },
                 targetBranch = state.selectedBranch,
                 readFileBytes = { path -> bytesByPath.getValue(path) },
@@ -1432,9 +1207,6 @@ class GitWaySessionViewModel(
         }
     }
 
-    /** Switches which branch every subsequent read/write in this repo session targets —
-     * null means "the repo's own default branch". Reloads the tree for the new branch
-     * and clears anything tied to the old one (open viewer, selection, commit history). */
     fun selectBranch(branch: String?) {
         if (branch == state.selectedBranch) return
         state = state.copy(
@@ -1452,8 +1224,6 @@ class GitWaySessionViewModel(
         state = state.copy(createBranchError = null)
     }
 
-    /** Creates [newBranchName] as a real fork of whichever branch is currently selected
-     * (or the default), then switches to it — never an empty ref. */
     fun createBranch(newBranchName: String) {
         val repo = state.selectedRepo ?: return
         if (newBranchName.isBlank() || state.isCreatingBranch) return
@@ -1514,8 +1284,6 @@ class GitWaySessionViewModel(
         }
     }
 
-    /** Permanently deletes the current repo from GitHub. [onDeleted] fires only on
-     * success, so the caller can navigate back to the repository list. */
     fun deleteRepository(onDeleted: () -> Unit) {
         val repo = state.selectedRepo ?: return
         if (state.isDeletingRepo) return
@@ -1532,9 +1300,6 @@ class GitWaySessionViewModel(
         }
     }
 
-    /** Deletes a single file, or an entire folder (every path under it), as one commit.
-     * Reuses [GitHubRepository.syncChanges] with REMOVED changes — nothing is read from
-     * disk/GitHub for a delete, the tree/commit pipeline just drops those paths. */
     fun deleteEntry(entry: BrowserEntry) {
         val paths = if (entry.isFolder) {
             state.remoteTreeCache.keys.filter { it == entry.path || it.startsWith("${entry.path}/") }
@@ -1563,9 +1328,9 @@ class GitWaySessionViewModel(
                 repo = repo,
                 changes = changes,
                 commitMessage = if (paths.size == 1) {
-                    "Git Way: delete ${paths.first()}"
+                    "Delete ${paths.first()}"
                 } else {
-                    "Git Way: delete ${paths.size} files"
+                    "Delete ${paths.size} files"
                 },
                 targetBranch = state.selectedBranch,
                 readFileBytes = { ByteArray(0) }, // never invoked — REMOVED changes carry no content
@@ -1602,8 +1367,6 @@ class GitWaySessionViewModel(
         state = state.copy(selectedBrowserPaths = emptySet())
     }
 
-    /** Copies every currently selected file into the in-memory clipboard and exits
-     * selection mode. Only the path/sha is kept — bytes are fetched lazily on paste. */
     fun copySelectionToClipboard() {
         val selectedEntries = state.browserEntries.map { it.entry }
             .filter { it.path in state.selectedBrowserPaths && !it.isFolder }
@@ -1615,10 +1378,6 @@ class GitWaySessionViewModel(
         state = state.copy(clipboard = emptyList())
     }
 
-    /** Pastes every clipboard entry into [GitWaySessionState.browserPath] (the last-tapped
-     * folder, or root) as a single commit — reads each file's bytes from GitHub by its
-     * cached blob sha, then re-uploads them at the new path(s). Auto-renames on a name
-     * collision ("name (copy).ext", then " (copy 2)"…). */
     fun pasteClipboardHere() {
         val repo = state.selectedRepo ?: return
         val toPaste = state.clipboard
@@ -1656,9 +1415,9 @@ class GitWaySessionViewModel(
                     repo = repo,
                     changes = changes,
                     commitMessage = if (changes.size == 1) {
-                        "Git Way: paste ${changes.first().filePath}"
+                        "Paste ${changes.first().filePath}"
                     } else {
-                        "Git Way: paste ${changes.size} files"
+                        "Paste ${changes.size} files"
                     },
                     targetBranch = state.selectedBranch,
                     readFileBytes = { path -> byteCache.getValue(path) },
@@ -1753,8 +1512,6 @@ class GitWaySessionViewModel(
         state = state.copy(isEditingFile = false, saveFileError = null)
     }
 
-    /** Commits the edited content as a single-file MODIFIED change, via the same tested
-     * sync pipeline used everywhere else — then updates the viewer to show the saved text. */
     fun saveFileEdits(newContent: String) {
         val repo = state.selectedRepo ?: return
         val entry = state.viewingFile ?: return
@@ -1766,7 +1523,7 @@ class GitWaySessionViewModel(
             gitHubRepository.syncChanges(
                 repo = repo,
                 changes = listOf(FileChange(fileName = entry.name, filePath = entry.path, type = ChangeType.MODIFIED)),
-                commitMessage = "Git Way: edit ${entry.path}",
+                commitMessage = "Edit ${entry.path}",
                 targetBranch = state.selectedBranch,
                 readFileBytes = { bytes },
                 onProgress = { _, _, _, _ -> }
@@ -1783,10 +1540,6 @@ class GitWaySessionViewModel(
         }
     }
 
-    /** Computes the immediate children of [currentPath] from a flat set of full repo paths,
-     * ordered by [GitWaySessionState.browserSortMode] and narrowed by
-     * [GitWaySessionState.browserTypeFilter] (folders are always shown regardless of the
-     * active filter, so the tree stays navigable to reach a filtered file deeper down). */
     private fun childrenOf(paths: Set<String>, currentPath: String): List<BrowserEntry> {
         val prefix = if (currentPath.isEmpty()) "" else "$currentPath/"
         val seen = linkedSetOf<String>()
@@ -1828,12 +1581,6 @@ class GitWaySessionViewModel(
         }
     }
 
-    /** Flattens the repository into a real VS Code/Acode-style tree.
-     *
-     * Every directory keeps its own row (no package-chain compaction), so the vertical
-     * guide columns can connect continuously from parent -> child -> sibling exactly like
-     * a desktop file explorer.
-     */
     private fun buildVisibleRows(paths: Set<String>, expanded: Set<String>): List<TreeRow> {
         val rows = mutableListOf<TreeRow>()
 
@@ -1843,13 +1590,6 @@ class GitWaySessionViewModel(
             children.forEachIndexed { index, entry ->
                 val hasNextSibling = index < children.lastIndex
 
-                // Every level — including depth 0 — appends its own "has a next sibling"
-                // flag. This is what lets the guide column for a root-level folder (e.g.
-                // "app") keep running down through that folder's ENTIRE expanded subtree
-                // when "app" itself has more root-level siblings below it (gradle, scripts,
-                // ...) — matching how every deeper level already connects, instead of the
-                // line stopping right after the root row (previously depth 0 was excluded
-                // here, which is why the guide line touched app but then cut inside it).
                 val guideState = ancestorsContinue + hasNextSibling
 
                 rows += if (entry.isFolder) {
@@ -1878,9 +1618,6 @@ class GitWaySessionViewModel(
         return rows
     }
 
-    // ============================================================
-    // GitHub Actions (workflow scope)
-    // ============================================================
 
     fun loadWorkflows() {
         val repo = state.selectedRepo ?: return
@@ -1951,9 +1688,6 @@ class GitWaySessionViewModel(
         }
     }
 
-    /** Downloads an artifact's zip, extracts the APK inside if there is one, and stores
-     * the result in [GitWaySessionState.pendingDownload] for the screen to act on
-     * (install / save). */
     fun downloadArtifact(artifact: ArtifactInfo) {
         val repo = state.selectedRepo ?: return
         if (state.downloadingArtifactName != null) return
@@ -2003,9 +1737,6 @@ class GitWaySessionViewModel(
         state = state.copy(pendingDownload = null)
     }
 
-    // ============================================================
-    // Pull requests
-    // ============================================================
 
     fun loadPullRequests(stateFilter: String = "open") {
         val repo = state.selectedRepo ?: return
@@ -2078,9 +1809,6 @@ class GitWaySessionViewModel(
         state = state.copy(selectedPullRequest = null, pullRequestFiles = emptyList())
     }
 
-    // ============================================================
-    // Issues
-    // ============================================================
 
     fun loadIssues(stateFilter: String = "open") {
         val repo = state.selectedRepo ?: return
@@ -2146,9 +1874,6 @@ class GitWaySessionViewModel(
         state = state.copy(selectedIssue = null, issueComments = emptyList())
     }
 
-    // ============================================================
-    // Star / unstar / fork
-    // ============================================================
 
     fun loadStarredRepositories() {
         if (state.isLoadingStarred || state.starredRepos.isNotEmpty()) return
@@ -2200,16 +1925,11 @@ class GitWaySessionViewModel(
         state = state.copy(forkError = null)
     }
 
-    /** Refreshes [repo] (with its new star count) inside whichever account-wide list
-     * currently holds it, so Overview/Profile stay consistent after a star toggle. */
     private fun updateRepoInLists(updated: GitRepository) {
         val overview = state.overviewRepositories.map { if (it.fullName == updated.fullName) updated else it }
         state = state.copy(overviewRepositories = overview)
     }
 
-    // ============================================================
-    // Releases
-    // ============================================================
 
     fun loadReleases() {
         val repo = state.selectedRepo ?: return
@@ -2299,9 +2019,6 @@ class GitWaySessionViewModel(
         }
     }
 
-    // ============================================================
-    // Search + commit diff + repo zip
-    // ============================================================
 
     fun searchRepositories(query: String) {
         if (query.isBlank()) {

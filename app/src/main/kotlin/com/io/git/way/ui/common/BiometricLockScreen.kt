@@ -48,9 +48,6 @@ import com.io.git.way.ui.theme.GlassPrimaryButton
 import com.io.git.way.ui.theme.LiquidGlassBackground
 import kotlinx.coroutines.launch
 
-/** Shown in place of the whole app while Security > Fingerprint Lock is on and the
- * session hasn't been unlocked yet this launch/resume — prompts immediately on first
- * appearance, with a manual retry button if the user dismisses or fails. */
 @Composable
 fun BiometricLockScreen(onUnlocked: () -> Unit) {
     val activity = LocalContext.current as FragmentActivity
@@ -62,9 +59,6 @@ fun BiometricLockScreen(onUnlocked: () -> Unit) {
         if (isPrompting) return
         isPrompting = true
         scope.launch {
-            // runCatching so a rare prompt exception (already active prompt, hardware
-            // hiccup) can never leave the lock screen stuck in the "prompting" state —
-            // worst case the user just taps Try again.
             val success = runCatching {
                 activity.authenticateWithBiometrics(
                     title = "Unlock Git Way",
@@ -77,22 +71,6 @@ fun BiometricLockScreen(onUnlocked: () -> Unit) {
         }
     }
 
-    // Bug fix: this screen is a single long-lived composable instance for as long as the
-    // app stays locked — MainActivity just flips isUnlocked back to false and recomposes
-    // the *same* BiometricLockScreen rather than leaving/re-entering composition. A
-    // LaunchedEffect(Unit) here only ever fires once for that instance's lifetime, so the
-    // old code only auto-prompted on the very first appearance.
-    //
-    // That first appearance is also the wrong moment on its own: MainActivity sets
-    // isUnlocked = false from an ON_STOP observer (screen turning off), which recomposes
-    // this screen and fires the effect *while the activity is stopped* — the system can't
-    // show a BiometricPrompt over a non-resumed activity, so that attempt silently does
-    // nothing (or errors), and nothing was left to retry it once the screen came back on.
-    //
-    // Listening for ON_RESUME instead covers both cases correctly: it fires once when the
-    // activity first becomes resumed after cold start/re-lock (same moment as before, but
-    // now guaranteed to be foregrounded), and it fires again every subsequent time the
-    // screen is turned back on while this lock screen is still showing.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -106,12 +84,6 @@ fun BiometricLockScreen(onUnlocked: () -> Unit) {
         Box(
             Modifier
                 .fillMaxSize()
-                // MainActivity now overlays this screen on top of the still-mounted app
-                // content instead of swapping it in, so — unlike a plain Box with no click
-                // handling, which lets touches fall through to whatever's underneath at the
-                // same position — every pointer event needs to be consumed here explicitly,
-                // or a tap on an "empty" part of this lock screen could still reach and
-                // trigger something in the (invisible, but still interactive) screen below.
                 .pointerInput(Unit) {
                     awaitEachGesture {
                         do {
